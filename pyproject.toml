@@ -31,3 +31,6 @@ packages = ["src/agent_runtime"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+markers = [
+    "postgres: requires a reachable PostgreSQL test database",
+]

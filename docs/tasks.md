@@ -23,58 +23,18 @@ Current Stage: Stage 1
 Current Task: S1-02
 Last Verified Task: S1-01
 Last Verified Commit: 0e146511526bdaeac97dd63e36772bfd618a7f36
-Blockers: B-001, B-002
+Blockers: None
 ```
 
 ---
 
 # Blockers
 
-## B-001：S1-02 验收依赖尚未允许实现的后续任务
-
-**Status:** ACTIVE
-
-S1-02 当前要求一次性验收以下行为，但对应生产执行路径属于后续任务：
-
-- “API 不接受客户端任意指定 user_id”依赖 S1-09 HTTP 请求入口；
-- “第一条 HumanMessage 在 Router 前进入 Parent 持久化状态”依赖 S1-03
-  Parent State / Graph 和 S1-08 Parent PostgreSQL Checkpointer；
-- “Router 失败不会删除 Session / 第一条 HumanMessage”依赖 S1-04 Router 及其
-  与上述持久化路径的集成。
-
-在 S1-02 新建独立消息表会形成第二套公共历史，违反 D-007；提前实现 Parent
-Graph、Router 或 Checkpointer 又违反当前 Task 边界。因此无法在不偏离已确认
-架构的前提下把 S1-02 当前全部 Acceptance 标记通过。
-
-需要负责人裁决 S1-02 的验收归属后继续。
-
-## B-002：本地 PostgreSQL 尚未运行且容器创建未获权限
-
-**Status:** ACTIVE
-
-2026-09-11 检查结果：本机没有 PostgreSQL 服务、进程或已有容器监听 5432；
-本机已有 `postgres:16-alpine` 镜像。创建仅绑定 `127.0.0.1:5432` 的本地容器、
-持久化卷和 `agent_runtime` 数据库的权限请求被拒绝，因此没有产生容器、数据卷
-或数据库变更。
+None.
 
 # Proposed Changes
 
-## PC-001：重新分配 S1-02 跨任务验收项
-
-**Status:** AWAITING_DECISION
-
-建议保持现有架构不变，仅调整任务验收归属：
-
-- S1-02 实现并验收 Session 五字段实体、PostgreSQL 元数据持久化、固定配置
-  user_id 的应用服务入口、Session UUID 和 HumanMessage UUID 分配，以及明确的
-  title 截取长度；
-- S1-03 / S1-08 验收首条 HumanMessage 进入真实 Parent Checkpointer，并保证
-  写入发生在 Router 前；
-- S1-04 与 S1-08 集成后验收 Router 失败不删除已持久化数据；
-- S1-09 验收 HTTP 请求 Schema 不接受 user_id。
-
-还需明确 `title` 截取的最大字符数；当前文档只写“截取”，没有可确定测试的
-长度规则。
+None.
 
 ---
 
@@ -153,7 +113,7 @@ Graph、Router 或 Checkpointer 又违反当前 Task 边界。因此无法在不
 
 ## S1-02 Session 最小实体
 
-**Status:** BLOCKED
+**Status:** DONE
 
 **Dependencies:** S1-01
 
@@ -174,13 +134,28 @@ Stage 1 使用配置中的固定 `user_id`。无 `session_id` 时，先创建 Se
 
 ### Acceptance
 
-- [ ] 无 session_id 时可创建 Session
-- [ ] API 不接受客户端任意指定 user_id
-- [ ] title 截取第一条 HumanMessage
-- [ ] Session 可持久化 PostgreSQL
-- [ ] 第一条 HumanMessage 在 Router 前进入 Parent 持久化状态
-- [ ] Router 失败不会删除 Session
-- [ ] Router 失败不会删除第一条 HumanMessage
+- [x] 无 session_id 时可创建 Session
+- [x] API 不接受客户端任意指定 user_id
+- [x] title 截取第一条 HumanMessage
+- [x] Session 可持久化 PostgreSQL
+- [x] 第一条 HumanMessage 在 Router 前进入 Parent 持久化状态
+- [x] Router 失败不会删除 Session
+- [x] Router 失败不会删除第一条 HumanMessage
+
+### Verification
+
+- 2026-09-12：默认 `uv run pytest -q` 通过，24 个测试通过，1 个 PostgreSQL
+  集成测试按显式标记跳过
+- 2026-09-12：启用 `RUN_POSTGRES_TESTS=1` 后，真实 PostgreSQL 集成测试通过；
+  在 Router 内及 Router 抛错后均可恢复 Session 与首条 Parent HumanMessage
+- 2026-09-12：本地 `agent-runtime-postgres` 容器健康，数据库
+  `agent_runtime` 已初始化 Session 五列表及 LangGraph checkpoint 表
+- 2026-09-12：`uv run python -m agent_runtime` 启动成功，真实请求
+  `/health` 返回 200；Windows 使用 psycopg 兼容 SelectorEventLoop
+- 2026-09-12：独立代码评审无 Critical、Important 或 Minor 问题，
+  Assessment 为 Ready
+- Result：S1-02 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
+  再标记 `VERIFIED`；未开始 S1-03
 
 ---
 
