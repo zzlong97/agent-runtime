@@ -71,7 +71,7 @@ None. 2026-09-11 架构审计提出的问题已经负责人逐项裁决，并进
 
 ## S1-01 工程初始化
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S1-00
 
@@ -90,13 +90,25 @@ None. 2026-09-11 架构审计提出的问题已经负责人逐项裁决，并进
 
 ### Acceptance
 
-- [ ] 应用可启动
-- [ ] `/health` 返回 200
-- [ ] 配置可从环境变量读取
-- [ ] PostgreSQL 连接配置可用
-- [ ] 百炼 API Key / Base URL / Model 可通过环境变量配置
-- [ ] 测试框架可运行
-- [ ] 默认测试不需要真实模型密钥
+- [x] 应用可启动
+- [x] `/health` 返回 200
+- [x] 配置可从环境变量读取
+- [x] PostgreSQL 连接配置可用
+- [x] 百炼 API Key / Base URL / Model 可通过环境变量配置
+- [x] 测试框架可运行
+- [x] 默认测试不需要真实模型密钥
+
+### Verification
+
+- 2026-09-11：`uv lock --check` 通过，锁定 Python `==3.12.*` 与 66 个包
+- 2026-09-11：`uv run pytest -q` 通过，11 个测试全部通过
+- 2026-09-11：`uv pip check` 通过，64 个已安装包依赖兼容
+- 2026-09-11：`uv build` 通过，成功构建 sdist 与 wheel
+- 2026-09-11：`python -m compileall -q src tests` 与 `git diff --check` 通过
+- 2026-09-11：真实 Uvicorn 进程启动后请求 `/health` 返回 `{"status":"ok"}`
+- 2026-09-11：独立代码评审无 Critical；DSN 兼容性问题修复后无剩余代码问题
+- 2026-09-11：负责人确认验收通过，同意 S1-01 状态更新为 `VERIFIED`
+- Result：S1-01 已通过独立审核与负责人验收，状态更新为 `VERIFIED`
 
 ---
 
