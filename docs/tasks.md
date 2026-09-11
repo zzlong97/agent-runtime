@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-00
-Last Verified Task: -
-Last Verified Commit: -
+Current Task: S1-01
+Last Verified Task: S1-00
+Last Verified Commit: e4da555b768e1ad57f87ef58b4959292b712e187
 Blockers: None
 ```
 
@@ -43,7 +43,7 @@ None. 2026-09-11 架构审计提出的问题已经负责人逐项裁决，并进
 
 ## S1-00 架构基线确认
 
-**Status:** IN_PROGRESS
+**Status:** VERIFIED
 
 **Dependencies:** None
 
@@ -59,7 +59,13 @@ None. 2026-09-11 架构审计提出的问题已经负责人逐项裁决，并进
 - [x] Requirements / Architecture / Decisions / Tasks / AGENTS / README 一致
 - [x] 已记录所有已确认架构裁决
 - [x] 未修改业务代码
-- [ ] 负责人完成书面复核
+- [x] 负责人完成书面复核
+
+### Verification
+
+- 2026-09-11：负责人书面确认“文档验收通过”
+- Reviewed Commit：`e4da555b768e1ad57f87ef58b4959292b712e187`
+- Result：架构基线已验收；下一允许任务为 `S1-01`
 
 ---
 
