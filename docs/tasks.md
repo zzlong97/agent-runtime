@@ -20,22 +20,61 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-01
-Last Verified Task: S1-00
-Last Verified Commit: e4da555b768e1ad57f87ef58b4959292b712e187
-Blockers: None
+Current Task: S1-02
+Last Verified Task: S1-01
+Last Verified Commit: 0e146511526bdaeac97dd63e36772bfd618a7f36
+Blockers: B-001, B-002
 ```
 
 ---
 
 # Blockers
 
-None.
+## B-001：S1-02 验收依赖尚未允许实现的后续任务
+
+**Status:** ACTIVE
+
+S1-02 当前要求一次性验收以下行为，但对应生产执行路径属于后续任务：
+
+- “API 不接受客户端任意指定 user_id”依赖 S1-09 HTTP 请求入口；
+- “第一条 HumanMessage 在 Router 前进入 Parent 持久化状态”依赖 S1-03
+  Parent State / Graph 和 S1-08 Parent PostgreSQL Checkpointer；
+- “Router 失败不会删除 Session / 第一条 HumanMessage”依赖 S1-04 Router 及其
+  与上述持久化路径的集成。
+
+在 S1-02 新建独立消息表会形成第二套公共历史，违反 D-007；提前实现 Parent
+Graph、Router 或 Checkpointer 又违反当前 Task 边界。因此无法在不偏离已确认
+架构的前提下把 S1-02 当前全部 Acceptance 标记通过。
+
+需要负责人裁决 S1-02 的验收归属后继续。
+
+## B-002：本地 PostgreSQL 尚未运行且容器创建未获权限
+
+**Status:** ACTIVE
+
+2026-09-11 检查结果：本机没有 PostgreSQL 服务、进程或已有容器监听 5432；
+本机已有 `postgres:16-alpine` 镜像。创建仅绑定 `127.0.0.1:5432` 的本地容器、
+持久化卷和 `agent_runtime` 数据库的权限请求被拒绝，因此没有产生容器、数据卷
+或数据库变更。
 
 # Proposed Changes
 
-None. 2026-09-11 架构审计提出的问题已经负责人逐项裁决，并进入当前文档
-基线；尚未开始业务实现。
+## PC-001：重新分配 S1-02 跨任务验收项
+
+**Status:** AWAITING_DECISION
+
+建议保持现有架构不变，仅调整任务验收归属：
+
+- S1-02 实现并验收 Session 五字段实体、PostgreSQL 元数据持久化、固定配置
+  user_id 的应用服务入口、Session UUID 和 HumanMessage UUID 分配，以及明确的
+  title 截取长度；
+- S1-03 / S1-08 验收首条 HumanMessage 进入真实 Parent Checkpointer，并保证
+  写入发生在 Router 前；
+- S1-04 与 S1-08 集成后验收 Router 失败不删除已持久化数据；
+- S1-09 验收 HTTP 请求 Schema 不接受 user_id。
+
+还需明确 `title` 截取的最大字符数；当前文档只写“截取”，没有可确定测试的
+长度规则。
 
 ---
 
@@ -114,7 +153,7 @@ None. 2026-09-11 架构审计提出的问题已经负责人逐项裁决，并进
 
 ## S1-02 Session 最小实体
 
-**Status:** TODO
+**Status:** BLOCKED
 
 **Dependencies:** S1-01
 
