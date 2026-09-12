@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-04
-Last Verified Task: S1-03
-Last Verified Commit: 4777c04f93cc9e1c0bf9d54b23943378e8d21c34
+Current Task: S1-05
+Last Verified Task: S1-04
+Last Verified Commit: cd53ef5259f5872b102af7f69f0efaea797f53f7
 Blockers: None
 ```
 
@@ -222,7 +222,7 @@ Parent 观察。
 
 ## S1-04 Router
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-03
 
@@ -271,14 +271,14 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
   `git diff --check` 通过
 - 2026-09-12：独立代码评审无 Critical、Important 或 Minor 问题，
   Assessment 为 Ready
-- Result：S1-04 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
-  再标记 `VERIFIED`；未开始 S1-05
+- 2026-09-12：负责人确认验收通过
+- Result：S1-04 已验收并更新为 `VERIFIED`；允许开始 S1-05
 
 ---
 
 ## S1-05 general_chat
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S1-03
 
@@ -298,13 +298,28 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
 
 ### Acceptance
 
-- [ ] 普通聊天正常
-- [ ] 多轮聊天正常
-- [ ] 翻译请求返回 OUT_OF_SCOPE
-- [ ] OUT_OF_SCOPE 不产生用户可见 token
-- [ ] OUT_OF_SCOPE 不推进 Child 消息历史
-- [ ] 简短风格通过 System Prompt 注入，不进行二次模型压缩
-- [ ] 默认测试使用 Fake Model
+- [x] 普通聊天正常
+- [x] 多轮聊天正常
+- [x] 翻译请求返回 OUT_OF_SCOPE
+- [x] OUT_OF_SCOPE 不产生用户可见 token
+- [x] OUT_OF_SCOPE 不推进 Child 消息历史
+- [x] 简短风格通过 System Prompt 注入，不进行二次模型压缩
+- [x] 默认测试使用 Fake Model
+
+### Execution Evidence
+
+- 2026-09-12：新增 `GeneralChatCapability`，使用 LangChain `create_agent`
+  实现普通聊天，并通过中文 System Prompt 约束默认简洁、直接回答
+- 2026-09-12：新增结构化 `GeneralChatScopeDecision`，在生成和 Child
+  Checkpoint 更新前识别所有语言方向的翻译请求并返回 `OUT_OF_SCOPE`
+- 2026-09-12：专项测试覆盖普通聊天、同一 Child thread 多轮历史、翻译拒绝
+  零事件和零历史推进；`4 passed`
+- 2026-09-12：默认全量回归 `47 passed, 2 skipped`；启用 PostgreSQL 后
+  全量回归 `49 passed`
+- 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
+  Ready
+- Result：S1-05 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
+  再标记 `VERIFIED`；未开始 S1-06
 
 ---
 
