@@ -32,5 +32,6 @@ packages = ["src/agent_runtime"]
 addopts = "-ra"
 testpaths = ["tests"]
 markers = [
-    "postgres: requires a reachable PostgreSQL test database",
+    "bailian: 仅在显式启用真实百炼模型调用时运行",
+    "postgres: 需要可连接的 PostgreSQL 测试数据库",
 ]

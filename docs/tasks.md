@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-09
-Last Verified Task: S1-08
-Last Verified Commit: 99fc91e0d91167e20d3b8cf043294630374e458a
+Current Task: S1-10
+Last Verified Task: S1-09
+Last Verified Commit: ec48d1503ba4521acd5d858aa66e58a63179e174
 Blockers: None
 ```
 
@@ -489,7 +489,7 @@ Child OUT_OF_SCOPE
 
 ## S1-09 HTTP + SSE
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-02, S1-03, S1-07, S1-08
 
@@ -548,13 +548,14 @@ done    → session_id + status
   全量回归 `103 passed`；依赖锁、环境兼容性、源码编译和分发包构建验证通过
 - 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
   Ready；确认未跨入 S1-10
-- Result：S1-09 实现和验证完成，等待负责人验收；尚未进入 S1-10
+- 2026-09-12：负责人确认验收通过
+- Result：S1-09 已验收并更新为 `VERIFIED`；允许开始 S1-10
 
 ---
 
 ## S1-10 Stage 1 集成测试
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S1-01 ~ S1-09
 
@@ -565,7 +566,7 @@ done    → session_id + status
 → general_chat
 ```
 
-- [ ] PASS
+- [x] PASS
 
 ### Acceptance Case B
 
@@ -577,7 +578,7 @@ done    → session_id + status
 → en_to_zh
 ```
 
-- [ ] PASS
+- [x] PASS
 
 ### Acceptance Case C
 
@@ -588,7 +589,7 @@ done    → session_id + status
 → 不经过 Router
 ```
 
-- [ ] PASS
+- [x] PASS
 
 ### Acceptance Case D
 
@@ -600,7 +601,7 @@ done    → session_id + status
 → general_chat
 ```
 
-- [ ] PASS
+- [x] PASS
 
 ### Acceptance Case E
 
@@ -611,7 +612,7 @@ done    → session_id + status
 → 不发送 error
 ```
 
-- [ ] PASS
+- [x] PASS
 
 ### Acceptance Case F
 
@@ -622,7 +623,7 @@ done    → session_id + status
 → Parent 完整历史仍然存在
 ```
 
-- [ ] PASS
+- [x] PASS
 
 ### Acceptance Case G
 
@@ -633,40 +634,65 @@ Child OUT_OF_SCOPE
 → Parent HumanMessage 只存在一次
 ```
 
-- [ ] PASS
+- [x] PASS
 
 ### Model Strategy
 
-- [ ] 默认完整验收使用 Fake Model
-- [ ] 不配置百炼密钥时自动化测试仍可通过
-- [ ] 真实百炼 smoke test 可选且与默认测试分离
+- [x] 默认完整验收使用 Fake Model
+- [x] 不配置百炼密钥时自动化测试仍可通过
+- [x] 真实百炼 smoke test 可选且与默认测试分离
 
 ### Persistence
 
-- [ ] 服务重启后已有 Session 可继续
-- [ ] Parent 恢复后包含完整公共历史和当前 Capability
-- [ ] Parent / 两个 Child 的 thread_id 和 Checkpointer 状态隔离
+- [x] 服务重启后已有 Session 可继续
+- [x] Parent 恢复后包含完整公共历史和当前 Capability
+- [x] Parent / 两个 Child 的 thread_id 和 Checkpointer 状态隔离
 
 ### Scope Audit
 
 确认 Stage 1 未实现：
 
-- [ ] Manifest
-- [ ] 权限
-- [ ] mount/unmount
-- [ ] interrupt/resume
-- [ ] regenerate
-- [ ] stop
-- [ ] feedback
-- [ ] 文件能力
-- [ ] Redis
-- [ ] Deep Agents
+- [x] Manifest
+- [x] 权限
+- [x] mount/unmount
+- [x] interrupt/resume
+- [x] regenerate
+- [x] stop
+- [x] feedback
+- [x] 文件能力
+- [x] Redis
+- [x] Deep Agents
 
 全部通过后：
 
 ```text
 Stage 1 = VERIFIED
 ```
+
+### Execution Evidence
+
+- 2026-09-12：新增 Stage 1 端到端验收，以真实
+  `FastAPI → ChatService → Parent Graph → Router / Child → SSE` 主链路覆盖
+  Case A～G；只替换默认测试中的模型与持久化介质
+- 2026-09-12：双向能力切换、当前能力直接续用、每个能力最多拒绝一次、拒绝
+  Child 零 message 事件和零历史推进、Parent HumanMessage 去重均验证通过
+- 2026-09-12：第 10 轮向 Child 传递前 9 个完整轮次和当前 HumanMessage；
+  第 11 轮只传递最近 5 个完整轮次和当前 HumanMessage，Parent 仍保留 22 条
+  完整公共消息
+- 2026-09-12：默认验收显式清空百炼配置并使用确定性 Fake Model；真实百炼
+  smoke test 由 `RUN_BAILIAN_SMOKE=1` 单独启用，不进入默认或 PostgreSQL 门禁
+- 2026-09-12：真实 PostgreSQL 测试跨两次独立服务生命周期恢复 Session、当前
+  Capability 和 Parent 完整公共历史；Parent、`general_chat`、`en_to_zh` 三个
+  thread 的消息及 Child 私有状态保持隔离
+- 2026-09-12：源码和依赖范围审计未发现 Manifest、权限、动态挂载、
+  interrupt/resume、regenerate、stop、feedback、文件能力、Redis 或 Deep Agents
+- 2026-09-12：S1-10 专项默认验收 `4 passed, 2 skipped`；默认全量回归
+  `102 passed, 7 skipped`；启用真实 PostgreSQL 后全量回归
+  `108 passed, 1 skipped`，唯一跳过项为显式隔离的真实百炼 smoke
+- 2026-09-12：依赖锁、环境兼容性、源码与测试编译验证通过；独立代码审查无
+  Critical、Important 或 Minor 问题，结论为 Ready
+- Result：S1-10 实现和验证完成，等待负责人验收；Stage 1 尚未最终标记
+  `VERIFIED`，未进入 Stage 2
 
 ---
 
