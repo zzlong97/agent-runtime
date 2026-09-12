@@ -105,6 +105,7 @@ def test_general_chat_answers_ordinary_chat_with_system_prompt() -> None:
         GENERAL_CHAT_SYSTEM_PROMPT,
         GeneralChatCapability,
     )
+    from agent_runtime.graph.child_result import ChildResult
 
     scope_model = FakeScopeChatModel(responses=[False])
     response_model = FakeResponseChatModel(
@@ -125,7 +126,7 @@ def test_general_chat_answers_ordinary_chat_with_system_prompt() -> None:
         )
     )
 
-    assert result == "completed"
+    assert result == ChildResult(status="completed", control_signal=None)
     assert _event_text(events) == "LangGraph 是用于构建有状态 Agent 工作流的框架。"
     assert len(response_model.captured_messages) == 1
     assert response_model.captured_messages[0][0] == SystemMessage(
@@ -140,6 +141,7 @@ def test_general_chat_answers_ordinary_chat_with_system_prompt() -> None:
 
 def test_general_chat_preserves_multi_turn_child_history() -> None:
     from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
+    from agent_runtime.graph.child_result import ChildResult
 
     saver = InMemorySaver()
     response_model = FakeResponseChatModel(
@@ -170,8 +172,8 @@ def test_general_chat_preserves_multi_turn_child_history() -> None:
     checkpoint = saver.get_tuple(config)
     assert checkpoint is not None
     messages = checkpoint.checkpoint["channel_values"]["messages"]
-    assert first_result == "completed"
-    assert second_result == "completed"
+    assert first_result == ChildResult(status="completed", control_signal=None)
+    assert second_result == ChildResult(status="completed", control_signal=None)
     assert [message.content for message in messages] == [
         "我喜欢蓝色",
         "我记住了。",
@@ -183,6 +185,7 @@ def test_general_chat_preserves_multi_turn_child_history() -> None:
 
 def test_translation_rejection_emits_nothing_and_does_not_advance_history() -> None:
     from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
+    from agent_runtime.graph.child_result import ChildResult
 
     saver = InMemorySaver()
     response_model = FakeResponseChatModel(responses=["普通聊天回复"])
@@ -217,7 +220,10 @@ def test_translation_rejection_emits_nothing_and_does_not_advance_history() -> N
     checkpoint_after = saver.get_tuple(config)
     assert checkpoint_after is not None
     history_after = checkpoint_after.checkpoint["channel_values"]["messages"]
-    assert result == "OUT_OF_SCOPE"
+    assert result == ChildResult(
+        status="rejected",
+        control_signal="OUT_OF_SCOPE",
+    )
     assert rejected_events == []
     assert history_after == history_before
     assert len(response_model.captured_messages) == 1

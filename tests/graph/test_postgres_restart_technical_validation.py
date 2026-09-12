@@ -24,6 +24,7 @@ def run_on_psycopg_compatible_loop(coroutine):
     reason="set RUN_POSTGRES_TESTS=1 to run PostgreSQL integration tests",
 )
 def test_fresh_parent_graph_restores_child_ai_message_from_postgres() -> None:
+    from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
     from agent_runtime.core.config import Settings
     from agent_runtime.graph.config import (
         child_thread_config,
@@ -67,7 +68,13 @@ def test_fresh_parent_graph_restores_child_ai_message_from_postgres() -> None:
                         ),
                         message_id=message_id,
                     )
-                    return {"messages": [final_message]}
+                    return CapabilityInvocation(
+                        result=ChildResult(
+                            status="completed",
+                            control_signal=None,
+                        ),
+                        message=final_message,
+                    )
 
                 first_parent = build_parent_graph(
                     route=route,

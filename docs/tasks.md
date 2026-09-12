@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-06
-Last Verified Task: S1-05
-Last Verified Commit: 47652129cce188fc1154f6ea5b6a8bee602c7836
+Current Task: S1-07
+Last Verified Task: S1-06
+Last Verified Commit: a97eee33a33b6b0ab7ec7de031bfc83ffd9de14d
 Blockers: None
 ```
 
@@ -325,7 +325,7 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
 
 ## S1-06 en_to_zh
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-03
 
@@ -363,14 +363,14 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
   `55 passed, 2 skipped`；启用 PostgreSQL 后全量回归 `57 passed`
 - 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
   Ready
-- Result：S1-06 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
-  再标记 `VERIFIED`；未开始 S1-07
+- 2026-09-12：负责人确认验收通过
+- Result：S1-06 已验收并更新为 `VERIFIED`；允许开始 S1-07
 
 ---
 
 ## S1-07 ChildResult 与 OUT_OF_SCOPE 回流
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S1-04, S1-05, S1-06
 
@@ -397,17 +397,35 @@ Child OUT_OF_SCOPE
 
 ### Acceptance
 
-- [ ] OUT_OF_SCOPE 与 failed/error 分离
-- [ ] OUT_OF_SCOPE 不产生 Child 用户可见输出
-- [ ] OUT_OF_SCOPE 不推进被拒绝 Child 的消息历史
-- [ ] 同一 HumanMessage 不重复写入 messages
-- [ ] general_chat → en_to_zh 切换成功
-- [ ] en_to_zh → general_chat 切换成功
-- [ ] Router 不会再次选择本轮已拒绝的 Capability
-- [ ] 两个 Capability 全部拒绝后不会循环
-- [ ] unsupported 回复写入 Parent messages
-- [ ] unsupported 回复由 Parent 发送 message 事件
-- [ ] unsupported 使用 done.status，不发送 error
+- [x] OUT_OF_SCOPE 与 failed/error 分离
+- [x] OUT_OF_SCOPE 不产生 Child 用户可见输出
+- [x] OUT_OF_SCOPE 不推进被拒绝 Child 的消息历史
+- [x] 同一 HumanMessage 不重复写入 messages
+- [x] general_chat → en_to_zh 切换成功
+- [x] en_to_zh → general_chat 切换成功
+- [x] Router 不会再次选择本轮已拒绝的 Capability
+- [x] 两个 Capability 全部拒绝后不会循环
+- [x] unsupported 回复写入 Parent messages
+- [x] unsupported 回复由 Parent 发送 message 事件
+- [x] unsupported 使用 done.status，不发送 error
+
+### Execution Evidence
+
+- 2026-09-12：新增极简 `ChildResult(status, control_signal)`，拒绝状态只能与
+  `OUT_OF_SCOPE` 搭配，控制面不接受用户可见内容
+- 2026-09-12：`general_chat` 和 `en_to_zh` 均返回标准 `ChildResult`；实际
+  模型异常继续作为 `ApplicationError`，不解释为能力越界
+- 2026-09-12：Parent Graph 支持当前能力直接续用、拒绝后记录本轮拒绝集并
+  重新路由；双向切换均通过，同一能力不会对同一 HumanMessage 重复调用
+- 2026-09-12：全部能力拒绝后生成固定 unsupported `AIMessage`，分配稳定 UUID、
+  写入 Parent 公共历史、发送内部 message 事件并设置
+  `completion_status="unsupported"`，不发送 error 且不继续循环
+- 2026-09-12：S1-07 相关专项测试 `34 passed`；默认全量回归
+  `63 passed, 2 skipped`；启用 PostgreSQL 后全量回归 `65 passed`
+- 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
+  Ready
+- Result：S1-07 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
+  再标记 `VERIFIED`；未开始 S1-08
 
 ---
 

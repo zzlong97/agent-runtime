@@ -322,6 +322,7 @@ def test_router_rejects_parent_state_without_human_message() -> None:
 
 
 def test_router_is_usable_as_parent_graph_route_node() -> None:
+    from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
     from agent_runtime.graph.parent import build_parent_graph
     from agent_runtime.graph.router import StageOneRouter
 
@@ -334,7 +335,10 @@ def test_router_is_usable_as_parent_graph_route_node() -> None:
 
     async def invoke_capability(state, config):
         invoked_capabilities.append(state["resolved_capability_id"])
-        return {}
+        return CapabilityInvocation(
+            result=ChildResult(status="completed", control_signal=None),
+            message=AIMessage(content="你好", id="router-parent-message"),
+        )
 
     parent = build_parent_graph(
         route=router.route,

@@ -121,6 +121,7 @@ def test_en_to_zh_translates_current_english_message_completely() -> None:
         EN_TO_ZH_SYSTEM_PROMPT,
         EnglishToChineseCapability,
     )
+    from agent_runtime.graph.child_result import ChildResult
 
     scope_model = FakeScopeChatModel(responses=[True])
     translation_model = FakeTranslationChatModel(
@@ -152,7 +153,7 @@ def test_en_to_zh_translates_current_english_message_completely() -> None:
 
     checkpoint = saver.get_tuple(config)
     assert checkpoint is not None
-    assert result == "completed"
+    assert result == ChildResult(status="completed", control_signal=None)
     assert _event_text(events) == (
         "打开文件，保留每个标题，并且不要遗漏最后的警告。"
     )
@@ -175,6 +176,7 @@ def test_en_to_zh_uses_history_only_for_translation_context() -> None:
         EN_TO_ZH_SYSTEM_PROMPT,
         EnglishToChineseCapability,
     )
+    from agent_runtime.graph.child_result import ChildResult
 
     saver = InMemorySaver()
     translation_model = FakeTranslationChatModel(
@@ -205,8 +207,8 @@ def test_en_to_zh_uses_history_only_for_translation_context() -> None:
     checkpoint = saver.get_tuple(config)
     assert checkpoint is not None
     messages = checkpoint.checkpoint["channel_values"]["messages"]
-    assert first_result == "completed"
-    assert second_result == "completed"
+    assert first_result == ChildResult(status="completed", control_signal=None)
+    assert second_result == ChildResult(status="completed", control_signal=None)
     assert [message.content for message in messages] == [
         "OpenAI released it.",
         "OpenAI 发布了它。",
@@ -236,6 +238,7 @@ def test_en_to_zh_rejects_requests_outside_english_to_chinese(message: str) -> N
         EN_TO_ZH_SCOPE_PROMPT,
         EnglishToChineseCapability,
     )
+    from agent_runtime.graph.child_result import ChildResult
 
     saver = InMemorySaver()
     translation_model = FakeTranslationChatModel(responses=["不应生成"])
@@ -256,7 +259,10 @@ def test_en_to_zh_rejects_requests_outside_english_to_chinese(message: str) -> N
         )
     )
 
-    assert result == "OUT_OF_SCOPE"
+    assert result == ChildResult(
+        status="rejected",
+        control_signal="OUT_OF_SCOPE",
+    )
     assert events == []
     assert saver.get_tuple(config) is None
     assert translation_model.captured_messages == []
@@ -268,6 +274,7 @@ def test_en_to_zh_rejects_requests_outside_english_to_chinese(message: str) -> N
 
 def test_en_to_zh_rejection_does_not_advance_existing_child_history() -> None:
     from agent_runtime.capabilities.en_to_zh.graph import EnglishToChineseCapability
+    from agent_runtime.graph.child_result import ChildResult
 
     saver = InMemorySaver()
     translation_model = FakeTranslationChatModel(responses=["早上好"])
@@ -299,7 +306,10 @@ def test_en_to_zh_rejection_does_not_advance_existing_child_history() -> None:
 
     checkpoint_after = saver.get_tuple(config)
     assert checkpoint_after is not None
-    assert result == "OUT_OF_SCOPE"
+    assert result == ChildResult(
+        status="rejected",
+        control_signal="OUT_OF_SCOPE",
+    )
     assert rejected_events == []
     assert checkpoint_after.checkpoint["channel_values"] == history_before
     assert len(translation_model.captured_messages) == 1

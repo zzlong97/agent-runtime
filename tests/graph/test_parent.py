@@ -1,11 +1,12 @@
 import asyncio
 from uuid import uuid4
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 
 def test_parent_graph_runs_the_fixed_stage_one_skeleton() -> None:
+    from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
     from agent_runtime.graph.config import parent_thread_config
     from agent_runtime.graph.parent import build_parent_graph
 
@@ -18,7 +19,10 @@ def test_parent_graph_runs_the_fixed_stage_one_skeleton() -> None:
     async def invoke_capability(state, config):
         calls.append("invoke_capability")
         assert state["resolved_capability_id"] == "general_chat"
-        return {}
+        return CapabilityInvocation(
+            result=ChildResult(status="completed", control_signal=None),
+            message=AIMessage(content="回复", id=str(uuid4())),
+        )
 
     graph = build_parent_graph(
         route=route,
@@ -39,24 +43,32 @@ def test_parent_graph_runs_the_fixed_stage_one_skeleton() -> None:
     assert result["resolved_capability_id"] == "general_chat"
     assert set(graph.get_graph().nodes) == {
         "__start__",
+        "prepare_request",
         "route",
         "invoke_capability",
+        "unsupported",
         "__end__",
     }
 
 
 def test_parent_graph_resets_rejections_before_each_new_request() -> None:
+    from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
     from agent_runtime.graph.config import parent_thread_config
     from agent_runtime.graph.parent import build_parent_graph
 
     rejections_seen_by_route: list[list[str]] = []
+    rejections_seen_by_capability: list[list[str]] = []
 
     async def route(state, config):
         rejections_seen_by_route.append(state["rejected_capability_ids"])
         return {"resolved_capability_id": "general_chat"}
 
     async def invoke_capability(state, config):
-        return {}
+        rejections_seen_by_capability.append(state["rejected_capability_ids"])
+        return CapabilityInvocation(
+            result=ChildResult(status="completed", control_signal=None),
+            message=AIMessage(content="回复", id=str(uuid4())),
+        )
 
     graph = build_parent_graph(
         route=route,
@@ -82,5 +94,6 @@ def test_parent_graph_resets_rejections_before_each_new_request() -> None:
 
     final_rejections = asyncio.run(exercise())
 
-    assert rejections_seen_by_route == [[], []]
+    assert rejections_seen_by_route == [[]]
+    assert rejections_seen_by_capability == [[], []]
     assert final_rejections == []

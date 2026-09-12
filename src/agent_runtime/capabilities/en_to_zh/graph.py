@@ -1,7 +1,7 @@
 """Stage 1 英文到中文翻译 Child Graph。"""
 
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agent_runtime.capabilities.en_to_zh.state import EnglishToChineseState
 from agent_runtime.core.errors import ApplicationError
+from agent_runtime.graph.child_result import ChildResult
 
 EN_TO_ZH_SCOPE_PROMPT = """你是 en_to_zh 的能力边界判断器，只判断当前用户消息能否由英文到中文翻译能力处理。
 纯英文内容视为待翻译原文；明确要求把英文内容翻译成中文也属于能力范围。
@@ -24,7 +25,6 @@ EN_TO_ZH_SYSTEM_PROMPT = """你是 AgentRuntime 的英文到中文翻译助手�
 历史消息仅用于理解代词、语境和术语，不得翻译或复述历史消息。
 不得省略、概括、缩写、解释或添加原文没有的信息；最终只输出当前原文的中文译文。"""
 
-EnglishToChineseRunStatus = Literal["completed", "OUT_OF_SCOPE"]
 EnglishToChineseMessageEvent = tuple[BaseMessage, dict[str, Any]]
 
 
@@ -102,7 +102,7 @@ class EnglishToChineseCapability:
         messages: list[BaseMessage],
         config: RunnableConfig,
         emit: Callable[[EnglishToChineseMessageEvent], None],
-    ) -> EnglishToChineseRunStatus:
+    ) -> ChildResult:
         """先执行范围守卫，再转发翻译图的消息事件。"""
 
         latest_message = next(
@@ -140,7 +140,10 @@ class EnglishToChineseCapability:
             ) from error
 
         if not decision.can_translate_to_chinese:
-            return "OUT_OF_SCOPE"
+            return ChildResult(
+                status="rejected",
+                control_signal="OUT_OF_SCOPE",
+            )
 
         try:
             async for event in self._graph.astream(
@@ -157,4 +160,4 @@ class EnglishToChineseCapability:
                 code="EN_TO_ZH_CALL_FAILED",
                 message="英译汉模型调用失败",
             ) from error
-        return "completed"
+        return ChildResult(status="completed", control_signal=None)

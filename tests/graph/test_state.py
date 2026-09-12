@@ -12,5 +12,6 @@ def test_parent_state_contains_only_public_and_control_fields() -> None:
         "messages",
         "resolved_capability_id",
         "rejected_capability_ids",
+        "completion_status",
     }
     assert fields["messages"].__metadata__ == (add_messages,)

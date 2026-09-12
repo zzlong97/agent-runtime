@@ -21,6 +21,7 @@ class TranslationProbeState(TypedDict):
 
 
 def test_parent_invokes_create_agent_child_and_forwards_tokens() -> None:
+    from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
     from agent_runtime.graph.config import (
         child_thread_config,
         parent_thread_config,
@@ -58,7 +59,10 @@ def test_parent_invokes_create_agent_child_and_forwards_tokens() -> None:
             ),
             message_id=message_id,
         )
-        return {"messages": [final_message]}
+        return CapabilityInvocation(
+            result=ChildResult(status="completed", control_signal=None),
+            message=final_message,
+        )
 
     parent = build_parent_graph(
         route=route,
@@ -101,6 +105,7 @@ def test_parent_invokes_create_agent_child_and_forwards_tokens() -> None:
 
 
 def test_parent_invokes_state_graph_child_without_leaking_private_state() -> None:
+    from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
     from agent_runtime.graph.config import (
         child_thread_config,
         parent_thread_config,
@@ -147,7 +152,10 @@ def test_parent_invokes_state_graph_child_without_leaking_private_state() -> Non
             ),
             message_id=message_id,
         )
-        return {"messages": [final_message]}
+        return CapabilityInvocation(
+            result=ChildResult(status="completed", control_signal=None),
+            message=final_message,
+        )
 
     parent = build_parent_graph(
         route=route,
