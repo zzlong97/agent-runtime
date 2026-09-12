@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-05
-Last Verified Task: S1-04
-Last Verified Commit: cd53ef5259f5872b102af7f69f0efaea797f53f7
+Current Task: S1-06
+Last Verified Task: S1-05
+Last Verified Commit: 47652129cce188fc1154f6ea5b6a8bee602c7836
 Blockers: None
 ```
 
@@ -278,7 +278,7 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
 
 ## S1-05 general_chat
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-03
 
@@ -318,14 +318,14 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
   全量回归 `49 passed`
 - 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
   Ready
-- Result：S1-05 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
-  再标记 `VERIFIED`；未开始 S1-06
+- 2026-09-12：负责人确认验收通过
+- Result：S1-05 已验收并更新为 `VERIFIED`；允许开始 S1-06
 
 ---
 
 ## S1-06 en_to_zh
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S1-03
 
@@ -337,16 +337,34 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
 
 ### Acceptance
 
-- [ ] 英文可翻译为中文
-- [ ] 普通聊天返回 OUT_OF_SCOPE
-- [ ] 中文翻英文返回 OUT_OF_SCOPE
-- [ ] 非翻译任务返回 OUT_OF_SCOPE
-- [ ] 忠实完整翻译当前 HumanMessage，不主动删减
-- [ ] 历史只辅助语境、代词和术语一致性
-- [ ] OUT_OF_SCOPE 不产生用户可见 token
-- [ ] OUT_OF_SCOPE 不推进 Child 消息历史
-- [ ] 使用独立 State
-- [ ] 默认测试使用 Fake Model
+- [x] 英文可翻译为中文
+- [x] 普通聊天返回 OUT_OF_SCOPE
+- [x] 中文翻英文返回 OUT_OF_SCOPE
+- [x] 非翻译任务返回 OUT_OF_SCOPE
+- [x] 忠实完整翻译当前 HumanMessage，不主动删减
+- [x] 历史只辅助语境、代词和术语一致性
+- [x] OUT_OF_SCOPE 不产生用户可见 token
+- [x] OUT_OF_SCOPE 不推进 Child 消息历史
+- [x] 使用独立 State
+- [x] 默认测试使用 Fake Model
+
+### Execution Evidence
+
+- 2026-09-12：新增独立 `EnglishToChineseState` 和 LangGraph `StateGraph`，
+  Child 私有状态仅包含派生消息快照与最近一次译文
+- 2026-09-12：新增结构化英文到中文范围守卫；纯英文和明确英译汉请求可进入，
+  普通聊天、中文翻英文、其他语言互译、代码生成及非翻译任务返回
+  `OUT_OF_SCOPE`
+- 2026-09-12：范围守卫在持久化翻译图外执行，拒绝路径不产生消息事件、不调用
+  翻译模型且不创建或推进 Child Checkpoint
+- 2026-09-12：中文翻译 Prompt 约束只翻译当前 HumanMessage，历史仅辅助代词、
+  语境和术语，不省略、概括、解释或添加原文内容
+- 2026-09-12：专项测试 `8 passed`；默认全量回归
+  `55 passed, 2 skipped`；启用 PostgreSQL 后全量回归 `57 passed`
+- 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
+  Ready
+- Result：S1-06 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
+  再标记 `VERIFIED`；未开始 S1-07
 
 ---
 
