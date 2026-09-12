@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-07
-Last Verified Task: S1-06
-Last Verified Commit: a97eee33a33b6b0ab7ec7de031bfc83ffd9de14d
+Current Task: S1-08
+Last Verified Task: S1-07
+Last Verified Commit: 01829bfc5bb83e1686a6562ba46c92927884603a
 Blockers: None
 ```
 
@@ -370,7 +370,7 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
 
 ## S1-07 ChildResult 与 OUT_OF_SCOPE 回流
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-04, S1-05, S1-06
 
@@ -424,14 +424,14 @@ Child OUT_OF_SCOPE
   `63 passed, 2 skipped`；启用 PostgreSQL 后全量回归 `65 passed`
 - 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
   Ready
-- Result：S1-07 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
-  再标记 `VERIFIED`；未开始 S1-08
+- 2026-09-12：负责人确认验收通过
+- Result：S1-07 已验收并更新为 `VERIFIED`；允许开始 S1-08
 
 ---
 
 ## S1-08 PostgreSQL Checkpointer
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S1-02, S1-03, S1-05, S1-06, S1-07
 
@@ -447,19 +447,43 @@ Child OUT_OF_SCOPE
 
 ### Acceptance
 
-- [ ] Parent / Child Checkpointer 逻辑隔离
-- [ ] Child A / Child B 状态隔离
-- [ ] general_chat child thread_id = `{session_id}:general_chat`
-- [ ] en_to_zh child thread_id = `{session_id}:en_to_zh`
-- [ ] Parent 保存完整公共对话
-- [ ] 当前 HumanMessage 之前不足 10 个已完成轮次时传递全部已完成轮次
-- [ ] 已有 10 个已完成轮次后只传最近 5 个完整轮次和当前 HumanMessage
-- [ ] System Message 始终保留且不计入轮数
-- [ ] 上下文裁剪不删除 Parent 历史
-- [ ] Child 消息视图不会与旧输入重复累加
-- [ ] unsupported / incomplete 不计入完整轮次
-- [ ] 服务重启后 Session 状态可恢复
-- [ ] 同一 Session 返回当前 Capability 后可继续执行
+- [x] Parent / Child Checkpointer 逻辑隔离
+- [x] Child A / Child B 状态隔离
+- [x] general_chat child thread_id = `{session_id}:general_chat`
+- [x] en_to_zh child thread_id = `{session_id}:en_to_zh`
+- [x] Parent 保存完整公共对话
+- [x] 当前 HumanMessage 之前不足 10 个已完成轮次时传递全部已完成轮次
+- [x] 已有 10 个已完成轮次后只传最近 5 个完整轮次和当前 HumanMessage
+- [x] System Message 始终保留且不计入轮数
+- [x] 上下文裁剪不删除 Parent 历史
+- [x] Child 消息视图不会与旧输入重复累加
+- [x] unsupported / incomplete 不计入完整轮次
+- [x] 服务重启后 Session 状态可恢复
+- [x] 同一 Session 返回当前 Capability 后可继续执行
+
+### Execution Evidence
+
+- 2026-09-12：新增 Context Builder，当前消息前不足 10 个已完成轮次时保留
+  全部轮次，已有 10 个轮次后仅保留最近 5 轮；System Message 始终保留，
+  `unsupported` 和 `incomplete` 不计数、不进入 Child 上下文
+- 2026-09-12：两个固定 Capability Adapter 使用
+  `RemoveMessage(REMOVE_ALL_MESSAGES)` 先清空旧 Child 消息，再写入 Parent 派生
+  快照；多轮与能力切换测试确认不会重复累加旧输入
+- 2026-09-12：Parent、`general_chat`、`en_to_zh` 使用三套同时存活的独立
+  PostgreSQL saver，thread_id 分别为 `session_id`、
+  `{session_id}:general_chat` 和 `{session_id}:en_to_zh`
+- 2026-09-12：真实 PostgreSQL 验证关闭第一组 saver / graph 后，以全新 saver /
+  graph 恢复 Parent 完整公共历史和当前 Capability，并继续完成能力回流与后续调用；
+  两个 Child 状态和私有字段互不污染
+- 2026-09-12：最终完整 `AIMessage` 由 Adapter 从 Child 事件聚合、分配服务端稳定
+  UUID，并通过数据面写回 Parent 公共 `messages`
+- 2026-09-12：Context Builder 与 Adapter / Checkpointer 专项测试
+  `10 passed, 1 skipped`；默认全量回归 `73 passed, 3 skipped`；启用真实
+  PostgreSQL 后全量回归 `76 passed`
+- 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
+  Ready；确认未跨入 S1-09
+- Result：S1-08 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
+  再标记 `VERIFIED`；未开始 S1-09
 
 ---
 

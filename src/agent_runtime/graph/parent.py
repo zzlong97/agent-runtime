@@ -1,6 +1,6 @@
 """Stage 1 Parent Graph 的固定调度与有限回流控制。"""
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
@@ -46,16 +46,34 @@ async def forward_child_message_stream(
     """转发 Child 消息事件并聚合最终公共 AIMessage。"""
 
     writer = get_stream_writer()
-    final_chunk: AIMessageChunk | None = None
+    emitted_messages: list[BaseMessage] = []
     async for message, _metadata in events:
         writer(message)
+        emitted_messages.append(message)
+
+    return build_public_ai_message(emitted_messages, message_id=message_id)
+
+
+def build_public_ai_message(
+    emitted_messages: Iterable[BaseMessage],
+    *,
+    message_id: UUID,
+) -> AIMessage:
+    """把 Child 消息事件聚合为带服务端稳定 UUID 的完整公共 AIMessage。"""
+
+    final_chunk: AIMessageChunk | None = None
+    final_message: AIMessage | None = None
+    for message in emitted_messages:
         if isinstance(message, AIMessageChunk):
             final_chunk = message if final_chunk is None else final_chunk + message
+        elif isinstance(message, AIMessage):
+            final_message = message
 
-    if final_chunk is None:
-        return AIMessage(content="", id=str(message_id))
+    if final_chunk is not None:
+        final_message = cast(AIMessage, message_chunk_to_message(final_chunk))
+    if final_message is None:
+        final_message = AIMessage(content="")
 
-    final_message = message_chunk_to_message(final_chunk)
     return cast(AIMessage, final_message.model_copy(update={"id": str(message_id)}))
 
 
