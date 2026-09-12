@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-02
-Last Verified Task: S1-01
-Last Verified Commit: 0e146511526bdaeac97dd63e36772bfd618a7f36
+Current Task: S1-03
+Last Verified Task: S1-02
+Last Verified Commit: d316b1a5379374433ff403c3303004167467ad3a
 Blockers: None
 ```
 
@@ -113,7 +113,7 @@ None.
 
 ## S1-02 Session 最小实体
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-01
 
@@ -154,14 +154,14 @@ Stage 1 使用配置中的固定 `user_id`。无 `session_id` 时，先创建 Se
   `/health` 返回 200；Windows 使用 psycopg 兼容 SelectorEventLoop
 - 2026-09-12：独立代码评审无 Critical、Important 或 Minor 问题，
   Assessment 为 Ready
-- Result：S1-02 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
-  再标记 `VERIFIED`；未开始 S1-03
+- 2026-09-12：负责人确认验收通过
+- Result：S1-02 已验收并更新为 `VERIFIED`；允许开始 S1-03
 
 ---
 
 ## S1-03 Parent State 与 Parent Graph 骨架
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S1-01, S1-02
 
@@ -190,12 +190,33 @@ Parent 观察。
 
 ### Acceptance
 
-- [ ] Parent Graph 可 compile
-- [ ] Parent State 不包含任何 Child 业务私有字段
-- [ ] session_id 可作为 parent thread_id
-- [ ] create_agent Child 和 StateGraph Child 均可被 Parent 调用
-- [ ] Child token 可穿透 Parent stream
-- [ ] rejected_capability_ids 每个新请求都会重置
+- [x] Parent Graph 可 compile
+- [x] Parent State 不包含任何 Child 业务私有字段
+- [x] session_id 可作为 parent thread_id
+- [x] create_agent Child 和 StateGraph Child 均可被 Parent 调用
+- [x] Child token 可穿透 Parent stream
+- [x] rejected_capability_ids 每个新请求都会重置
+
+### Verification
+
+- 2026-09-12：Parent State 仅包含 `messages`、
+  `resolved_capability_id`、`rejected_capability_ids`，固定图拓扑编译并按
+  `START → route → invoke_capability → END` 执行
+- 2026-09-12：真实 `create_agent` Child 与自定义 `StateGraph` Child 均由
+  Parent 调用；二者使用独立 State Schema、Checkpointer 和 capability 级
+  thread_id
+- 2026-09-12：两类 Child token 均可穿透 Parent custom stream，聚合后的最终
+  `AIMessage` 使用调用方分配的稳定 UUID 写回 Parent `messages`，Child 私有字段
+  未泄漏
+- 2026-09-12：真实 PostgreSQL 验证关闭首个 saver / graph 后，以全新 saver /
+  graph 恢复完整 Human + AI 公共历史
+- 2026-09-12：默认 `uv run pytest -q` 通过，31 个测试通过，2 个 PostgreSQL
+  集成测试按显式标记跳过；启用 `RUN_POSTGRES_TESTS=1` 后全量 33 个测试通过
+- 2026-09-12：`uv lock --check`、`uv pip check`、源码编译和构建检查通过
+- 2026-09-12：独立代码二次复核无 Critical、Important 或 Minor 问题，
+  Assessment 为 Ready
+- Result：S1-03 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
+  再标记 `VERIFIED`；未开始 S1-04
 
 ---
 
