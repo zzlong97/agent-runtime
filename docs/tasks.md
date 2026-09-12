@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-03
-Last Verified Task: S1-02
-Last Verified Commit: d316b1a5379374433ff403c3303004167467ad3a
+Current Task: S1-04
+Last Verified Task: S1-03
+Last Verified Commit: 4777c04f93cc9e1c0bf9d54b23943378e8d21c34
 Blockers: None
 ```
 
@@ -161,7 +161,7 @@ Stage 1 使用配置中的固定 `user_id`。无 `session_id` 时，先创建 Se
 
 ## S1-03 Parent State 与 Parent Graph 骨架
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-01, S1-02
 
@@ -215,14 +215,14 @@ Parent 观察。
 - 2026-09-12：`uv lock --check`、`uv pip check`、源码编译和构建检查通过
 - 2026-09-12：独立代码二次复核无 Critical、Important 或 Minor 问题，
   Assessment 为 Ready
-- Result：S1-03 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
-  再标记 `VERIFIED`；未开始 S1-04
+- 2026-09-12：负责人确认验收通过
+- Result：S1-03 已验收并更新为 `VERIFIED`；允许开始 S1-04
 
 ---
 
 ## S1-04 Router
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S1-03
 
@@ -246,14 +246,33 @@ Router 只能从本轮未拒绝当前 HumanMessage 的候选中选择。
 
 ### Acceptance
 
-- [ ] 普通聊天可路由 general_chat
-- [ ] 明确英译汉可路由 en_to_zh
-- [ ] Router 输出经过 schema 校验
-- [ ] Router 输出经过候选集校验
-- [ ] 已拒绝 Capability 不会被再次选择
-- [ ] Router 非法输出属于 error，不属于 OUT_OF_SCOPE
-- [ ] 未实现 interrupt / TopN
-- [ ] 默认测试使用 Fake Model
+- [x] 普通聊天可路由 general_chat
+- [x] 明确英译汉可路由 en_to_zh
+- [x] Router 输出经过 schema 校验
+- [x] Router 输出经过候选集校验
+- [x] 已拒绝 Capability 不会被再次选择
+- [x] Router 非法输出属于 error，不属于 OUT_OF_SCOPE
+- [x] 未实现 interrupt / TopN
+- [x] 默认测试使用 Fake Model
+
+### Verification
+
+- 2026-09-12：`StageOneRouter` 使用 LangChain `with_structured_output()` 绑定
+  `RouterDecision`，未使用自由文本解析或启发式规则
+- 2026-09-12：`capability_id` 和 `confidence` 均提供明确中文 Schema
+  `description`；禁止额外字段并校验 confidence 范围为 0.0 至 1.0
+- 2026-09-12：Fake Chat Model 验证普通聊天、明确英译汉、候选过滤、候选越权、
+  Schema 非法、模型异常、无候选及 Parent Graph 接入
+- 2026-09-12：低 confidence 仍直接返回 Top1；未实现 interrupt、人工确认或
+  TopN
+- 2026-09-12：默认 `uv run pytest -q` 通过，43 个测试通过，2 个 PostgreSQL
+  集成测试按显式标记跳过；启用 `RUN_POSTGRES_TESTS=1` 后全量 45 个测试通过
+- 2026-09-12：`uv lock --check`、`uv pip check`、源码编译、构建和
+  `git diff --check` 通过
+- 2026-09-12：独立代码评审无 Critical、Important 或 Minor 问题，
+  Assessment 为 Ready
+- Result：S1-04 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
+  再标记 `VERIFIED`；未开始 S1-05
 
 ---
 
