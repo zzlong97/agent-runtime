@@ -118,8 +118,9 @@ def test_all_rejected_capabilities_emit_and_persist_unsupported_message() -> Non
     route_rejections: list[list[str]] = []
     invoked_capabilities: list[str | None] = []
     unsupported_message_id = UUID("00000000-0000-0000-0000-000000000321")
+    fallback_message_id = UUID("00000000-0000-0000-0000-000000000322")
     saver = InMemorySaver()
-    config = parent_thread_config(uuid4())
+    config = parent_thread_config(uuid4(), message_id=unsupported_message_id)
 
     async def route(state, config):
         rejected = list(state["rejected_capability_ids"])
@@ -144,7 +145,7 @@ def test_all_rejected_capabilities_emit_and_persist_unsupported_message() -> Non
         route=route,
         invoke_capability=invoke_capability,
         checkpointer=saver,
-        message_id_factory=lambda: unsupported_message_id,
+        message_id_factory=lambda: fallback_message_id,
     )
     human_message = HumanMessage(content="把你好翻译成英文", id=str(uuid4()))
 

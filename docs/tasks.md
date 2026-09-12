@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 1
-Current Task: S1-08
-Last Verified Task: S1-07
-Last Verified Commit: 01829bfc5bb83e1686a6562ba46c92927884603a
+Current Task: S1-09
+Last Verified Task: S1-08
+Last Verified Commit: 99fc91e0d91167e20d3b8cf043294630374e458a
 Blockers: None
 ```
 
@@ -431,7 +431,7 @@ Child OUT_OF_SCOPE
 
 ## S1-08 PostgreSQL Checkpointer
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-02, S1-03, S1-05, S1-06, S1-07
 
@@ -482,14 +482,14 @@ Child OUT_OF_SCOPE
   PostgreSQL 后全量回归 `76 passed`
 - 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
   Ready；确认未跨入 S1-09
-- Result：S1-08 实现与自动化验收完成，状态更新为 `DONE`，等待负责人复核后
-  再标记 `VERIFIED`；未开始 S1-09
+- 2026-09-12：负责人确认验收通过
+- Result：S1-08 已验收并更新为 `VERIFIED`；允许开始 S1-09
 
 ---
 
 ## S1-09 HTTP + SSE
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S1-02, S1-03, S1-07, S1-08
 
@@ -520,16 +520,35 @@ done    → session_id + status
 
 ### Acceptance
 
-- [ ] LLM token 可流式返回
-- [ ] 新 Session 从首个 SSE 事件起即可获得 session_id
-- [ ] 同一回复所有 delta 使用相同 message_id
-- [ ] FastAPI 对 LangGraph 内部 stream 做转换
-- [ ] 前端协议不暴露原始 StateSnapshot
-- [ ] 前端协议不暴露 node 名称
-- [ ] done.status 只允许 completed / unsupported / failed
-- [ ] 建立 SSE 后的运行错误发送 error → done(failed)
-- [ ] 请求或 Session 校验失败在 SSE 前返回 HTTP 4xx JSON
-- [ ] 部分输出后失败会保存 incomplete AIMessage
+- [x] LLM token 可流式返回
+- [x] 新 Session 从首个 SSE 事件起即可获得 session_id
+- [x] 同一回复所有 delta 使用相同 message_id
+- [x] FastAPI 对 LangGraph 内部 stream 做转换
+- [x] 前端协议不暴露原始 StateSnapshot
+- [x] 前端协议不暴露 node 名称
+- [x] done.status 只允许 completed / unsupported / failed
+- [x] 建立 SSE 后的运行错误发送 error → done(failed)
+- [x] 请求或 Session 校验失败在 SSE 前返回 HTTP 4xx JSON
+- [x] 部分输出后失败会保存 incomplete AIMessage
+
+### Execution Evidence
+
+- 2026-09-12：新增 `POST /api/v1/chat/completions`，在建立 SSE 前完成请求、
+  Session 所属关系和 Parent 状态校验；新 Session 先持久化 Session 与首条
+  HumanMessage，再运行 Router
+- 2026-09-12：新增带完整中文字段说明的请求与 SSE Schema；FastAPI Adapter
+  只输出 `message`、`error`、`done` 及固定产品字段，不暴露 LangGraph 内部事件
+- 2026-09-12：每轮在服务端分配稳定 HumanMessage / AIMessage UUID，并通过
+  Parent 配置贯穿 Capability、unsupported 回复、SSE delta 和最终公共消息
+- 2026-09-12：流建立后的运行异常转换为 `error → done(failed)`；模型已有部分
+  输出时，以相同 AIMessage UUID 将聚合内容标记为 `incomplete` 并写回 Parent
+- 2026-09-12：生产应用生命周期装配百炼 OpenAI 兼容模型、固定 Router、两个
+  Capability Adapter 及三套独立 PostgreSQL Checkpointer；生命周期打开与关闭验证通过
+- 2026-09-12：默认全量回归 `98 passed, 5 skipped`；启用真实 PostgreSQL 后
+  全量回归 `103 passed`；依赖锁、环境兼容性、源码编译和分发包构建验证通过
+- 2026-09-12：独立代码审查无 Critical、Important 或 Minor 问题，结论为
+  Ready；确认未跨入 S1-10
+- Result：S1-09 实现和验证完成，等待负责人验收；尚未进入 S1-10
 
 ---
 

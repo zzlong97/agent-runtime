@@ -96,3 +96,30 @@ def test_router_failure_keeps_session_and_first_human_message() -> None:
     assert routed_session_id is not None
     assert routed_session_id in persisted_sessions
     assert persisted_messages[routed_session_id][0].content == "Retain me"
+
+
+def test_prepare_new_session_persists_without_starting_graph() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions.service import SessionService
+
+    events: list[str] = []
+
+    class FakeSessionRepository:
+        async def add(self, session) -> None:
+            events.append("session")
+
+    class FakeParentStateStore:
+        async def store_initial_human_message(self, session_id, message) -> None:
+            events.append("human_message")
+
+    service = SessionService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        parent_state_store=FakeParentStateStore(),
+    )
+
+    prepared = asyncio.run(service.prepare_new_session(content="准备流式执行"))
+
+    assert events == ["session", "human_message"]
+    assert prepared.session.user_id == "configured-user"
+    assert prepared.human_message.content == "准备流式执行"

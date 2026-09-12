@@ -17,6 +17,7 @@ from langgraph.types import Checkpointer, Command
 
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.graph.child_result import CapabilityInvocation
+from agent_runtime.graph.config import public_message_id_from_parent_config
 from agent_runtime.graph.state import ParentState
 
 UNSUPPORTED_REPLY = "抱歉，当前能力无法处理这个请求。"
@@ -188,12 +189,14 @@ def build_parent_graph(
 
     async def generate_unsupported_reply(
         state: ParentState,
+        config: RunnableConfig,
     ) -> dict[str, Any]:
         """生成固定 unsupported 回复并作为普通消息事件发送。"""
 
+        message_id = public_message_id_from_parent_config(config)
         message = AIMessage(
             content=UNSUPPORTED_REPLY,
-            id=str(message_id_factory()),
+            id=str(message_id or message_id_factory()),
             additional_kwargs={"runtime_status": "unsupported"},
         )
         writer = get_stream_writer()

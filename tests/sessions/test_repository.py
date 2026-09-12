@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
+
 
 def test_session_repository_setup_creates_minimal_table_and_commits(
     monkeypatch,
@@ -159,3 +161,36 @@ def test_session_repository_get_restores_session_metadata(
         "FROM sessions WHERE session_id = %s"
     )
     assert executed["params"] == (session_id,)
+
+
+def test_session_repository_get_reports_missing_session(monkeypatch) -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions import repository
+
+    class FakeCursor:
+        async def fetchone(self):
+            return None
+
+    class FakeConnection:
+        async def execute(self, query: str, params=None):
+            return FakeCursor()
+
+    @asynccontextmanager
+    async def fake_connection_factory(settings):
+        yield FakeConnection()
+
+    monkeypatch.setattr(
+        repository,
+        "open_database_connection",
+        fake_connection_factory,
+    )
+    session_repository = repository.PostgresSessionRepository(
+        Settings(_env_file=None)
+    )
+
+    with pytest.raises(repository.SessionNotFoundError) as captured:
+        asyncio.run(session_repository.get(uuid4()))
+
+    assert captured.value.code == "SESSION_NOT_FOUND"
+    assert captured.value.message == "Session 不存在"
+    assert captured.value.status_code == 404

@@ -9,7 +9,11 @@ from langgraph.config import get_stream_writer
 
 from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
 from agent_runtime.graph.child_result import CapabilityInvocation
-from agent_runtime.graph.config import child_thread_config, session_id_from_parent_config
+from agent_runtime.graph.config import (
+    child_thread_config,
+    public_message_id_from_parent_config,
+    session_id_from_parent_config,
+)
 from agent_runtime.graph.context import build_refreshed_child_input
 from agent_runtime.graph.parent import build_public_ai_message
 from agent_runtime.graph.state import ParentState
@@ -45,6 +49,7 @@ class GeneralChatAdapter:
             writer(message)
 
         session_id = session_id_from_parent_config(config)
+        message_id = public_message_id_from_parent_config(config)
         result = await self._capability.run(
             messages=build_refreshed_child_input(state["messages"]),
             config=child_thread_config(session_id, "general_chat"),
@@ -56,6 +61,6 @@ class GeneralChatAdapter:
             result=result,
             message=build_public_ai_message(
                 emitted_messages,
-                message_id=self._message_id_factory(),
+                message_id=message_id or self._message_id_factory(),
             ),
         )

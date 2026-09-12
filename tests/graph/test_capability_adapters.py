@@ -85,7 +85,13 @@ def test_adapters_refresh_child_views_and_keep_parent_authoritative() -> None:
     from agent_runtime.graph.parent import build_parent_graph
 
     session_id = uuid4()
-    parent_config = parent_thread_config(session_id)
+    first_message_id = UUID("00000000-0000-0000-0000-000000000101")
+    second_message_id = UUID("00000000-0000-0000-0000-000000000102")
+    third_message_id = UUID("00000000-0000-0000-0000-000000000103")
+    parent_configs = [
+        parent_thread_config(session_id, message_id=message_id)
+        for message_id in (first_message_id, second_message_id, third_message_id)
+    ]
     parent_saver = InMemorySaver()
     general_saver = InMemorySaver()
     translation_saver = InMemorySaver()
@@ -103,9 +109,7 @@ def test_adapters_refresh_child_views_and_keep_parent_authoritative() -> None:
             response_model=general_response_model,
             checkpointer=general_saver,
         ),
-        message_id_factory=iter(
-            [UUID("00000000-0000-0000-0000-000000000101")]
-        ).__next__,
+        message_id_factory=lambda: UUID("00000000-0000-0000-0000-000000000999"),
     )
     translation_adapter = EnglishToChineseAdapter(
         capability=EnglishToChineseCapability(
@@ -117,12 +121,7 @@ def test_adapters_refresh_child_views_and_keep_parent_authoritative() -> None:
             translation_model=translation_model,
             checkpointer=translation_saver,
         ),
-        message_id_factory=iter(
-            [
-                UUID("00000000-0000-0000-0000-000000000102"),
-                UUID("00000000-0000-0000-0000-000000000103"),
-            ]
-        ).__next__,
+        message_id_factory=lambda: UUID("00000000-0000-0000-0000-000000000999"),
     )
     route_rejections: list[list[str]] = []
 
@@ -153,24 +152,24 @@ def test_adapters_refresh_child_views_and_keep_parent_authoritative() -> None:
                 "resolved_capability_id": None,
                 "rejected_capability_ids": [],
             },
-            parent_config,
+            parent_configs[0],
             stream_mode="custom",
         ):
             pass
         async for _event in parent.astream(
             {"messages": [second_human]},
-            parent_config,
+            parent_configs[1],
             stream_mode="custom",
         ):
             pass
         async for _event in parent.astream(
             {"messages": [third_human]},
-            parent_config,
+            parent_configs[2],
             stream_mode="custom",
         ):
             pass
 
-        parent_state = await parent.aget_state(parent_config)
+        parent_state = await parent.aget_state(parent_configs[2])
         general_checkpoint = general_saver.get_tuple(
             child_thread_config(session_id, "general_chat")
         )
@@ -212,6 +211,14 @@ def test_adapters_refresh_child_views_and_keep_parent_authoritative() -> None:
         message.content for message in translation_model.captured_messages[-1][1:]
     ] == parent_messages[:-1]
     assert parent_messages.count("我喜欢蓝色") == 1
+    parent_checkpoint = parent_saver.get_tuple(parent_configs[2])
+    assert parent_checkpoint is not None
+    parent_history = parent_checkpoint.checkpoint["channel_values"]["messages"]
+    assert [message.id for message in parent_history[1::2]] == [
+        str(first_message_id),
+        str(second_message_id),
+        str(third_message_id),
+    ]
     assert general_saver.get_tuple(child_thread_config(session_id, "en_to_zh")) is None
     assert (
         translation_saver.get_tuple(

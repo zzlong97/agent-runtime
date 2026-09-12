@@ -1,4 +1,4 @@
-"""Session creation ordering for the Stage 1 chat entry point."""
+"""Stage 1 聊天入口的 Session 创建顺序。"""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ from agent_runtime.sessions.repository import PostgresSessionRepository
 
 @dataclass(frozen=True, slots=True)
 class SessionStart:
-    """Stable IDs and persisted values handed to the Parent routing boundary."""
+    """交给 Parent 执行边界的稳定标识与已持久化值。"""
 
     session: Session
     human_message: HumanMessage
@@ -25,7 +25,7 @@ RouteHandler = Callable[[SessionStart], Awaitable[None]]
 
 
 class SessionService:
-    """Create and persist a Session before any Router work is attempted."""
+    """在任何 Router 工作前创建并持久化 Session。"""
 
     def __init__(
         self,
@@ -48,7 +48,18 @@ class SessionService:
         content: str,
         route: RouteHandler,
     ) -> SessionStart:
-        """Persist the new Session and first HumanMessage, then invoke Router."""
+        """持久化新 Session 和首条 HumanMessage，再调用 Router。"""
+
+        started = await self.prepare_new_session(content=content)
+        await route(started)
+        return started
+
+    async def prepare_new_session(
+        self,
+        *,
+        content: str,
+    ) -> SessionStart:
+        """在返回 StreamingResponse 前保存新 Session 和首条 HumanMessage。"""
 
         now = datetime.now(UTC)
         session = Session(
@@ -69,5 +80,4 @@ class SessionService:
             session.session_id,
             human_message,
         )
-        await route(started)
         return started

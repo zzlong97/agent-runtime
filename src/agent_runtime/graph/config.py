@@ -11,10 +11,17 @@ class ThreadConfigError(ApplicationError):
     """图调用配置中缺少合法的 Session thread_id。"""
 
 
-def parent_thread_config(session_id: UUID) -> RunnableConfig:
-    """使用 Session 标识作为 Parent checkpoint thread_id。"""
+def parent_thread_config(
+    session_id: UUID,
+    *,
+    message_id: UUID | None = None,
+) -> RunnableConfig:
+    """构造 Parent thread_id，并可携带本轮公共 AIMessage 的稳定 UUID。"""
 
-    return {"configurable": {"thread_id": str(session_id)}}
+    configurable = {"thread_id": str(session_id)}
+    if message_id is not None:
+        configurable["message_id"] = str(message_id)
+    return {"configurable": configurable}
 
 
 def child_thread_config(
@@ -40,4 +47,22 @@ def session_id_from_parent_config(config: RunnableConfig) -> UUID:
         raise ThreadConfigError(
             code="PARENT_THREAD_ID_INVALID",
             message="Parent 调用配置中缺少有效的 Session thread_id",
+        ) from error
+
+
+def public_message_id_from_parent_config(
+    config: RunnableConfig,
+) -> UUID | None:
+    """读取本轮公共 AIMessage UUID；非 HTTP 调用未提供时返回 null。"""
+
+    configurable = config.get("configurable", {})
+    raw_message_id = configurable.get("message_id")
+    if raw_message_id is None:
+        return None
+    try:
+        return UUID(str(raw_message_id))
+    except (TypeError, ValueError) as error:
+        raise ThreadConfigError(
+            code="PUBLIC_MESSAGE_ID_INVALID",
+            message="Parent 调用配置中的公共 message_id 不是有效 UUID",
         ) from error

@@ -1,8 +1,9 @@
-"""PostgreSQL persistence for Stage 1 Session metadata."""
+"""Stage 1 Session 元数据的 PostgreSQL 持久化。"""
 
 from uuid import UUID
 
 from agent_runtime.core.config import Settings, get_settings
+from agent_runtime.core.errors import ApplicationError
 from agent_runtime.persistence.database import open_database_connection
 from agent_runtime.sessions.models import Session
 
@@ -28,21 +29,25 @@ WHERE session_id = %s
 """
 
 
+class SessionNotFoundError(ApplicationError):
+    """客户端指定的 Session 不存在。"""
+
+
 class PostgresSessionRepository:
-    """Persist and restore the five-field Stage 1 Session entity."""
+    """持久化并恢复 Stage 1 五字段 Session 实体。"""
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """Create the Session metadata table when it does not exist."""
+        """在 Session 元数据表不存在时创建该表。"""
 
         async with open_database_connection(self._settings) as connection:
             await connection.execute(_CREATE_SESSIONS_TABLE)
             await connection.commit()
 
     async def add(self, session: Session) -> None:
-        """Persist one Session before graph execution starts."""
+        """在图执行开始前持久化一个 Session。"""
 
         async with open_database_connection(self._settings) as connection:
             await connection.execute(
@@ -58,9 +63,15 @@ class PostgresSessionRepository:
             await connection.commit()
 
     async def get(self, session_id: UUID) -> Session:
-        """Restore one existing Session by its stable UUID."""
+        """按稳定 UUID 恢复 Session，不存在时返回标准 404 应用错误。"""
 
         async with open_database_connection(self._settings) as connection:
             cursor = await connection.execute(_SELECT_SESSION, (session_id,))
             row = await cursor.fetchone()
+        if row is None:
+            raise SessionNotFoundError(
+                code="SESSION_NOT_FOUND",
+                message="Session 不存在",
+                status_code=404,
+            )
         return Session(**row)
