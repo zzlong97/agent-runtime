@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-02
-Last Verified Task: S2-01
-Last Verified Commit: 3dfb94d5a33698c3f3cde7f963899381a4c6cf4f
+Current Task: S2-03
+Last Verified Task: S2-02
+Last Verified Commit: 07a18f1c4a2fe83e72aaae36b257deaeb28a992a
 Blockers: None
 ```
 
@@ -778,7 +778,7 @@ GET /api/v1/chat/sessions?cursor={cursor}&limit={limit}
 
 ## S2-02 Session 改名
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-01
 
@@ -815,13 +815,14 @@ PATCH /api/v1/chat/sessions/{session_id}/rename
 - 2026-09-13：依赖锁、源码与测试编译、源码包和 wheel 构建、OpenAPI 契约、
   暂存差异检查均通过；独立代码审查无 Critical、Important 或 Minor 问题，
   结论为 Ready
-- Result：S2-02 实现与工程验收完成，等待负责人确认后再进入 S2-03
+- 2026-09-13：负责人确认验收通过
+- Result：S2-02 已验收并更新为 `VERIFIED`；允许开始 S2-03
 
 ---
 
 ## S2-03 单 Session 单 Run
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-02
 
@@ -837,12 +838,32 @@ active_runs[session_id] = ActiveRun
 
 ### Acceptance
 
-- [ ] 同一 Session 同时只允许一个 Run
-- [ ] 重复请求在 SSE 前返回 HTTP 409 `SESSION_BUSY`
-- [ ] 被拒绝的重复请求不写入 HumanMessage
-- [ ] 不同 Session 可以并发运行
-- [ ] 完成、失败、停止和断开路径都释放 Registry
-- [ ] 未引入 Redis 或多实例协调
+- [x] 同一 Session 同时只允许一个 Run
+- [x] 重复请求在 SSE 前返回 HTTP 409 `SESSION_BUSY`
+- [x] 被拒绝的重复请求不写入 HumanMessage
+- [x] 不同 Session 可以并发运行
+- [x] 完成、失败、停止和断开路径都释放 Registry
+- [x] 未引入 Redis 或多实例协调
+
+### Execution Evidence
+
+- 2026-09-13：新增进程内 `ActiveRunRegistry`，以 Session UUID 为键并在同一
+  `asyncio.Lock` 下原子占用；重复请求在创建 HumanMessage 和建立 SSE 前返回
+  HTTP 409 `SESSION_BUSY`，不同 Session 可分别占用
+- 2026-09-13：Graph 改由独立 producer task 执行，使用每个 Run 独立的产品事件
+  queue 向 SSE Adapter 传递 `message`、`error` 和 `done`，未向前端暴露
+  LangGraph 内部事件
+- 2026-09-13：完成、失败、取消、客户端断开、响应体未启动和服务关闭路径均会
+  刷新 `Session.updated_at`、结束事件队列、完成 `terminal_future` 并释放 Registry；
+  reservation token 与精确 Run 句柄阻止过期响应清理影响 replacement Run
+- 2026-09-13：确定性锁竞争测试覆盖取消请求先于 producer 最终 release 获锁的
+  路径；sentinel 与 release 在独立清理任务中执行，复审重复 100 次均通过
+- 2026-09-13：默认全量回归 `158 passed, 9 skipped`；启用真实 PostgreSQL 后
+  全量回归 `166 passed, 1 skipped`，唯一跳过项为真实百炼 smoke；真实数据库
+  聊天测试确认终态 `updated_at > created_at`
+- 2026-09-13：依赖锁、源码与测试编译、源码包和 wheel 构建、差异检查均通过；
+  独立代码复审无 Critical、Important 或 Minor 问题，结论为 Ready
+- Result：S2-03 实现与工程验收完成，等待负责人确认后再进入 S2-04
 
 ---
 

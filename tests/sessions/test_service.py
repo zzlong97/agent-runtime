@@ -281,3 +281,42 @@ def test_rename_session_uses_fixed_user_and_persists_new_timestamp() -> None:
     assert called_title == "新标题"
     assert before <= called_updated_at <= after
     assert called_updated_at.tzinfo is UTC
+
+
+def test_touch_session_uses_fixed_user_and_persists_new_timestamp() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions.models import Session
+    from agent_runtime.sessions.service import SessionService
+
+    session_id = UUID("00000000-0000-0000-0000-000000001011")
+    created_at = datetime(2026, 9, 13, 8, 0, tzinfo=UTC)
+    calls: list[tuple[UUID, str, datetime]] = []
+
+    class FakeSessionRepository:
+        async def touch(self, *, session_id, user_id, updated_at):
+            calls.append((session_id, user_id, updated_at))
+            return Session(
+                session_id=session_id,
+                user_id=user_id,
+                title="原标题",
+                created_at=created_at,
+                updated_at=updated_at,
+            )
+
+    service = SessionService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        parent_state_store=object(),
+    )
+    before = datetime.now(UTC)
+
+    touched = asyncio.run(service.touch_session(session_id=session_id))
+    after = datetime.now(UTC)
+
+    assert touched.title == "原标题"
+    assert len(calls) == 1
+    called_session_id, called_user_id, called_updated_at = calls[0]
+    assert called_session_id == session_id
+    assert called_user_id == "configured-user"
+    assert before <= called_updated_at <= after
+    assert called_updated_at.tzinfo is UTC

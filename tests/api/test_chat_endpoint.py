@@ -5,6 +5,7 @@ import json
 from uuid import UUID
 
 import httpx
+import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 
@@ -23,14 +24,47 @@ def _parse_sse(response_text: str) -> list[tuple[str, dict[str, object]]]:
 
 class FakeChatService:
     def __init__(self) -> None:
-        from agent_runtime.chat import PreparedChatTurn
+        from agent_runtime.chat import ChatService
+        from agent_runtime.core.config import Settings
+        from agent_runtime.runs import ActiveRunRegistry
 
         self.session_id = UUID("00000000-0000-0000-0000-000000000801")
         self.message_id = UUID("00000000-0000-0000-0000-000000000803")
-        self.prepared = PreparedChatTurn(
+        self._run_registry = ActiveRunRegistry()
+        self._producer_service = ChatService(
+            settings=Settings(_env_file=None),
+            session_repository=object(),
+            session_service=self,
+            parent_graph=object(),
+            run_registry=self._run_registry,
+        )
+        self.events: list[object] = []
+        self.status = "completed"
+        self.prepare_error: Exception | None = None
+        self.prepare_calls: list[tuple[UUID | None, str]] = []
+        self.incomplete_contents: list[str] = []
+        self.persist_error: Exception | None = None
+        self.last_turn = None
+        self.stream_blocker: asyncio.Event | None = None
+        self.touched_session_ids: list[UUID] = []
+
+    async def touch_session(self, *, session_id: UUID) -> None:
+        self.touched_session_ids.append(session_id)
+
+    async def prepare_turn(self, *, session_id, content):
+        from agent_runtime.chat import PreparedChatTurn
+
+        self.prepare_calls.append((session_id, content))
+        if self.prepare_error is not None:
+            raise self.prepare_error
+        active_run = await self._run_registry.reserve(
+            self.session_id,
+            self.message_id,
+        )
+        self.last_turn = PreparedChatTurn(
             session_id=self.session_id,
             human_message=HumanMessage(
-                content="测试消息",
+                content=content,
                 id="00000000-0000-0000-0000-000000000802",
             ),
             response_message_id=self.message_id,
@@ -40,25 +74,17 @@ class FakeChatService:
                     "message_id": str(self.message_id),
                 }
             },
+            active_run=active_run,
         )
-        self.events: list[object] = []
-        self.status = "completed"
-        self.prepare_error: Exception | None = None
-        self.prepare_calls: list[tuple[UUID | None, str]] = []
-        self.incomplete_contents: list[str] = []
-        self.persist_error: Exception | None = None
-
-    async def prepare_turn(self, *, session_id, content):
-        self.prepare_calls.append((session_id, content))
-        if self.prepare_error is not None:
-            raise self.prepare_error
-        return self.prepared
+        return self.last_turn
 
     async def stream_turn(self, turn):
         for event in self.events:
             if isinstance(event, Exception):
                 raise event
             yield event
+        if self.stream_blocker is not None:
+            await self.stream_blocker.wait()
 
     async def get_completion_status(self, turn):
         return self.status
@@ -67,6 +93,15 @@ class FakeChatService:
         self.incomplete_contents.append(content)
         if self.persist_error is not None:
             raise self.persist_error
+
+    async def start_producer(self, turn):
+        self._producer_service.stream_turn = self.stream_turn
+        self._producer_service.get_completion_status = self.get_completion_status
+        self._producer_service.persist_incomplete = self.persist_incomplete
+        await self._producer_service.start_producer(turn)
+
+    async def cancel_run(self, run, *, reason):
+        return await self._producer_service.cancel_run(run, reason=reason)
 
 
 def _post(app, payload: dict[str, object]) -> httpx.Response:
@@ -232,6 +267,38 @@ def test_chat_endpoint_returns_session_validation_error_before_sse() -> None:
     }
 
 
+def test_chat_endpoint_returns_session_busy_before_sse() -> None:
+    from agent_runtime.runs import SessionBusyError
+    from agent_runtime.main import create_app
+
+    service = FakeChatService()
+    service.prepare_error = SessionBusyError(
+        code="SESSION_BUSY",
+        message="当前 Session 正在生成回复",
+        status_code=409,
+        retryable=True,
+    )
+    app = create_app(chat_service=service)
+
+    response = _post(
+        app,
+        {
+            "session_id": str(service.session_id),
+            "message": {"content": "重复请求"},
+        },
+    )
+
+    assert response.status_code == 409
+    assert not response.headers["content-type"].startswith("text/event-stream")
+    assert response.json() == {
+        "detail": {
+            "code": "SESSION_BUSY",
+            "message": "当前 Session 正在生成回复",
+            "retryable": True,
+        }
+    }
+
+
 def test_chat_endpoint_rejects_invalid_request_before_service_call() -> None:
     from agent_runtime.main import create_app
 
@@ -243,3 +310,130 @@ def test_chat_endpoint_rejects_invalid_request_before_service_call() -> None:
     assert response.status_code == 422
     assert not response.headers["content-type"].startswith("text/event-stream")
     assert service.prepare_calls == []
+
+
+def test_chat_response_background_releases_run_if_body_never_starts() -> None:
+    from fastapi import Request
+
+    from agent_runtime.api.routes.chat import create_chat_completion
+    from agent_runtime.api.schemas.chat import ChatCompletionRequest
+    from agent_runtime.main import create_app
+
+    service = FakeChatService()
+    app = create_app(chat_service=service)
+    request = Request(
+        {
+            "type": "http",
+            "app": app,
+            "method": "POST",
+            "path": "/api/v1/chat/completions",
+            "headers": [],
+        }
+    )
+    payload = ChatCompletionRequest.model_validate(
+        {"message": {"content": "客户端立即断开"}}
+    )
+
+    async def exercise() -> None:
+        response = await create_chat_completion(payload, request)
+
+        assert response.background is not None
+        await response.background()
+        assert service.last_turn.active_run.cancel_reason == "disconnected"
+        assert service.last_turn.active_run.terminal_future.done()
+        assert service.touched_session_ids == [service.session_id]
+
+    asyncio.run(exercise())
+
+
+def test_delayed_response_background_does_not_cancel_replacement_run() -> None:
+    from fastapi import Request
+
+    from agent_runtime.api.routes.chat import create_chat_completion
+    from agent_runtime.api.schemas.chat import ChatCompletionRequest
+    from agent_runtime.main import create_app
+
+    service = FakeChatService()
+    app = create_app(chat_service=service)
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/chat/completions",
+            "headers": [],
+            "app": app,
+        }
+    )
+
+    async def exercise() -> None:
+        response = await create_chat_completion(
+            ChatCompletionRequest.model_validate(
+                {"message": {"content": "旧请求"}}
+            ),
+            request,
+        )
+        stale_run = service.last_turn.active_run
+        await service._run_registry.release(stale_run)
+        replacement = await service._run_registry.reserve(
+            service.session_id,
+            UUID("00000000-0000-0000-0000-000000000804"),
+        )
+
+        assert response.background is not None
+        await response.background()
+
+        assert replacement.cancel_reason is None
+        assert replacement.terminal_future.done() is False
+        await service._run_registry.release(replacement)
+
+    asyncio.run(exercise())
+
+
+def test_chat_response_releases_run_when_asgi_send_disconnects() -> None:
+    from starlette.requests import ClientDisconnect
+
+    from agent_runtime.api.routes.chat import create_chat_completion
+    from agent_runtime.api.schemas.chat import ChatCompletionRequest
+    from agent_runtime.main import create_app
+
+    service = FakeChatService()
+    service.events = [AIMessageChunk(content="首段")]
+    service.stream_blocker = asyncio.Event()
+    app = create_app(chat_service=service)
+    request = httpx.Request(
+        "POST",
+        "http://testserver/api/v1/chat/completions",
+    )
+    payload = ChatCompletionRequest.model_validate(
+        {"message": {"content": "连接中断"}}
+    )
+
+    async def exercise() -> None:
+        from fastapi import Request
+
+        route_request = Request(
+            {
+                "type": "http",
+                "asgi": {"spec_version": "2.4"},
+                "app": app,
+                "method": request.method,
+                "path": request.url.path,
+                "headers": [],
+            }
+        )
+        response = await create_chat_completion(payload, route_request)
+
+        async def receive():
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            if message["type"] == "http.response.body":
+                raise OSError("客户端已断开")
+
+        with pytest.raises(ClientDisconnect):
+            await response(route_request.scope, receive, send)
+
+        assert service.last_turn.active_run.cancel_reason == "disconnected"
+        assert service.last_turn.active_run.terminal_future.done()
+
+    asyncio.run(exercise())

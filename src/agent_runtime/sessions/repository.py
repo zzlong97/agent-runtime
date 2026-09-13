@@ -58,6 +58,13 @@ WHERE session_id = %s AND user_id = %s
 RETURNING session_id, user_id, title, created_at, updated_at
 """
 
+_TOUCH_SESSION = """
+UPDATE sessions
+SET updated_at = %s
+WHERE session_id = %s AND user_id = %s
+RETURNING session_id, user_id, title, created_at, updated_at
+"""
+
 
 class SessionNotFoundError(ApplicationError):
     """客户端指定的 Session 不存在。"""
@@ -150,6 +157,30 @@ class PostgresSessionRepository:
             cursor = await connection.execute(
                 _RENAME_SESSION,
                 (title, updated_at, session_id, user_id),
+            )
+            row = await cursor.fetchone()
+            await connection.commit()
+        if row is None:
+            raise SessionNotFoundError(
+                code="SESSION_NOT_FOUND",
+                message="Session 不存在",
+                status_code=404,
+            )
+        return Session(**row)
+
+    async def touch(
+        self,
+        *,
+        session_id: UUID,
+        user_id: str,
+        updated_at: datetime,
+    ) -> Session:
+        """刷新指定用户拥有的 Session 活跃时间，并返回完整元数据。"""
+
+        async with open_database_connection(self._settings) as connection:
+            cursor = await connection.execute(
+                _TOUCH_SESSION,
+                (updated_at, session_id, user_id),
             )
             row = await cursor.fetchone()
             await connection.commit()

@@ -1,7 +1,11 @@
+import asyncio
 import json
-from uuid import UUID
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 import pytest
+from langchain_core.messages import AIMessageChunk
 
 
 @pytest.mark.parametrize(
@@ -70,3 +74,109 @@ def test_encode_sse_emits_only_stable_product_protocol(
     assert lines[2:] == [""]
     assert "node" not in encoded
     assert "checkpoint" not in encoded
+
+
+def test_closing_sse_consumer_cancels_producer_and_releases_session() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+    from agent_runtime.sessions.models import Session
+    from agent_runtime.streaming.sse import stream_chat_sse
+
+    session_id = UUID("00000000-0000-0000-0000-000000001271")
+    registry = ActiveRunRegistry()
+    producer_cancelled = asyncio.Event()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            now = datetime.now(UTC)
+            return Session(
+                session_id=requested_session_id,
+                user_id="configured-user",
+                title="会话",
+                created_at=now,
+                updated_at=now,
+            )
+
+    class BlockingParentGraph:
+        async def aget_state(self, config):
+            return SimpleNamespace(
+                values={"messages": [], "completion_status": "completed"}
+            )
+
+        async def astream(self, state, config, *, stream_mode):
+            try:
+                yield AIMessageChunk(content="首段")
+                await asyncio.Event().wait()
+            finally:
+                producer_cancelled.set()
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id: UUID) -> None:
+            pass
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=BlockingParentGraph(),
+        run_registry=registry,
+    )
+
+    async def exercise() -> None:
+        turn = await service.prepare_turn(session_id=session_id, content="继续")
+        stream = stream_chat_sse(service, turn)
+
+        first_frame = await anext(stream)
+        await stream.aclose()
+
+        assert first_frame.startswith("event: message\n")
+        assert producer_cancelled.is_set()
+        assert turn.active_run.cancel_reason == "disconnected"
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+
+    asyncio.run(exercise())
+
+
+def test_delayed_sse_cleanup_does_not_cancel_replacement_run() -> None:
+    from langchain_core.messages import HumanMessage
+
+    from agent_runtime.chat import PreparedChatTurn
+    from agent_runtime.graph.config import parent_thread_config
+    from agent_runtime.runs import ActiveRunRegistry
+    from agent_runtime.streaming.sse import stream_chat_sse
+
+    session_id = UUID("00000000-0000-0000-0000-000000001275")
+    response_message_id = UUID("00000000-0000-0000-0000-000000001276")
+    registry = ActiveRunRegistry()
+
+    class DelayedResponseService:
+        async def start_producer(self, turn) -> None:
+            pass
+
+        async def cancel_run(self, run, *, reason):
+            return await registry.request_cancel(run, reason)
+
+    async def exercise() -> None:
+        stale_run = await registry.reserve(session_id, response_message_id)
+        turn = PreparedChatTurn(
+            session_id=session_id,
+            human_message=HumanMessage(content="旧请求"),
+            response_message_id=response_message_id,
+            config=parent_thread_config(session_id),
+            active_run=stale_run,
+        )
+        stale_run.event_queue.put_nowait(None)
+        await registry.release(stale_run)
+        replacement = await registry.reserve(session_id, uuid4())
+
+        stream = stream_chat_sse(DelayedResponseService(), turn)
+        with pytest.raises(StopAsyncIteration):
+            await anext(stream)
+
+        assert replacement.cancel_reason is None
+        assert replacement.terminal_future.done() is False
+        await registry.release(replacement)
+
+    asyncio.run(exercise())

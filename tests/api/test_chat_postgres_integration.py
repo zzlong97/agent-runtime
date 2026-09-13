@@ -153,6 +153,10 @@ def test_chat_endpoint_streams_and_persists_public_messages_in_postgres() -> Non
                 )
                 assert restored_session.user_id == settings.local_user_id
                 assert restored_session.title == "介绍一下测试运行时"
+                assert (
+                    restored_session.updated_at
+                    > restored_session.created_at
+                )
 
             assert session_id is not None
             async with AsyncPostgresSaver.from_conn_string(

@@ -4,7 +4,7 @@ from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request
-from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
 from agent_runtime.api.schemas.chat import ChatCompletionRequest
 from agent_runtime.api.schemas.sessions import (
@@ -15,7 +15,7 @@ from agent_runtime.api.schemas.sessions import (
 )
 from agent_runtime.chat import ChatService
 from agent_runtime.core.errors import ApplicationError
-from agent_runtime.streaming.sse import stream_chat_sse
+from agent_runtime.streaming.sse import RunStreamingResponse, stream_chat_sse
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -104,7 +104,7 @@ async def rename_session(
 async def create_chat_completion(
     payload: ChatCompletionRequest,
     request: Request,
-) -> StreamingResponse:
+) -> RunStreamingResponse:
     """先完成请求与 Session 校验，再建立产品级 SSE 响应。"""
 
     chat_service = _get_chat_service(request)
@@ -119,11 +119,16 @@ async def create_chat_completion(
             detail=_application_error_detail(error),
         ) from error
 
-    return StreamingResponse(
+    return RunStreamingResponse(
         stream_chat_sse(chat_service, turn),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+        background=BackgroundTask(
+            chat_service.cancel_run,
+            turn.active_run,
+            reason="disconnected",
+        ),
     )

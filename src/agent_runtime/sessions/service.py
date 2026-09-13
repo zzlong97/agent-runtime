@@ -59,18 +59,23 @@ class SessionService:
         self,
         *,
         content: str,
+        session_id: UUID | None = None,
+        human_message_id: UUID | None = None,
     ) -> SessionStart:
-        """在返回 StreamingResponse 前保存新 Session 和首条 HumanMessage。"""
+        """使用调用方预占用的标识保存新 Session 和首条 HumanMessage。"""
 
         now = datetime.now(UTC)
         session = Session(
-            session_id=uuid4(),
+            session_id=session_id or uuid4(),
             user_id=self._settings.local_user_id,
             title=content,
             created_at=now,
             updated_at=now,
         )
-        human_message = HumanMessage(content=content, id=str(uuid4()))
+        human_message = HumanMessage(
+            content=content,
+            id=str(human_message_id or uuid4()),
+        )
         started = SessionStart(
             session=session,
             human_message=human_message,
@@ -120,5 +125,14 @@ class SessionService:
             session_id=session_id,
             user_id=self._settings.local_user_id,
             title=title,
+            updated_at=datetime.now(UTC),
+        )
+
+    async def touch_session(self, *, session_id: UUID) -> Session:
+        """以固定本地用户身份刷新一次 Session 的最终活跃时间。"""
+
+        return await self._session_repository.touch(
+            session_id=session_id,
+            user_id=self._settings.local_user_id,
             updated_at=datetime.now(UTC),
         )

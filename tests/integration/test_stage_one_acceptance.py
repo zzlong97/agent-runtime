@@ -3,7 +3,8 @@
 import asyncio
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from uuid import UUID
 
 import httpx
@@ -254,6 +255,24 @@ class InMemorySessionRepository:
                 message="Session 不存在",
                 status_code=404,
             ) from error
+
+    async def touch(
+        self,
+        *,
+        session_id: UUID,
+        user_id: str,
+        updated_at: datetime,
+    ) -> Session:
+        session = await self.get(session_id)
+        if session.user_id != user_id:
+            raise SessionNotFoundError(
+                code="SESSION_NOT_FOUND",
+                message="Session 不存在",
+                status_code=404,
+            )
+        touched = replace(session, updated_at=updated_at)
+        self.sessions[session_id] = touched
+        return touched
 
 
 class InMemoryParentStateStore:

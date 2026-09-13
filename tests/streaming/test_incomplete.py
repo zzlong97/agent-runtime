@@ -113,14 +113,27 @@ def test_partial_model_output_is_persisted_as_incomplete_parent_message() -> Non
     )
 
     class FakeSessionService:
-        async def prepare_new_session(self, *, content: str):
+        async def prepare_new_session(
+            self,
+            *,
+            session_id: UUID,
+            human_message_id: UUID,
+            content: str,
+        ):
+            assert session_id == started.session.session_id
+            assert human_message_id == UUID(str(started.human_message.id))
             return started
+
+        async def touch_session(self, *, session_id: UUID) -> None:
+            assert session_id == started.session.session_id
 
     service = ChatService(
         settings=Settings(local_user_id="configured-user", _env_file=None),
         session_repository=object(),
         session_service=FakeSessionService(),
         parent_graph=parent,
+        session_id_factory=lambda: session_id,
+        human_message_id_factory=lambda: UUID(str(started.human_message.id)),
         response_message_id_factory=lambda: response_message_id,
     )
 
