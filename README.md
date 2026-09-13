@@ -235,12 +235,6 @@ ChildResult
 - [docs/architecture.md](./docs/architecture.md)：技术架构与实现约束
 - [docs/decisions.md](./docs/decisions.md)：已裁决的架构决策
 - [docs/tasks.md](./docs/tasks.md)：任务执行与验收状态
-- [Stage 2 设计](./docs/plans/2026-09-13-stage-2-chat-product-design.md)：
-  已确认的产品接口、运行语义与聊天页面设计
-- [Stage 2 后端计划](./docs/superpowers/plans/2026-09-13-stage-2-backend.md)：
-  S2-01～S2-08 的测试驱动实施步骤
-- [Stage 2 前端计划](./docs/superpowers/plans/2026-09-13-stage-2-frontend.md)：
-  S2-09 页面和 S2-10 集成验收步骤
 
 ---
 
