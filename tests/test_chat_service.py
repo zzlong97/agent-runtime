@@ -224,3 +224,28 @@ def test_stream_turn_and_persist_incomplete_message_in_parent() -> None:
     assert incomplete_message.content == "部分输出"
     assert incomplete_message.id == str(response_message_id)
     assert incomplete_message.additional_kwargs["runtime_status"] == "incomplete"
+
+
+def test_chat_service_delegates_session_listing_to_session_service() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+
+    expected_page = object()
+    calls: list[tuple[str | None, int]] = []
+
+    class FakeSessionService:
+        async def list_sessions(self, *, cursor, limit):
+            calls.append((cursor, limit))
+            return expected_page
+
+    service = ChatService(
+        settings=Settings(_env_file=None),
+        session_repository=object(),
+        session_service=FakeSessionService(),
+        parent_graph=FakeParentGraph(),
+    )
+
+    page = asyncio.run(service.list_sessions(cursor="opaque", limit=7))
+
+    assert page is expected_page
+    assert calls == [("opaque", 7)]

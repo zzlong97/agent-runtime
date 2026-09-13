@@ -1,4 +1,4 @@
-"""Stage 1 聊天应用层，连接 Session 与 Parent Graph。"""
+"""聊天应用层，连接 Session 产品能力与 Parent Graph。"""
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -22,6 +22,7 @@ from agent_runtime.graph.parent import build_parent_graph
 from agent_runtime.graph.router import StageOneRouter
 from agent_runtime.persistence.checkpointers import open_stage_one_checkpointers
 from agent_runtime.persistence.parent_state import PostgresParentStateStore
+from agent_runtime.sessions.models import SessionPage
 from agent_runtime.sessions.repository import PostgresSessionRepository
 from agent_runtime.sessions.service import SessionService
 
@@ -47,7 +48,7 @@ class PreparedChatTurn:
 
 
 class ChatService:
-    """准备聊天请求、运行 Parent Graph 并维护失败时的公共消息。"""
+    """查询 Session、准备聊天请求并维护 Parent Graph 公共消息。"""
 
     def __init__(
         self,
@@ -113,6 +114,19 @@ class ChatService:
                 session_id,
                 message_id=response_message_id,
             ),
+        )
+
+    async def list_sessions(
+        self,
+        *,
+        cursor: str | None,
+        limit: int,
+    ) -> SessionPage:
+        """返回固定本地用户的一页 Session 产品数据。"""
+
+        return await self._session_service.list_sessions(
+            cursor=cursor,
+            limit=limit,
         )
 
     async def stream_turn(

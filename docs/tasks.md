@@ -732,7 +732,7 @@ Stage 1 = VERIFIED
 
 ## S2-01 Session 列表
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-00
 
@@ -748,11 +748,30 @@ GET /api/v1/chat/sessions?cursor={cursor}&limit={limit}
 
 ### Acceptance
 
-- [ ] 只返回固定本地用户的 Session
-- [ ] 首次请求返回最新一页和可空 `next_cursor`
-- [ ] 相同排序键下不会重复或遗漏 Session
-- [ ] 非法游标返回明确客户端错误
-- [ ] Pydantic 字段均有完整中文 description
+- [x] 只返回固定本地用户的 Session
+- [x] 首次请求返回最新一页和可空 `next_cursor`
+- [x] 相同排序键下不会重复或遗漏 Session
+- [x] 非法游标返回明确客户端错误
+- [x] Pydantic 字段均有完整中文 description
+
+### Execution Evidence
+
+- 2026-09-13：新增 `GET /api/v1/chat/sessions` 产品接口；查询只接受
+  `cursor` 和 `limit`，默认 20 条且限制为 1～100 条，响应不暴露 `user_id`
+- 2026-09-13：Session Service 固定注入配置中的 `local_user_id`；PostgreSQL
+  使用 `updated_at DESC, session_id DESC` 复合键、对应索引和 `limit + 1`
+  查询生成稳定下一页
+- 2026-09-13：游标使用 Base64 URL-safe 编码的版本化 JSON，只携带版本与
+  `updated_at + session_id` 排序边界；非法 Base64、JSON、版本、字段、时区或
+  UUID 统一返回 HTTP 400 `SESSION_CURSOR_INVALID`
+- 2026-09-13：真实 PostgreSQL 测试以 3 个相同 `updated_at` 的 Session 跨越
+  `limit=2` 页边界，确认无重复、无遗漏，并确认其他用户数据不可见
+- 2026-09-13：默认全量回归 `122 passed, 8 skipped`；启用真实 PostgreSQL 后
+  全量回归 `129 passed, 1 skipped`，唯一跳过项为真实百炼 smoke
+- 2026-09-13：依赖锁、源码与测试编译、源码包和 wheel 构建、OpenAPI 参数、
+  暂存差异检查均通过；独立代码审查无 Critical、Important 或 Minor 问题，
+  结论为 Ready
+- Result：S2-01 实现与工程验收完成，等待负责人确认后再进入 S2-02
 
 ---
 

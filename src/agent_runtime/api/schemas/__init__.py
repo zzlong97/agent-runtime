@@ -7,6 +7,11 @@ from agent_runtime.api.schemas.chat import (
     ErrorEventData,
     MessageEventData,
 )
+from agent_runtime.api.schemas.sessions import (
+    SessionListItem,
+    SessionListQuery,
+    SessionListResponse,
+)
 
 __all__ = [
     "ChatCompletionRequest",
@@ -14,4 +19,7 @@ __all__ = [
     "DoneEventData",
     "ErrorEventData",
     "MessageEventData",
+    "SessionListItem",
+    "SessionListQuery",
+    "SessionListResponse",
 ]

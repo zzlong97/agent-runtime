@@ -9,7 +9,8 @@ from langchain_core.messages import HumanMessage
 
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.persistence.parent_state import PostgresParentStateStore
-from agent_runtime.sessions.models import Session
+from agent_runtime.sessions.models import Session, SessionCursor, SessionPage
+from agent_runtime.sessions.pagination import decode_cursor, encode_cursor
 from agent_runtime.sessions.repository import PostgresSessionRepository
 
 
@@ -25,7 +26,7 @@ RouteHandler = Callable[[SessionStart], Awaitable[None]]
 
 
 class SessionService:
-    """在任何 Router 工作前创建并持久化 Session。"""
+    """创建 Session，并提供固定本地用户的产品查询能力。"""
 
     def __init__(
         self,
@@ -81,3 +82,28 @@ class SessionService:
             human_message,
         )
         return started
+
+    async def list_sessions(
+        self,
+        *,
+        cursor: str | None,
+        limit: int,
+    ) -> SessionPage:
+        """解析不透明游标并查询固定本地用户的一页 Session。"""
+
+        boundary = decode_cursor(cursor) if cursor is not None else None
+        items, has_more = await self._session_repository.list_page(
+            user_id=self._settings.local_user_id,
+            cursor=boundary,
+            limit=limit,
+        )
+        next_cursor = None
+        if has_more:
+            last = items[-1]
+            next_cursor = encode_cursor(
+                SessionCursor(
+                    updated_at=last.updated_at,
+                    session_id=last.session_id,
+                )
+            )
+        return SessionPage(items=tuple(items), next_cursor=next_cursor)

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
@@ -123,3 +124,110 @@ def test_prepare_new_session_persists_without_starting_graph() -> None:
     assert events == ["session", "human_message"]
     assert prepared.session.user_id == "configured-user"
     assert prepared.human_message.content == "准备流式执行"
+
+
+def test_list_sessions_uses_fixed_user_and_builds_next_cursor() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions.models import Session
+    from agent_runtime.sessions.pagination import decode_cursor
+    from agent_runtime.sessions.service import SessionService
+
+    newer_time = datetime(2026, 9, 13, 10, 0, tzinfo=UTC)
+    older_time = datetime(2026, 9, 13, 9, 0, tzinfo=UTC)
+    sessions = [
+        Session(
+            session_id=UUID("00000000-0000-0000-0000-000000000502"),
+            user_id="configured-user",
+            title="较新",
+            created_at=newer_time,
+            updated_at=newer_time,
+        ),
+        Session(
+            session_id=UUID("00000000-0000-0000-0000-000000000501"),
+            user_id="configured-user",
+            title="较旧",
+            created_at=older_time,
+            updated_at=older_time,
+        ),
+    ]
+    calls: list[tuple[str, object, int]] = []
+
+    class FakeSessionRepository:
+        async def list_page(self, *, user_id, cursor, limit):
+            calls.append((user_id, cursor, limit))
+            return sessions, True
+
+    service = SessionService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        parent_state_store=object(),
+    )
+
+    page = asyncio.run(service.list_sessions(cursor=None, limit=2))
+
+    assert calls == [("configured-user", None, 2)]
+    assert page.items == tuple(sessions)
+    assert page.next_cursor is not None
+    next_cursor = decode_cursor(page.next_cursor)
+    assert next_cursor.updated_at == older_time
+    assert next_cursor.session_id == sessions[-1].session_id
+
+
+def test_list_sessions_decodes_cursor_and_omits_cursor_at_last_page() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions.models import Session, SessionCursor
+    from agent_runtime.sessions.pagination import encode_cursor
+    from agent_runtime.sessions.service import SessionService
+
+    updated_at = datetime(2026, 9, 13, 8, 0, tzinfo=UTC)
+    boundary = SessionCursor(
+        updated_at=updated_at,
+        session_id=UUID("00000000-0000-0000-0000-000000000601"),
+    )
+    item = Session(
+        session_id=UUID("00000000-0000-0000-0000-000000000600"),
+        user_id="configured-user",
+        title="最后一页",
+        created_at=updated_at,
+        updated_at=updated_at,
+    )
+    received_cursor = None
+
+    class FakeSessionRepository:
+        async def list_page(self, *, user_id, cursor, limit):
+            nonlocal received_cursor
+            received_cursor = cursor
+            return [item], False
+
+    service = SessionService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        parent_state_store=object(),
+    )
+
+    page = asyncio.run(
+        service.list_sessions(cursor=encode_cursor(boundary), limit=20)
+    )
+
+    assert received_cursor == boundary
+    assert page.items == (item,)
+    assert page.next_cursor is None
+
+
+def test_list_sessions_rejects_invalid_cursor_before_database_query() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions.pagination import InvalidSessionCursorError
+    from agent_runtime.sessions.service import SessionService
+
+    class UnexpectedRepository:
+        async def list_page(self, *, user_id, cursor, limit):
+            raise AssertionError("非法游标不应访问数据库")
+
+    service = SessionService(
+        settings=Settings(_env_file=None),
+        session_repository=UnexpectedRepository(),
+        parent_state_store=object(),
+    )
+
+    with pytest.raises(InvalidSessionCursorError):
+        asyncio.run(service.list_sessions(cursor="broken", limit=20))

@@ -41,7 +41,7 @@ def test_session_repository_setup_creates_minimal_table_and_commits(
     asyncio.run(session_repository.setup())
 
     assert connection.committed is True
-    assert len(statements) == 1
+    assert len(statements) == 2
     assert "CREATE TABLE IF NOT EXISTS sessions" in statements[0]
     for column in (
         "session_id UUID PRIMARY KEY",
@@ -51,6 +51,10 @@ def test_session_repository_setup_creates_minimal_table_and_commits(
         "updated_at TIMESTAMPTZ NOT NULL",
     ):
         assert column in statements[0]
+    assert statements[1] == (
+        "CREATE INDEX IF NOT EXISTS sessions_user_updated_id_idx "
+        "ON sessions (user_id, updated_at DESC, session_id DESC)"
+    )
 
 
 def test_session_repository_add_persists_all_session_fields(
@@ -194,3 +198,121 @@ def test_session_repository_get_reports_missing_session(monkeypatch) -> None:
     assert captured.value.code == "SESSION_NOT_FOUND"
     assert captured.value.message == "Session 不存在"
     assert captured.value.status_code == 404
+
+
+def test_session_repository_lists_first_page_with_stable_order_and_overfetch(
+    monkeypatch,
+) -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions import repository
+    from agent_runtime.sessions.models import Session
+
+    now = datetime.now(UTC)
+    rows = [
+        {
+            "session_id": uuid4(),
+            "user_id": "configured-user",
+            "title": f"Session {index}",
+            "created_at": now,
+            "updated_at": now,
+        }
+        for index in range(3)
+    ]
+    executed: dict[str, object] = {}
+
+    class FakeCursor:
+        async def fetchall(self):
+            return rows
+
+    class FakeConnection:
+        async def execute(self, query: str, params=None):
+            executed["query"] = " ".join(query.split())
+            executed["params"] = params
+            return FakeCursor()
+
+    @asynccontextmanager
+    async def fake_connection_factory(settings):
+        yield FakeConnection()
+
+    monkeypatch.setattr(
+        repository,
+        "open_database_connection",
+        fake_connection_factory,
+    )
+    session_repository = repository.PostgresSessionRepository(
+        Settings(_env_file=None)
+    )
+
+    items, has_more = asyncio.run(
+        session_repository.list_page(
+            user_id="configured-user",
+            cursor=None,
+            limit=2,
+        )
+    )
+
+    assert items == [Session(**row) for row in rows[:2]]
+    assert has_more is True
+    assert executed["query"] == (
+        "SELECT session_id, user_id, title, created_at, updated_at "
+        "FROM sessions WHERE user_id = %s "
+        "ORDER BY updated_at DESC, session_id DESC LIMIT %s"
+    )
+    assert executed["params"] == ("configured-user", 3)
+
+
+def test_session_repository_continues_after_composite_cursor(monkeypatch) -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions import repository
+    from agent_runtime.sessions.models import SessionCursor
+
+    updated_at = datetime.now(UTC)
+    session_id = uuid4()
+    executed: dict[str, object] = {}
+
+    class FakeCursor:
+        async def fetchall(self):
+            return []
+
+    class FakeConnection:
+        async def execute(self, query: str, params=None):
+            executed["query"] = " ".join(query.split())
+            executed["params"] = params
+            return FakeCursor()
+
+    @asynccontextmanager
+    async def fake_connection_factory(settings):
+        yield FakeConnection()
+
+    monkeypatch.setattr(
+        repository,
+        "open_database_connection",
+        fake_connection_factory,
+    )
+    session_repository = repository.PostgresSessionRepository(
+        Settings(_env_file=None)
+    )
+    cursor = SessionCursor(updated_at=updated_at, session_id=session_id)
+
+    items, has_more = asyncio.run(
+        session_repository.list_page(
+            user_id="configured-user",
+            cursor=cursor,
+            limit=2,
+        )
+    )
+
+    assert items == []
+    assert has_more is False
+    assert executed["query"] == (
+        "SELECT session_id, user_id, title, created_at, updated_at "
+        "FROM sessions WHERE user_id = %s "
+        "AND (updated_at, session_id) < (%s, %s) "
+        "ORDER BY updated_at DESC, session_id DESC LIMIT %s"
+    )
+    assert executed["params"] == (
+        "configured-user",
+        updated_at,
+        session_id,
+        3,
+    )

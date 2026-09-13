@@ -1,5 +1,7 @@
 import asyncio
 import os
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -81,5 +83,89 @@ def test_router_failure_retains_session_and_parent_human_message_in_postgres() -
                     settings.database_connection_string
                 ) as checkpointer:
                     await checkpointer.adelete_thread(str(routed_session_id))
+
+    run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="set RUN_POSTGRES_TESTS=1 to run PostgreSQL integration tests",
+)
+def test_session_list_paginates_composite_sort_key_without_gaps() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.persistence.database import open_database_connection
+    from agent_runtime.sessions.models import Session
+    from agent_runtime.sessions.repository import PostgresSessionRepository
+    from agent_runtime.sessions.service import SessionService
+
+    base_settings = Settings()
+    settings = Settings(
+        database_url=base_settings.database_url,
+        local_user_id=f"s2-list-test-{uuid4()}",
+        _env_file=None,
+    )
+    session_repository = PostgresSessionRepository(settings)
+    base_time = datetime(2026, 9, 13, 0, 0, tzinfo=UTC)
+    configured_sessions = [
+        Session(
+            session_id=uuid4(),
+            user_id=settings.local_user_id,
+            title=f"分页会话 {index}",
+            created_at=base_time,
+            updated_at=base_time + timedelta(hours=offset),
+        )
+        for index, offset in enumerate((3, 3, 3, 2, 1), start=1)
+    ]
+    other_user_session = Session(
+        session_id=uuid4(),
+        user_id=f"{settings.local_user_id}-other",
+        title="不应返回",
+        created_at=base_time,
+        updated_at=base_time + timedelta(hours=4),
+    )
+    inserted_ids = [
+        *(session.session_id for session in configured_sessions),
+        other_user_session.session_id,
+    ]
+
+    async def exercise() -> None:
+        await session_repository.setup()
+        for session in [*configured_sessions, other_user_session]:
+            await session_repository.add(session)
+
+        service = SessionService(
+            settings=settings,
+            session_repository=session_repository,
+            parent_state_store=object(),
+        )
+        received = []
+        cursor = None
+        try:
+            while True:
+                page = await service.list_sessions(cursor=cursor, limit=2)
+                received.extend(page.items)
+                if page.next_cursor is None:
+                    break
+                cursor = page.next_cursor
+
+            expected = sorted(
+                configured_sessions,
+                key=lambda session: (session.updated_at, session.session_id),
+                reverse=True,
+            )
+            assert received == expected
+            assert len({session.session_id for session in received}) == 5
+            assert all(
+                session.user_id == settings.local_user_id for session in received
+            )
+        finally:
+            async with open_database_connection(settings) as connection:
+                for session_id in inserted_ids:
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                await connection.commit()
 
     run_on_psycopg_compatible_loop(exercise())
