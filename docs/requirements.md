@@ -390,17 +390,27 @@ Remote Agent
 
 ---
 
-# 4. Stage 2：完整聊天产品能力
+# 4. Stage 2：完整聊天产品能力与演示页面
 
-Stage 2 目标：把 Runtime Demo 升级成可实际使用的聊天后端。
+Stage 2 目标：在不改变 Stage 1 Parent / Child 边界的前提下，把 Runtime Demo
+升级成具备完整产品接口和可直接演示聊天页面的单用户应用。
 
-必须实现：
+Stage 2 继续使用可信单用户环境：`user_id` 由服务端配置固定注入，所有 API
+均不得接受客户端指定的 `user_id`。身份认证和多用户数据隔离不在本阶段实现。
 
 ## 4.1 Session 列表
 
 ```http
-GET /api/v1/chat/sessions
+GET /api/v1/chat/sessions?cursor={cursor}&limit={limit}
 ```
+
+要求：
+
+- 使用游标分页，`limit` 默认 20，允许范围为 1～100
+- 按 `updated_at DESC, session_id DESC` 稳定排序
+- `cursor` 是后端生成的不透明值，客户端不得解析或拼装
+- 响应包含 `items` 和可空的 `next_cursor`
+- 每个 Session 项至少包含 `session_id`、`title`、`created_at`、`updated_at`
 
 ## 4.2 Session 改名
 
@@ -408,47 +418,65 @@ GET /api/v1/chat/sessions
 PATCH /api/v1/chat/sessions/{session_id}/rename
 ```
 
+请求体只包含 `title`。标题去除首尾空白后必须为 1～100 个字符。默认标题
+仍由首条 HumanMessage 截取，不调用模型生成标题。
+
 ## 4.3 Session 删除
 
 ```http
 DELETE /api/v1/chat/sessions/{session_id}
 ```
 
-Stage 2 使用硬删除。
+Stage 2 使用幂等硬删除，成功返回 HTTP 204；目标已不存在时也返回 204。
 
-删除时：
+删除顺序：
 
 ```text
 存在 active Run
-→ 自动 stop
-→ 删除 Parent checkpoints
+→ 自动 stop 并等待运行结束
 → 删除相关 Child checkpoints
-→ 删除 Session
+→ 删除 Parent checkpoints
+→ 删除 Feedback
+→ 最后删除 Session
 ```
+
+中途清理失败时不得先删除 Session，使同一删除请求可以安全重试。
 
 ## 4.4 历史消息查询
 
 ```http
-GET /api/v1/chat/sessions/{session_id}/messages
+GET /api/v1/chat/sessions/{session_id}/messages?before={message_id}&limit={limit}
 ```
 
-后端负责将 LangGraph checkpoint history 转换为前端可直接消费的消息结构。
+要求：
 
-不得直接暴露原始 `StateSnapshot`。
+- 默认返回当前活动 Parent 分支的最新一页，`limit` 默认 50，允许范围为 1～100
+- `before` 必须是当前 Session 活动历史中的 `message_id`
+- 响应包含按对话时间正序排列的 `items` 和可空的 `next_before`
+- Product Message 至少包含 `message_id`、`role`、`content`、
+  `runtime_status`、`capability_id` 和当前 `feedback`
+- AIMessage 的 `runtime_status` 允许 `completed`、`unsupported`、
+  `incomplete`、`stopped`
+- `unsupported`、`incomplete`、`stopped` 对用户可见，但不进入后续模型上下文
+- 普通历史只返回最新活动分支；Regenerate 前的旧回答保留在旧 checkpoint 中，
+  不通过普通历史接口返回
+- 后端负责把 Parent 权威消息转换为前端 DTO，不得返回原始
+  `StateSnapshot`、节点名称、任务信息或 checkpoint metadata
+
+Stage 1 已持久化但没有 `runtime_status` 的正常 AIMessage 按 `completed` 兼容；
+缺少 `capability_id` 时返回 `null`。
 
 ## 4.5 单 Session 单 Run
 
-规则：
-
-```text
-一个 Session 同一时间最多一个 active Run
-```
-
-重复请求：
+一个 Session 同一时间最多存在一个 active Run。创建新 HumanMessage 和建立
+SSE 之前必须先占用 Session；重复请求返回 HTTP 409：
 
 ```text
 SESSION_BUSY
 ```
+
+Stage 2 使用单实例进程内协调，不引入 Redis。所有完成、失败、停止和客户端
+断开路径都必须释放 active Run。
 
 ## 4.6 Stop
 
@@ -456,15 +484,19 @@ SESSION_BUSY
 POST /api/v1/chat/sessions/{session_id}/stop
 ```
 
-Stop 只停止当前 Run。
+Stop 只停止当前 Run，不删除 Session、不回滚已有历史。接口必须等待以下工作
+完成后再返回：
 
-不删除：
+```text
+取消执行
+→ 将已输出内容以 runtime_status=stopped 写回 Parent
+→ 结束 SSE 生产端
+→ 清理 active Run
+```
 
-- Session
-- 已有历史消息
-- 已成功持久化状态
-
-已经流式输出的内容保留。
+即使尚未产生文本，也保存带稳定 UUID 的 `stopped` AIMessage，使本轮在历史中
+可解释。没有 active Run 时幂等成功，历史保持不变。Stop 不是运行失败，不发送
+`error` 事件。
 
 ## 4.7 Regenerate
 
@@ -474,11 +506,16 @@ POST /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate
 
 要求：
 
-- 使用 checkpoint history
-- 从历史 checkpoint fork 新执行分支
-- 不覆盖原回答
-- 不删除原 checkpoint
-- 第一版不额外维护 `branch_id` / `is_active`
+- 只允许重新生成当前活动分支中最新的 `completed` AIMessage
+- 使用 checkpoint history 定位该回答生成前、已经包含原 HumanMessage 和
+  Parent 路由状态的 checkpoint
+- 使用 LangGraph time travel 从该 checkpoint fork 新执行分支，并沿 Parent
+  流程继续执行；客户端不能指定或绕过 Capability
+- 原 HumanMessage 保持原 `message_id`，新 AIMessage 使用新的服务端 UUID
+- 不覆盖原回答，不删除原 checkpoint，不复制 HumanMessage
+- 新分支启动后成为活动分支；停止或失败时不自动回滚旧回答
+- 第一版不额外维护产品级 `branch_id` / `is_active`，不提供分支浏览或切换 UI
+- 接口使用与普通聊天相同的产品 SSE 协议
 
 ## 4.8 Feedback
 
@@ -486,7 +523,7 @@ POST /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate
 POST /api/v1/chat/messages/{message_id}/feedback
 ```
 
-支持：
+请求动作只允许：
 
 ```text
 like
@@ -494,13 +531,68 @@ dislike
 cancel
 ```
 
-同一：
+只有当前活动分支中的 `completed` AIMessage 可以反馈。以
+`user_id + message_id` 作为唯一键，`like` / `dislike` 覆盖旧值，`cancel`
+删除当前值，只保留最终反馈。旧分支反馈可以保留，但普通历史不可见。
+
+## 4.9 Stage 2 SSE 协议
+
+外部 SSE 继续只使用：
 
 ```text
-user_id + message_id
+message
+error
+done
 ```
 
-只保留最终反馈。
+Stage 2 字段：
+
+```text
+message → session_id + message_id + capability_id + delta
+error   → session_id + code + message + retryable
+done    → session_id + message_id + capability_id + status
+```
+
+`capability_id` 允许 `general_chat`、`en_to_zh` 或 `null`；`done.status` 允许
+`completed`、`unsupported`、`stopped`、`failed`。建立 SSE 后的运行错误仍按
+`error → done(failed)` 结束。
+
+浏览器刷新或 SSE 连接意外断开时终止本轮执行，并保存
+`runtime_status=incomplete` 的 AIMessage；即使尚未产生文本也保留该状态，
+避免留下客户端无法观察或无法解释的后台 Run。
+
+## 4.10 完整聊天演示页面
+
+Stage 2 接口完成后必须提供可直接打开的 `/chat` 页面，不接受仅有后端接口的
+验收结果。
+
+前端要求：
+
+- 使用 React + Vite + Ant Design / Ant Design X
+- 使用第三方开源消息气泡、输入框、按钮、弹窗、提示和 Markdown 组件，
+  不从零开发通用 UI 组件
+- HTML、JavaScript/JSX、API 客户端和 CSS 分文件维护，禁止全部内联在一个
+  HTML 页面中
+- 左侧显示会话列表；右侧显示历史、聊天输入和流式回复；提供可折叠运行状态
+  面板
+- 支持新建会话、游标加载、选择、改名、二次确认删除、流式聊天、Stop、
+  Regenerate、like、dislike 和 cancel
+- 状态面板展示 `session_id`、`message_id`、`capability_id`、流式状态与最终
+  状态，但不展示提示词、LangGraph 节点或 checkpoint
+- 使用安全 Markdown 和代码高亮；禁用未经处理的原始 HTML，并安全处理外链
+- 前端不成为消息或运行状态的第二权威源，刷新后必须以 API 返回状态为准
+- Vite 构建产物必须保持独立 HTML、带内容哈希的 JS 和 CSS 文件，不使用 CDN
+- FastAPI 同源提供页面和静态资源；生产演示只依赖 Python / uv，Node / npm
+  只用于前端开发和构建
+
+## 4.11 Stage 2 验收策略
+
+- 后端默认 pytest 使用 Fake Model，不依赖百炼密钥和外部网络
+- 前端使用 Vitest + React Testing Library 验证组件与交互
+- `npm run build` 验证静态产物拆分，并验证 FastAPI 可以提供 `/chat` 与资源文件
+- 提供可选 Playwright + PostgreSQL + Fake Model 浏览器端到端验收
+- 真实百炼只作为独立 smoke test；执行前由负责人在项目指定配置文件中配置，
+  不作为默认或 CI 门禁
 
 ---
 

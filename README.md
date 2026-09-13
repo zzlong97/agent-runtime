@@ -13,16 +13,18 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 
 ## 1. 当前定位
 
-当前项目处于 **Stage 1：最小 Agent Runtime**。
+当前项目已完成 **Stage 1：最小 Agent Runtime**，正在进入
+**Stage 2：完整聊天产品能力与演示页面**。
 
-Stage 1 面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
+项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
 的 OpenAI 兼容接口接入；自动化测试默认使用 Fake Model，真实模型只用于
 可选 smoke test。
 
-Stage 1 只证明以下主链路成立：
+Stage 1 已证明以下 Runtime 主链路成立，Stage 2 在其外增加完整产品 API 和
+React 演示页面：
 
 ```text
-Frontend / API Client
+React / Ant Design X Chat Demo
         ↓
 FastAPI
         ↓
@@ -184,14 +186,16 @@ ChildResult
 
 实现：
 
-- Session 列表
-- Session 改名
-- Session 删除
-- 历史消息查询
+- 游标分页的 Session 列表
+- Session 改名和幂等硬删除
+- 当前活动分支历史消息查询
 - 单 Session 单 Run
-- Stop
-- Regenerate / Checkpoint Fork
-- Feedback
+- 可等待且幂等的 Stop
+- 最新完成回答的 Regenerate / Checkpoint Fork
+- 活动分支完成消息的 Feedback
+- React + Vite + Ant Design X 完整聊天演示页面
+- 独立 HTML、JavaScript/JSX 和 CSS 构建资源
+- pytest、Vitest 和可选 Playwright 分层验收
 
 ### Stage 3：Capability Runtime 平台化
 
@@ -231,6 +235,12 @@ ChildResult
 - [docs/architecture.md](./docs/architecture.md)：技术架构与实现约束
 - [docs/decisions.md](./docs/decisions.md)：已裁决的架构决策
 - [docs/tasks.md](./docs/tasks.md)：任务执行与验收状态
+- [Stage 2 设计](./docs/plans/2026-09-13-stage-2-chat-product-design.md)：
+  已确认的产品接口、运行语义与聊天页面设计
+- [Stage 2 后端计划](./docs/superpowers/plans/2026-09-13-stage-2-backend.md)：
+  S2-01～S2-08 的测试驱动实施步骤
+- [Stage 2 前端计划](./docs/superpowers/plans/2026-09-13-stage-2-frontend.md)：
+  S2-09 页面和 S2-10 集成验收步骤
 
 ---
 
@@ -244,9 +254,12 @@ ChildResult
 4. `docs/decisions.md`
 5. `docs/tasks.md`
 
-当前只允许执行 `docs/tasks.md` 中 **Stage 1** 的任务。
+当前只允许执行 `docs/tasks.md` 中标记的 **Stage 2 当前任务**。
 
-未通过 Stage 1 验收前，不允许提前实现 Stage 2 / Stage 3 / Future 能力。
+未通过 Stage 2 验收前，不允许提前实现 Stage 3 / Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、
 `LLM_BASE_URL` 和 `LLM_MODEL`；不得提交真实密钥。
+
+Stage 2 页面生产构建由 FastAPI 同源提供。运行已提交的演示资源只需要
+Python / uv；修改或重新构建 `frontend/` 时才需要 Node / npm。

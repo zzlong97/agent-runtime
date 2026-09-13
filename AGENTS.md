@@ -372,7 +372,45 @@ Parent 生成固定简短 unsupported 回复
 
 ---
 
-# 14. 开发流程
+# 14. Stage 2 约束
+
+Stage 2 继续使用配置中的固定 `user_id`，不实现认证或多用户隔离。
+
+产品接口必须遵守：
+
+- Session 列表使用 `updated_at DESC, session_id DESC` 不透明游标分页
+- 历史接口只返回当前活动 Parent 分支，不暴露原始 checkpoint
+- 同一 Session 同时最多一个进程内 active Run
+- Stop 等待停止持久化、SSE 生产端结束和 Run 清理后返回
+- Regenerate 只允许活动分支最新的 completed AIMessage
+- Feedback 只允许活动分支中的 completed AIMessage
+- Session 删除时先停止 Run，最后删除 Session 行
+- completed / unsupported / incomplete / stopped AIMessage 对用户可见，只有
+  completed 完整轮次进入模型上下文
+- 浏览器或 SSE 意外断开时停止 Run，并保存 incomplete AIMessage
+
+Stage 2 SSE 继续只使用 `message`、`error`、`done`，但产品字段扩展为：
+
+```text
+message → session_id + message_id + capability_id + delta
+error   → session_id + code + message + retryable
+done    → session_id + message_id + capability_id + status
+```
+
+`done.status` 允许 `completed`、`unsupported`、`stopped`、`failed`。
+
+Stage 2 必须交付 `/chat` 完整演示页面。前端使用 React + Vite + Ant Design /
+Ant Design X，并满足：
+
+- 使用第三方开源通用组件，不从零开发消息气泡、输入框、弹窗等组件
+- HTML、JavaScript/JSX、API 客户端和 CSS 分文件维护
+- 禁止将全部页面逻辑和样式内联到一个 HTML
+- 构建产物保持独立 HTML、带内容哈希的 JS 和 CSS
+- 页面不得依赖 LangGraph 节点、StateSnapshot、tasks 或 checkpoint metadata
+
+---
+
+# 15. 开发流程
 
 每次任务执行：
 
@@ -391,7 +429,7 @@ Parent 生成固定简短 unsupported 回复
 
 ---
 
-# 15. 修改文档规则
+# 16. 修改文档规则
 
 Codex 可以：
 
@@ -410,7 +448,7 @@ Codex 不可以未经负责人明确裁决直接修改：
 
 ---
 
-# 16. 完成定义
+# 17. 完成定义
 
 任务不是“代码已写完”即完成。
 
@@ -426,7 +464,7 @@ Codex 不可以未经负责人明确裁决直接修改：
 
 ---
 
-# 17. 代码文本与 Schema 描述
+# 18. 代码文本与 Schema 描述
 
 - 新增或修改的代码注释、docstring、模型提示词和用户可见提示信息使用中文
 - 代码标识符继续使用清晰、规范的英文命名

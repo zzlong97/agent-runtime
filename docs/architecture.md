@@ -475,44 +475,239 @@ Parent 可调用 create_agent Child 和 StateGraph Child
 
 # 13. Stage 2 架构增量
 
-Stage 2 新增：
+Stage 2 在现有 Runtime 外增加产品服务和演示前端，不改变 Parent Graph 与 Child
+Agent 的状态所有权。
 
-## Active Run
-
-单实例进程内：
-
-```text
-active_runs[session_id] = asyncio.Task
-```
-
-用于：
-
-- SESSION_BUSY
-- stop
-- Session 删除前停止执行
-
-Stage 2 不引入 Redis。
-
-## Message History Adapter
+## 13.1 组件关系
 
 ```text
-Checkpoint History
-→ 后端解析
-→ Product Message DTO
-→ Frontend
+React / Ant Design X /chat
+        ↓ 同源 HTTP + SSE
+FastAPI Product API
+   ├── Session Service
+   ├── History Adapter
+   ├── Feedback Store
+   └── Active Run Registry
+        ↓
+Parent Graph（公共消息权威源）
+        ↓
+固定 Child Capabilities
+        ↓
+PostgreSQL Session / Feedback / Checkpoints
 ```
 
-## Regenerate
+前端只消费 Product DTO 和产品 SSE。不得让前端读取、缓存或解释原始
+`StateSnapshot`、LangGraph 节点、tasks、checkpoint metadata 或 Child 私有状态。
+
+## 13.2 Active Run
+
+单实例进程内使用：
+
+```text
+active_runs[session_id] = ActiveRun
+```
+
+`ActiveRun` 只保存：
+
+```text
+session_id
+response_message_id
+producer_task
+cancel_reason
+terminal_future
+event_queue
+```
+
+它不保存 Parent / Child 业务 State。Registry 的增删查必须由同一个异步锁保护，
+并通过每次占用生成的内部 token 防止旧任务误删同 Session 的新 Run。
+
+已有 Session 的请求顺序：
+
+```text
+校验 Session 和 Parent 状态
+→ reserve active Run
+→ 创建 HumanMessage
+→ 建立 SSE
+→ 启动独立 producer task
+```
+
+新 Session 的请求顺序：
+
+```text
+服务端生成 session_id
+→ reserve active Run
+→ 创建 Session
+→ 保存第一条 HumanMessage
+→ 建立 SSE
+```
+
+占用失败时在 SSE 前返回 HTTP 409 `SESSION_BUSY`，且不得新增 HumanMessage。
+Stage 2 不引入 Redis，因此只支持单应用实例的并发互斥。
+
+## 13.3 SSE Producer 与停止
+
+Graph 执行放在独立 producer task 中，SSE 响应从该 Run 的 event queue 消费产品
+事件。这样 Stop 接口可以取消执行并等待终态，而不是依赖另一个 HTTP 生成器的
+调用栈。
+
+```text
+Graph delta
+→ producer 聚合 partial text
+→ Product message event
+→ event queue
+→ SSE response
+```
+
+producer 必须在一个统一的终态处理区完成：
+
+```text
+completed / unsupported
+→ 确认 Parent 最终消息
+→ done
+
+用户 Stop
+→ 取消 graph task
+→ 保存 stopped AIMessage
+→ done(stopped)
+
+客户端断开
+→ 取消 graph task
+→ 保存 incomplete AIMessage（允许空内容）
+
+运行异常
+→ 有部分输出时保存 incomplete AIMessage
+→ error
+→ done(failed)
+
+所有路径
+→ 更新 Session.updated_at
+→ 完成 terminal_future
+→ release active Run
+```
+
+Stop 等待 `terminal_future` 后返回。无 active Run 时直接返回当前无运行状态。
+服务端只能保证 producer 和 SSE 服务端迭代结束，不能保证网络客户端已读取最后
+一个事件。
+
+## 13.4 公共消息元数据
+
+Stage 2 新生成的公共 AIMessage 在 `additional_kwargs` 中保存：
+
+```json
+{
+  "runtime_status": "completed|unsupported|incomplete|stopped",
+  "capability_id": "general_chat|en_to_zh|null"
+}
+```
+
+这些字段是产品消息元数据，不是 Child 私有 State。Parent 仍是完整公共消息的
+唯一权威源。Stage 1 正常 AIMessage 缺少 `runtime_status` 时按 `completed`
+读取；缺少 `capability_id` 时返回 `null`。
+
+## 13.5 Session 与消息分页
+
+Session cursor 使用 Base64 URL-safe 编码的版本化 JSON，只包含
+`updated_at + session_id`。数据库使用同一组合条件继续稳定降序查询，并读取
+`limit + 1` 条判断是否存在下一页。
+
+消息历史不新增第二套消息表：
+
+```text
+Parent 最新活动 checkpoint
+→ 读取权威 messages
+→ 过滤并转换 Product Message DTO
+→ 按 before=message_id 在内存切片
+→ 附加当前活动消息的 Feedback
+→ 按时间正序返回
+```
+
+`before` 必须出现在当前活动消息列表中。最新活动 checkpoint 自然代表
+Regenerate 后的新分支，因此普通历史不需要产品级 `branch_id`。
+
+## 13.6 Regenerate
+
+Regenerate 的目标只能是当前活动消息列表中最后一个 AIMessage，并且其
+`runtime_status` 必须为 `completed`。
 
 ```text
 message_id
-→ 定位相关历史 checkpoint
-→ 从历史 checkpoint 恢复
-→ fork 新分支
-→ 继续执行
+→ 验证当前活动分支与最新 completed 条件
+→ 遍历 Parent aget_state_history
+→ 找到回答执行前且 next 指向 Capability 调用的 checkpoint
+→ aupdate_state 创建 fork checkpoint
+→ 使用返回的 fork config，以输入 None 继续 Parent
+→ 产生新 response_message_id
 ```
 
-不复制一套业务消息历史实现版本管理。
+Fork checkpoint 必须已经包含原 HumanMessage 和原 Parent 路由状态。执行仍经过
+Parent 控制面，不允许 API 直接调用 Child。原 checkpoint、原 AIMessage 和原
+Feedback 不删除；普通历史随最新 checkpoint 切换到新分支。
+
+## 13.7 Feedback 与删除
+
+Feedback 使用独立业务表：
+
+```text
+message_feedback
+├── user_id
+├── session_id
+├── message_id
+├── value = like | dislike
+└── updated_at
+
+PRIMARY KEY (user_id, message_id)
+```
+
+写入前必须通过 History Adapter 确认目标位于当前活动分支且是
+`completed` AIMessage。`session_id` 只用于 Session 级清理和索引，不改变
+`user_id + message_id` 的唯一产品语义。`cancel` 删除该唯一键记录。
+
+Session 删除以 Session 行作为可重试锚点：
+
+```text
+stop_and_wait
+→ delete {session_id}:general_chat
+→ delete {session_id}:en_to_zh
+→ delete parent {session_id}
+→ delete feedback
+→ delete session last
+```
+
+任一步失败均返回稳定应用错误；因为 Session 最后删除，客户端可以使用同一
+Session ID 重试。不存在或不属于固定用户的 Session 对 DELETE 统一返回 204。
+
+## 13.8 前端与静态资源
+
+前端源码位于 `frontend/`，使用 React JavaScript/JSX、Vite、Ant Design 和
+Ant Design X。业务代码按组件、API 服务和 CSS 分离，不建立自研通用组件库。
+
+```text
+frontend/index.html
+frontend/src/main.jsx
+frontend/src/App.jsx
+frontend/src/components/*
+frontend/src/services/chatApi.js
+frontend/src/services/sseClient.js
+frontend/src/styles/*
+```
+
+Vite 输出到 Python 包内的 `src/agent_runtime/static/`：
+
+```text
+static/index.html
+static/assets/*.js
+static/assets/*.css
+```
+
+构建产物提交到仓库并由 FastAPI 同源提供：`/chat` 返回入口 HTML，
+`/assets/*` 返回带内容哈希的静态资源。运行已构建 Demo 不要求 Node；开发和
+重新构建使用 npm，并通过 `package-lock.json` 固定依赖。
+
+页面采用左侧 Session 列表、右侧聊天区和可折叠运行状态面板。运行状态面板只
+展示 `session_id`、`message_id`、`capability_id`、流式状态和最终状态。
+
+POST SSE 使用 `fetch + ReadableStream` 解析。前端收到事件后可进行即时 UI
+投影，但在切换 Session、刷新页面和 Run 结束后必须重新以 API 数据为准。
 
 ---
 

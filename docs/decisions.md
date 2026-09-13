@@ -551,3 +551,141 @@ done    → session_id + status
 LangGraph 内部事件。
 
 **Status**：Accepted
+
+---
+
+## D-035：Stage 2 继续使用固定单用户边界
+
+**Decision**
+
+Stage 2 继续运行在单用户可信环境。服务端从配置注入固定 `user_id`，API 不
+接受客户端指定用户。身份认证和多用户数据隔离延后。
+
+**Reason**
+
+Stage 2 聚焦完整聊天产品闭环，不同时扩大为账号与权限平台。
+
+**Status**：Accepted
+
+---
+
+## D-036：Stage 2 使用游标分页和活动 Parent 分支历史
+
+**Decision**
+
+Session 列表按 `updated_at DESC, session_id DESC` 使用不透明游标分页。
+消息历史使用 `before=message_id`，返回当前活动 Parent 分支的消息并保持页内
+时间正序。
+
+`completed`、`unsupported`、`incomplete`、`stopped` AIMessage 均可在
+公共历史中展示；只有成功完成的 HumanMessage + AIMessage 轮次进入模型上下文。
+
+Regenerate 的旧分支仍存在于 checkpoint history，但普通历史接口不提供分支
+浏览、切换或产品级 `branch_id`。
+
+**Reason**
+
+保持 Parent `messages` 的权威性，同时提供稳定、可扩展且不泄漏 LangGraph
+内部结构的产品查询协议。
+
+**Status**：Accepted
+
+---
+
+## D-037：Stage 2 Stop 是可等待的幂等产品终态
+
+**Decision**
+
+Graph Run 使用进程内 Registry 和独立 producer task 管理。同一 Session 在建立
+SSE 前完成占用，重复请求返回 HTTP 409 `SESSION_BUSY`。
+
+Stop 取消当前 Run，将部分或空输出保存为 `runtime_status=stopped`，结束 SSE
+生产端并释放 active Run 后才返回。没有 active Run 时幂等成功。
+
+Stage 2 的 `done.status` 增加 `stopped`。Stop 不发送 `error`，客户端连接
+意外断开则终止执行并按 `incomplete` 处理。
+
+**Reason**
+
+调用方在 Stop 返回后可以立即开始新请求，同时每个已经接受的 HumanMessage 都
+有可解释的公共结果。
+
+**Status**：Accepted
+
+---
+
+## D-038：Regenerate 只处理最新完成回答
+
+**Decision**
+
+只允许重新生成当前活动分支中最新的 `completed` AIMessage。通过 LangGraph
+checkpoint history 定位回答前状态并创建 fork，新分支沿 Parent 流程继续执行。
+
+原 HumanMessage 和 message_id 不复制；新 AIMessage 使用新 UUID。新分支启动后
+成为活动分支，失败或停止不自动回滚；旧 checkpoint 不删除但不通过普通历史
+返回。
+
+**Reason**
+
+该约束能够提供用户可理解的“重新回答”，又避免 Stage 2 引入完整分支产品模型。
+
+**Status**：Accepted
+
+---
+
+## D-039：Feedback 只作用于活动分支完成消息
+
+**Decision**
+
+只有当前活动分支中的 `completed` AIMessage 可以接收 `like`、`dislike`
+或 `cancel`。以 `user_id + message_id` 唯一约束保存最终反馈；cancel 删除
+当前反馈。记录额外保存 `session_id` 作为 Session 硬删除的清理索引，但不改变
+唯一产品语义。
+
+**Reason**
+
+避免对 unsupported、incomplete、stopped 或不可见旧分支消息产生含义不清的
+反馈记录。
+
+**Status**：Accepted
+
+---
+
+## D-040：Stage 2 必须交付独立资源的聊天演示页面
+
+**Decision**
+
+Stage 2 接口完成后使用 React + Vite + Ant Design / Ant Design X 交付 `/chat`
+演示页面。使用开源第三方通用 UI 与 Markdown 组件，项目只编写业务组合组件。
+
+HTML、JavaScript/JSX、API 客户端和 CSS 分文件维护；Vite 输出独立且带内容哈希
+的 JS / CSS 资源到 Python 包内静态目录，FastAPI 同源提供页面和资源。禁止把
+全部实现放入单个 HTML，也不使用 CDN。
+
+页面使用左侧会话列表、右侧聊天区和可折叠产品运行状态面板。面板可展示
+`session_id`、`message_id`、`capability_id` 与终态，但不得展示提示词、
+节点或 checkpoint。
+
+**Reason**
+
+完整页面让 Runtime 的路由、流式、停止、重新生成和反馈能力可直接观察与验收，
+同时第三方组件降低无必要的 UI 自研成本。
+
+**Status**：Accepted
+
+---
+
+## D-041：Stage 2 使用分层自动化验收
+
+**Decision**
+
+后端使用 pytest + Fake Model；前端使用 Vitest + React Testing Library；另提供
+显式启用的 Playwright + PostgreSQL + Fake Model 端到端验收。真实百炼继续只
+用于独立 smoke test。
+
+**Reason**
+
+默认验证保持确定、快速、无费用，端到端测试同时证明构建后的真实页面能够承接
+完整产品接口。
+
+**Status**：Accepted

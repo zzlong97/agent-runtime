@@ -19,10 +19,10 @@ VERIFIED
 # 当前工作状态
 
 ```text
-Current Stage: Stage 1
-Current Task: S1-10
-Last Verified Task: S1-09
-Last Verified Commit: ec48d1503ba4521acd5d858aa66e58a63179e174
+Current Stage: Stage 2
+Current Task: S2-00
+Last Verified Task: S1-10
+Last Verified Commit: eac8b9793a13d7046830832d75cac26ac4275241
 Blockers: None
 ```
 
@@ -555,7 +555,7 @@ done    → session_id + status
 
 ## S1-10 Stage 1 集成测试
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-01 ~ S1-09
 
@@ -691,24 +691,66 @@ Stage 1 = VERIFIED
   `108 passed, 1 skipped`，唯一跳过项为显式隔离的真实百炼 smoke
 - 2026-09-12：依赖锁、环境兼容性、源码与测试编译验证通过；独立代码审查无
   Critical、Important 或 Minor 问题，结论为 Ready
-- Result：S1-10 实现和验证完成，等待负责人验收；Stage 1 尚未最终标记
-  `VERIFIED`，未进入 Stage 2
+- 2026-09-13：负责人确认 Stage 1 已经完成，并开始 Stage 2 设计
+- Result：S1-10 与 Stage 1 整体验收通过，允许进入 Stage 2
 
 ---
 
 # Stage 2：完整聊天产品能力
 
-> Stage 1 VERIFIED 前禁止开始。
+> Stage 1 已 VERIFIED。Stage 2 严格按 S2-00～S2-10 顺序推进。
+
+## S2-00 Stage 2 架构基线确认
+
+**Status:** DONE
+
+**Dependencies:** S1-10
+
+### Work
+
+- 细化 Session、History、Active Run、Stop、Regenerate、Feedback 和 Delete 契约
+- 明确活动 Parent 分支、消息状态、Capability 展示和 SSE Stage 2 增量
+- 增加 React + Vite + Ant Design X 完整聊天演示页面
+- 明确默认 Fake Model、前端组件测试和可选浏览器端到端验收
+
+### Acceptance
+
+- [x] 单用户、Parent 权威源和 Child 隔离原则保持不变
+- [x] API、状态语义、分页、错误和删除顺序已明确
+- [x] Regenerate 资格和活动分支可见性已明确
+- [x] 演示页面范围、技术栈和静态资源拆分已明确
+- [x] 负责人逐节确认整体设计
+- [ ] 负责人复核写入仓库后的 Stage 2 文档
+
+### Verification
+
+- 2026-09-13：负责人依次确认产品范围、API 契约、运行与持久化、前端结构和
+  验收策略
+- Result：设计内容已确认，等待负责人对固化后的文档进行书面复核
 
 ## S2-01 Session 列表
 
 **Status:** TODO
 
-实现：
+**Dependencies:** S2-00
+
+### Work
 
 ```http
-GET /api/v1/chat/sessions
+GET /api/v1/chat/sessions?cursor={cursor}&limit={limit}
 ```
+
+- 使用不透明游标
+- 按 `updated_at DESC, session_id DESC` 稳定排序
+- 默认 20 条，限制 1～100 条
+
+### Acceptance
+
+- [ ] 只返回固定本地用户的 Session
+- [ ] 首次请求返回最新一页和可空 `next_cursor`
+- [ ] 相同排序键下不会重复或遗漏 Session
+- [ ] 非法游标返回明确客户端错误
+- [ ] Pydantic 字段均有完整中文 description
 
 ---
 
@@ -716,9 +758,23 @@ GET /api/v1/chat/sessions
 
 **Status:** TODO
 
+**Dependencies:** S2-01
+
+### Work
+
 ```http
 PATCH /api/v1/chat/sessions/{session_id}/rename
 ```
+
+- 标题 trim 后限制 1～100 字符
+- 不调用模型生成标题
+
+### Acceptance
+
+- [ ] 合法标题持久化并返回更新后的 Session
+- [ ] 空标题、超长标题和额外字段被拒绝
+- [ ] 不存在或不属于固定用户的 Session 返回 404
+- [ ] 服务重启后新标题仍可恢复
 
 ---
 
@@ -726,17 +782,26 @@ PATCH /api/v1/chat/sessions/{session_id}/rename
 
 **Status:** TODO
 
-使用进程内：
+**Dependencies:** S2-02
+
+### Work
 
 ```text
-active_runs[session_id]
+active_runs[session_id] = ActiveRun
 ```
 
-重复请求返回：
+- 在新增 HumanMessage 和 SSE 前完成 Session 占用
+- Graph 在独立 producer task 中运行
+- 使用 event queue 向 SSE 适配器传递产品事件
 
-```text
-SESSION_BUSY
-```
+### Acceptance
+
+- [ ] 同一 Session 同时只允许一个 Run
+- [ ] 重复请求在 SSE 前返回 HTTP 409 `SESSION_BUSY`
+- [ ] 被拒绝的重复请求不写入 HumanMessage
+- [ ] 不同 Session 可以并发运行
+- [ ] 完成、失败、停止和断开路径都释放 Registry
+- [ ] 未引入 Redis 或多实例协调
 
 ---
 
@@ -744,9 +809,27 @@ SESSION_BUSY
 
 **Status:** TODO
 
+**Dependencies:** S2-03
+
+### Work
+
 ```http
 POST /api/v1/chat/sessions/{session_id}/stop
 ```
+
+- 取消当前 producer task
+- 保存 `stopped` AIMessage
+- 发送 `done(status="stopped")`
+- 等待 Run 清理后返回
+
+### Acceptance
+
+- [ ] 已输出文本完整保留并标记为 stopped
+- [ ] 零文本时仍保存稳定 UUID 的 stopped AIMessage
+- [ ] Stop 不发送 error，也不回滚历史
+- [ ] 无 active Run 时幂等成功
+- [ ] Stop 返回后同 Session 可以立即开始新 Run
+- [ ] 客户端断开会终止 Run 并按 incomplete 保存
 
 ---
 
@@ -754,11 +837,26 @@ POST /api/v1/chat/sessions/{session_id}/stop
 
 **Status:** TODO
 
+**Dependencies:** S2-04
+
+### Work
+
 ```http
-GET /api/v1/chat/sessions/{session_id}/messages
+GET /api/v1/chat/sessions/{session_id}/messages?before={message_id}&limit={limit}
 ```
 
-Checkpoint History → 前端消息结构。
+- 从最新活动 Parent checkpoint 读取权威 messages
+- 转换为 Product Message DTO
+- 默认 50 条，限制 1～100 条
+
+### Acceptance
+
+- [ ] 页内消息按时间正序返回
+- [ ] before 只能引用当前 Session 活动历史中的 message_id
+- [ ] completed / unsupported / incomplete / stopped 均正确展示
+- [ ] 返回 capability_id 和当前反馈
+- [ ] 兼容缺少 Stage 2 元数据的 Stage 1 消息
+- [ ] 不暴露 StateSnapshot、节点、tasks 或 checkpoint metadata
 
 ---
 
@@ -766,9 +864,26 @@ Checkpoint History → 前端消息结构。
 
 **Status:** TODO
 
+**Dependencies:** S2-05
+
+### Work
+
 ```http
 POST /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate
 ```
+
+- 只允许活动分支最新 completed AIMessage
+- 从回答前 checkpoint fork，并使用相同 SSE 协议继续 Parent
+
+### Acceptance
+
+- [ ] 历史中间回答、unsupported、incomplete、stopped 均不可重新生成
+- [ ] 原 HumanMessage 不重复且 message_id 保持不变
+- [ ] 新 AIMessage 获得新 UUID
+- [ ] 普通历史只返回新活动分支
+- [ ] 原 checkpoint 和旧反馈仍保留
+- [ ] 新分支失败或停止时不回滚旧回答
+- [ ] 前端不能指定 Capability 或绕过 Parent
 
 ---
 
@@ -776,15 +891,35 @@ POST /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate
 
 **Status:** TODO
 
+**Dependencies:** S2-06
+
+### Work
+
 ```http
 POST /api/v1/chat/messages/{message_id}/feedback
 ```
+
+- 支持 `like`、`dislike`、`cancel`
+- 以 `user_id + message_id` 保存最终结果
+- 保存 `session_id` 清理索引，支持幂等 Session 硬删除重试
+
+### Acceptance
+
+- [ ] 只允许当前活动分支中的 completed AIMessage
+- [ ] like / dislike 覆盖旧值且不产生重复记录
+- [ ] cancel 删除当前反馈并保持幂等
+- [ ] unsupported / incomplete / stopped / HumanMessage 被拒绝
+- [ ] 历史查询返回当前最终反馈
 
 ---
 
 ## S2-08 Session 删除
 
 **Status:** TODO
+
+**Dependencies:** S2-07
+
+### Work
 
 ```http
 DELETE /api/v1/chat/sessions/{session_id}
@@ -793,19 +928,67 @@ DELETE /api/v1/chat/sessions/{session_id}
 执行：
 
 ```text
-stop active run
-→ delete parent checkpoints
+stop and wait
 → delete child checkpoints
-→ delete session
+→ delete parent checkpoints
+→ delete feedback
+→ delete session last
 ```
+
+### Acceptance
+
+- [ ] 删除 active Session 时先完成停止和 Run 清理
+- [ ] Parent、两个 Child、Feedback 与 Session 均被删除
+- [ ] Session 在所有关联数据之后删除
+- [ ] 中途失败后可以使用同一 session_id 重试
+- [ ] 不存在或不属于固定用户的目标幂等返回 204
 
 ---
 
-## S2-09 Stage 2 集成验收
+## S2-09 完整聊天演示页面
 
 **Status:** TODO
 
-验收项后续在 Stage 1 完成后细化。
+**Dependencies:** S2-08
+
+### Work
+
+- 创建 React + Vite + Ant Design / Ant Design X 前端
+- 实现双栏聊天页面和可折叠运行状态面板
+- 接入所有 Stage 2 API 与 POST SSE
+- 构建独立 HTML、JS、CSS 静态资源并由 FastAPI 同源提供
+
+### Acceptance
+
+- [ ] 页面支持会话新建、分页、选择、改名和二次确认删除
+- [ ] 页面支持流式聊天、Stop、Regenerate 和 Feedback
+- [ ] 运行面板显示 session_id、message_id、capability_id 与终态
+- [ ] Markdown 安全渲染，原始 HTML 不直接执行
+- [ ] 通用 UI 使用第三方开源组件，不自研组件库
+- [ ] HTML、JavaScript/JSX、API 模块和 CSS 源码分离
+- [ ] 构建产物包含独立且带内容哈希的 JS / CSS
+- [ ] `/chat` 和 `/assets/*` 可由 FastAPI 直接访问
+- [ ] 生产演示不要求安装 Node
+
+---
+
+## S2-10 Stage 2 集成验收
+
+**Status:** TODO
+
+**Dependencies:** S2-01 ~ S2-09
+
+### Acceptance
+
+- [ ] 默认 `uv run pytest -q` 使用 Fake Model 并全部通过
+- [ ] 前端 Vitest + React Testing Library 全部通过
+- [ ] `npm run build` 成功且静态资源边界检查通过
+- [ ] 可选 PostgreSQL 后端集成测试通过
+- [ ] 可选 Playwright 真实浏览器端到端验收通过
+- [ ] 普通聊天、英译汉和有限 OUT_OF_SCOPE 回流未回归
+- [ ] 10/5 上下文规则继续排除 unsupported / incomplete / stopped
+- [ ] 未实现 Stage 3 或 Future 能力
+- [ ] README 和全部项目文档与实现一致
 
 ---
 
