@@ -1,5 +1,6 @@
-"""Stage 1 Session 元数据的 PostgreSQL 持久化。"""
+"""Session 元数据的 PostgreSQL 持久化与产品查询。"""
 
+from datetime import datetime
 from uuid import UUID
 
 from agent_runtime.core.config import Settings, get_settings
@@ -48,6 +49,13 @@ WHERE user_id = %s
 AND (updated_at, session_id) < (%s, %s)
 ORDER BY updated_at DESC, session_id DESC
 LIMIT %s
+"""
+
+_RENAME_SESSION = """
+UPDATE sessions
+SET title = %s, updated_at = %s
+WHERE session_id = %s AND user_id = %s
+RETURNING session_id, user_id, title, created_at, updated_at
 """
 
 
@@ -127,3 +135,28 @@ class PostgresSessionRepository:
 
         sessions = [Session(**row) for row in rows]
         return sessions[:limit], len(sessions) > limit
+
+    async def rename(
+        self,
+        *,
+        session_id: UUID,
+        user_id: str,
+        title: str,
+        updated_at: datetime,
+    ) -> Session:
+        """只更新指定用户拥有的 Session，并返回持久化后的完整元数据。"""
+
+        async with open_database_connection(self._settings) as connection:
+            cursor = await connection.execute(
+                _RENAME_SESSION,
+                (title, updated_at, session_id, user_id),
+            )
+            row = await cursor.fetchone()
+            await connection.commit()
+        if row is None:
+            raise SessionNotFoundError(
+                code="SESSION_NOT_FOUND",
+                message="Session 不存在",
+                status_code=404,
+            )
+        return Session(**row)

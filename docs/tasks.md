@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-01
-Last Verified Task: S2-00
-Last Verified Commit: 191913e5051a06bb3b511a5c2513f491468fd1a4
+Current Task: S2-02
+Last Verified Task: S2-01
+Last Verified Commit: 3dfb94d5a33698c3f3cde7f963899381a4c6cf4f
 Blockers: None
 ```
 
@@ -732,7 +732,7 @@ Stage 1 = VERIFIED
 
 ## S2-01 Session 列表
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-00
 
@@ -771,13 +771,14 @@ GET /api/v1/chat/sessions?cursor={cursor}&limit={limit}
 - 2026-09-13：依赖锁、源码与测试编译、源码包和 wheel 构建、OpenAPI 参数、
   暂存差异检查均通过；独立代码审查无 Critical、Important 或 Minor 问题，
   结论为 Ready
-- Result：S2-01 实现与工程验收完成，等待负责人确认后再进入 S2-02
+- 2026-09-13：负责人确认验收通过
+- Result：S2-01 已验收并更新为 `VERIFIED`；允许开始 S2-02
 
 ---
 
 ## S2-02 Session 改名
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-01
 
@@ -792,10 +793,29 @@ PATCH /api/v1/chat/sessions/{session_id}/rename
 
 ### Acceptance
 
-- [ ] 合法标题持久化并返回更新后的 Session
-- [ ] 空标题、超长标题和额外字段被拒绝
-- [ ] 不存在或不属于固定用户的 Session 返回 404
-- [ ] 服务重启后新标题仍可恢复
+- [x] 合法标题持久化并返回更新后的 Session
+- [x] 空标题、超长标题和额外字段被拒绝
+- [x] 不存在或不属于固定用户的 Session 返回 404
+- [x] 服务重启后新标题仍可恢复
+
+### Execution Evidence
+
+- 2026-09-13：新增 `PATCH /api/v1/chat/sessions/{session_id}/rename`；请求体只
+  接受 `title`，先去除首尾空白，再限制为 1～100 个字符，未调用模型生成标题
+- 2026-09-13：请求、响应和路径参数均提供完整中文说明；响应只返回
+  `session_id`、`title`、`created_at`、`updated_at`，不暴露 `user_id`
+- 2026-09-13：PostgreSQL 使用单条参数化 `UPDATE`，同时按 `session_id` 和
+  配置中的固定 `local_user_id` 过滤；不存在和越权目标统一返回 HTTP 404
+  `SESSION_NOT_FOUND`
+- 2026-09-13：改名只更新 `title` 和 `updated_at`，保持 `created_at`；真实
+  PostgreSQL 测试确认重建 Repository / Service 后仍可恢复新标题，且其他用户
+  记录保持不变
+- 2026-09-13：默认全量回归 `133 passed, 9 skipped`；启用真实 PostgreSQL 后
+  全量回归 `141 passed, 1 skipped`，唯一跳过项为真实百炼 smoke
+- 2026-09-13：依赖锁、源码与测试编译、源码包和 wheel 构建、OpenAPI 契约、
+  暂存差异检查均通过；独立代码审查无 Critical、Important 或 Minor 问题，
+  结论为 Ready
+- Result：S2-02 实现与工程验收完成，等待负责人确认后再进入 S2-03
 
 ---
 

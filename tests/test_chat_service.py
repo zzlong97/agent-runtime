@@ -249,3 +249,31 @@ def test_chat_service_delegates_session_listing_to_session_service() -> None:
 
     assert page is expected_page
     assert calls == [("opaque", 7)]
+
+
+def test_chat_service_delegates_session_rename_to_session_service() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+
+    session_id = UUID("00000000-0000-0000-0000-000000001101")
+    expected_session = object()
+    calls: list[tuple[UUID, str]] = []
+
+    class FakeSessionService:
+        async def rename_session(self, *, session_id, title):
+            calls.append((session_id, title))
+            return expected_session
+
+    service = ChatService(
+        settings=Settings(_env_file=None),
+        session_repository=object(),
+        session_service=FakeSessionService(),
+        parent_graph=FakeParentGraph(),
+    )
+
+    renamed = asyncio.run(
+        service.rename_session(session_id=session_id, title="新标题")
+    )
+
+    assert renamed is expected_session
+    assert calls == [(session_id, "新标题")]

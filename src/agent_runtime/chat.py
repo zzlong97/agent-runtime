@@ -22,7 +22,7 @@ from agent_runtime.graph.parent import build_parent_graph
 from agent_runtime.graph.router import StageOneRouter
 from agent_runtime.persistence.checkpointers import open_stage_one_checkpointers
 from agent_runtime.persistence.parent_state import PostgresParentStateStore
-from agent_runtime.sessions.models import SessionPage
+from agent_runtime.sessions.models import Session, SessionPage
 from agent_runtime.sessions.repository import PostgresSessionRepository
 from agent_runtime.sessions.service import SessionService
 
@@ -127,6 +127,19 @@ class ChatService:
         return await self._session_service.list_sessions(
             cursor=cursor,
             limit=limit,
+        )
+
+    async def rename_session(
+        self,
+        *,
+        session_id: UUID,
+        title: str,
+    ) -> Session:
+        """更新固定本地用户拥有的 Session 标题。"""
+
+        return await self._session_service.rename_session(
+            session_id=session_id,
+            title=title,
         )
 
     async def stream_turn(

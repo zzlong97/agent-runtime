@@ -11,6 +11,8 @@ from agent_runtime.api.schemas.sessions import (
     SessionListItem,
     SessionListQuery,
     SessionListResponse,
+    SessionRenameRequest,
+    SessionRenameResponse,
 )
 
 __all__ = [
@@ -22,4 +24,6 @@ __all__ = [
     "SessionListItem",
     "SessionListQuery",
     "SessionListResponse",
+    "SessionRenameRequest",
+    "SessionRenameResponse",
 ]

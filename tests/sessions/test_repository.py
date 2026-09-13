@@ -316,3 +316,121 @@ def test_session_repository_continues_after_composite_cursor(monkeypatch) -> Non
         session_id,
         3,
     )
+
+
+def test_session_repository_renames_owned_session_and_returns_updated_row(
+    monkeypatch,
+) -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions import repository
+    from agent_runtime.sessions.models import Session
+
+    session_id = uuid4()
+    created_at = datetime(2026, 9, 13, 8, 0, tzinfo=UTC)
+    updated_at = datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
+    row = {
+        "session_id": session_id,
+        "user_id": "configured-user",
+        "title": "新标题",
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+    executed: dict[str, object] = {}
+
+    class FakeCursor:
+        async def fetchone(self):
+            return row
+
+    class FakeConnection:
+        committed = False
+
+        async def execute(self, query: str, params=None):
+            executed["query"] = " ".join(query.split())
+            executed["params"] = params
+            return FakeCursor()
+
+        async def commit(self) -> None:
+            self.committed = True
+
+    connection = FakeConnection()
+
+    @asynccontextmanager
+    async def fake_connection_factory(settings):
+        yield connection
+
+    monkeypatch.setattr(
+        repository,
+        "open_database_connection",
+        fake_connection_factory,
+    )
+    session_repository = repository.PostgresSessionRepository(
+        Settings(_env_file=None)
+    )
+
+    renamed = asyncio.run(
+        session_repository.rename(
+            session_id=session_id,
+            user_id="configured-user",
+            title="新标题",
+            updated_at=updated_at,
+        )
+    )
+
+    assert renamed == Session(**row)
+    assert connection.committed is True
+    assert executed["query"] == (
+        "UPDATE sessions SET title = %s, updated_at = %s "
+        "WHERE session_id = %s AND user_id = %s "
+        "RETURNING session_id, user_id, title, created_at, updated_at"
+    )
+    assert executed["params"] == (
+        "新标题",
+        updated_at,
+        session_id,
+        "configured-user",
+    )
+
+
+def test_session_repository_hides_missing_or_unowned_session_on_rename(
+    monkeypatch,
+) -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions import repository
+
+    class FakeCursor:
+        async def fetchone(self):
+            return None
+
+    class FakeConnection:
+        async def execute(self, query: str, params=None):
+            return FakeCursor()
+
+        async def commit(self) -> None:
+            pass
+
+    @asynccontextmanager
+    async def fake_connection_factory(settings):
+        yield FakeConnection()
+
+    monkeypatch.setattr(
+        repository,
+        "open_database_connection",
+        fake_connection_factory,
+    )
+    session_repository = repository.PostgresSessionRepository(
+        Settings(_env_file=None)
+    )
+
+    with pytest.raises(repository.SessionNotFoundError) as captured:
+        asyncio.run(
+            session_repository.rename(
+                session_id=uuid4(),
+                user_id="configured-user",
+                title="新标题",
+                updated_at=datetime.now(UTC),
+            )
+        )
+
+    assert captured.value.code == "SESSION_NOT_FOUND"
+    assert captured.value.message == "Session 不存在"
+    assert captured.value.status_code == 404

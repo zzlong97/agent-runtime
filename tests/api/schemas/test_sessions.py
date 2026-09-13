@@ -75,3 +75,58 @@ def test_session_list_schemas_describe_every_field_in_chinese() -> None:
             name: definition["description"]
             for name, definition in schema["properties"].items()
         } == descriptions
+
+
+def test_session_rename_request_trims_title_and_rejects_invalid_values() -> None:
+    from agent_runtime.api.schemas.sessions import SessionRenameRequest
+
+    assert SessionRenameRequest(title="  新标题\n").title == "新标题"
+    assert SessionRenameRequest(title=f"  {'新' * 100}\t").title == "新" * 100
+
+    for title in ("   ", "新" * 101):
+        with pytest.raises(ValidationError):
+            SessionRenameRequest(title=title)
+
+    with pytest.raises(ValidationError):
+        SessionRenameRequest.model_validate(
+            {"title": "合法标题", "user_id": "client-user"}
+        )
+
+
+def test_session_rename_schemas_describe_every_field_in_chinese() -> None:
+    from agent_runtime.api.schemas.sessions import (
+        SessionRenameRequest,
+        SessionRenameResponse,
+    )
+
+    expected_descriptions = {
+        SessionRenameRequest: {
+            "title": (
+                "新的 Session 标题；服务端先去除首尾空白，再要求长度为 1～100 "
+                "个字符；Stage 2 S2-02 不调用模型生成标题。"
+            ),
+        },
+        SessionRenameResponse: {
+            "session_id": (
+                "已改名 Session 的服务端稳定 UUID；Stage 2 S2-02 不允许客户端"
+                "修改该值。"
+            ),
+            "title": "去除首尾空白后已持久化的新标题，长度为 1～100 个字符。",
+            "created_at": (
+                "Session 原始创建时间；改名不会修改该值，返回带时区的 "
+                "ISO 8601 时间。"
+            ),
+            "updated_at": (
+                "本次改名的持久化时间；用于 Session 列表首要降序排序，"
+                "返回带时区的 ISO 8601 时间。"
+            ),
+        },
+    }
+
+    for schema_type, descriptions in expected_descriptions.items():
+        schema = schema_type.model_json_schema()
+        assert schema["additionalProperties"] is False
+        assert {
+            name: definition["description"]
+            for name, definition in schema["properties"].items()
+        } == descriptions

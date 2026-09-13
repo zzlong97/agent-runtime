@@ -1,12 +1,18 @@
 """聊天 HTTP + SSE 与 Stage 2 Session 产品入口。"""
 
 from typing import Annotated, Any, cast
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Path, Query, Request
 from fastapi.responses import StreamingResponse
 
 from agent_runtime.api.schemas.chat import ChatCompletionRequest
-from agent_runtime.api.schemas.sessions import SessionListQuery, SessionListResponse
+from agent_runtime.api.schemas.sessions import (
+    SessionListQuery,
+    SessionListResponse,
+    SessionRenameRequest,
+    SessionRenameResponse,
+)
 from agent_runtime.chat import ChatService
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.streaming.sse import stream_chat_sse
@@ -59,6 +65,39 @@ async def list_sessions(
             detail=_application_error_detail(error),
         ) from error
     return SessionListResponse.model_validate(page, from_attributes=True)
+
+
+@router.patch(
+    "/sessions/{session_id}/rename",
+    response_model=SessionRenameResponse,
+)
+async def rename_session(
+    session_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要改名的 Session UUID；只允许操作固定本地用户拥有的 "
+                "Session，不存在或不属于该用户时统一返回 404。"
+            )
+        ),
+    ],
+    payload: SessionRenameRequest,
+    request: Request,
+) -> SessionRenameResponse:
+    """更新固定本地用户拥有的 Session 标题。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        session = await chat_service.rename_session(
+            session_id=session_id,
+            title=payload.title,
+        )
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    return SessionRenameResponse.model_validate(session, from_attributes=True)
 
 
 @router.post("/completions")

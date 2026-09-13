@@ -1,9 +1,9 @@
-"""Stage 1 聊天入口的 Session 创建顺序。"""
+"""Session 创建、列表与改名产品服务。"""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from langchain_core.messages import HumanMessage
 
@@ -107,3 +107,18 @@ class SessionService:
                 )
             )
         return SessionPage(items=tuple(items), next_cursor=next_cursor)
+
+    async def rename_session(
+        self,
+        *,
+        session_id: UUID,
+        title: str,
+    ) -> Session:
+        """按固定本地用户更新标题与更新时间。"""
+
+        return await self._session_repository.rename(
+            session_id=session_id,
+            user_id=self._settings.local_user_id,
+            title=title,
+            updated_at=datetime.now(UTC),
+        )

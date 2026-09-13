@@ -169,3 +169,89 @@ def test_session_list_paginates_composite_sort_key_without_gaps() -> None:
                 await connection.commit()
 
     run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="set RUN_POSTGRES_TESTS=1 to run PostgreSQL integration tests",
+)
+def test_session_rename_persists_across_service_restart_and_hides_other_user() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.persistence.database import open_database_connection
+    from agent_runtime.sessions.models import Session
+    from agent_runtime.sessions.repository import (
+        PostgresSessionRepository,
+        SessionNotFoundError,
+    )
+    from agent_runtime.sessions.service import SessionService
+
+    base_settings = Settings()
+    settings = Settings(
+        database_url=base_settings.database_url,
+        local_user_id=f"s2-rename-test-{uuid4()}",
+        _env_file=None,
+    )
+    session_repository = PostgresSessionRepository(settings)
+    original_time = datetime(2026, 9, 13, 8, 0, tzinfo=UTC)
+    owned_session = Session(
+        session_id=uuid4(),
+        user_id=settings.local_user_id,
+        title="旧标题",
+        created_at=original_time,
+        updated_at=original_time,
+    )
+    other_session = Session(
+        session_id=uuid4(),
+        user_id=f"{settings.local_user_id}-other",
+        title="其他用户标题",
+        created_at=original_time,
+        updated_at=original_time,
+    )
+    inserted_ids = (owned_session.session_id, other_session.session_id)
+
+    async def exercise() -> None:
+        await session_repository.setup()
+        await session_repository.add(owned_session)
+        await session_repository.add(other_session)
+        service = SessionService(
+            settings=settings,
+            session_repository=session_repository,
+            parent_state_store=object(),
+        )
+        try:
+            renamed = await service.rename_session(
+                session_id=owned_session.session_id,
+                title="持久化新标题",
+            )
+
+            restarted_repository = PostgresSessionRepository(settings)
+            restarted_service = SessionService(
+                settings=settings,
+                session_repository=restarted_repository,
+                parent_state_store=object(),
+            )
+            restored = await restarted_repository.get(owned_session.session_id)
+            assert restored == renamed
+            assert restored.title == "持久化新标题"
+            assert restored.created_at == original_time
+            assert restored.updated_at > original_time
+
+            with pytest.raises(SessionNotFoundError):
+                await restarted_service.rename_session(
+                    session_id=other_session.session_id,
+                    title="越权标题",
+                )
+            untouched = await restarted_repository.get(other_session.session_id)
+            assert untouched.title == "其他用户标题"
+            assert untouched.updated_at == original_time
+        finally:
+            async with open_database_connection(settings) as connection:
+                for session_id in inserted_ids:
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                await connection.commit()
+
+    run_on_psycopg_compatible_loop(exercise())
