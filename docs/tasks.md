@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-00
-Last Verified Task: S1-10
-Last Verified Commit: eac8b9793a13d7046830832d75cac26ac4275241
+Current Task: S2-01
+Last Verified Task: S2-00
+Last Verified Commit: 191913e5051a06bb3b511a5c2513f491468fd1a4
 Blockers: None
 ```
 
@@ -702,7 +702,7 @@ Stage 1 = VERIFIED
 
 ## S2-00 Stage 2 架构基线确认
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S1-10
 
@@ -720,13 +720,15 @@ Stage 1 = VERIFIED
 - [x] Regenerate 资格和活动分支可见性已明确
 - [x] 演示页面范围、技术栈和静态资源拆分已明确
 - [x] 负责人逐节确认整体设计
-- [ ] 负责人复核写入仓库后的 Stage 2 文档
+- [x] 负责人复核写入仓库后的 Stage 2 文档
 
 ### Verification
 
 - 2026-09-13：负责人依次确认产品范围、API 契约、运行与持久化、前端结构和
   验收策略
-- Result：设计内容已确认，等待负责人对固化后的文档进行书面复核
+- 2026-09-13：负责人书面确认“审核通过”
+- Reviewed Commit：`191913e5051a06bb3b511a5c2513f491468fd1a4`
+- Result：Stage 2 架构基线已验收；下一项 `S2-01` 可交由编码人员实施
 
 ## S2-01 Session 列表
 
