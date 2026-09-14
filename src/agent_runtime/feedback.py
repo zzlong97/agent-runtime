@@ -1,5 +1,6 @@
 """Stage 2 消息反馈应用服务与 PostgreSQL 存储。"""
 
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Callable, Literal, Protocol, cast
@@ -45,6 +46,11 @@ DELETE FROM message_feedback
 WHERE user_id = %s AND message_id = %s
 """
 
+_DELETE_FEEDBACK_BY_SESSION = """
+DELETE FROM message_feedback
+WHERE user_id = %s AND session_id = %s
+"""
+
 _SELECT_FEEDBACK_FOR_MESSAGES = """
 SELECT message_id, value
 FROM message_feedback
@@ -61,6 +67,16 @@ class ActiveFeedbackTargetFinder(Protocol):
 
     async def find_feedback_session(self, *, message_id: UUID) -> UUID:
         """校验目标并返回目标所属 Session UUID。"""
+
+
+class SessionOperationCoordinator(Protocol):
+    """协调 Session 短写操作与幂等硬删除。"""
+
+    def session_operation(
+        self,
+        session_id: UUID,
+    ) -> AbstractAsyncContextManager[None]:
+        """返回阻止同一 Session 并发删除的操作临界区。"""
 
 
 class FeedbackStore(Protocol):
@@ -119,6 +135,28 @@ class PostgresFeedbackStore:
                 await connection.execute(
                     _UPSERT_FEEDBACK,
                     (user_id, session_id, message_id, value, updated_at),
+                )
+                await connection.commit()
+        except Exception as error:
+            raise FeedbackError(
+                code="MESSAGE_FEEDBACK_PERSIST_FAILED",
+                message="消息反馈保存失败",
+                retryable=True,
+            ) from error
+
+    async def delete_by_session(
+        self,
+        *,
+        user_id: str,
+        session_id: UUID,
+    ) -> None:
+        """幂等删除固定用户指定 Session 的全部反馈。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                await connection.execute(
+                    _DELETE_FEEDBACK_BY_SESSION,
+                    (user_id, session_id),
                 )
                 await connection.commit()
         except Exception as error:
@@ -188,6 +226,7 @@ class FeedbackService:
         *,
         target_finder: ActiveFeedbackTargetFinder,
         store: FeedbackStore,
+        operation_coordinator: SessionOperationCoordinator,
         settings: Settings | None = None,
         now_factory: Callable[[], datetime] | None = None,
     ) -> None:
@@ -195,6 +234,7 @@ class FeedbackService:
         self._target_finder = target_finder
         self._store = store
         self._now_factory = now_factory or (lambda: datetime.now(UTC))
+        self._operation_coordinator = operation_coordinator
 
     async def submit(
         self,
@@ -207,18 +247,19 @@ class FeedbackService:
         session_id = await self._target_finder.find_feedback_session(
             message_id=message_id
         )
-        if action == "cancel":
-            await self._store.delete(
-                user_id=self._settings.local_user_id,
-                message_id=message_id,
-            )
-            return FeedbackResult(message_id=message_id, feedback=None)
+        async with self._operation_coordinator.session_operation(session_id):
+            if action == "cancel":
+                await self._store.delete(
+                    user_id=self._settings.local_user_id,
+                    message_id=message_id,
+                )
+                return FeedbackResult(message_id=message_id, feedback=None)
 
-        await self._store.upsert(
-            user_id=self._settings.local_user_id,
-            session_id=session_id,
-            message_id=message_id,
-            value=action,
-            updated_at=self._now_factory(),
-        )
-        return FeedbackResult(message_id=message_id, feedback=action)
+            await self._store.upsert(
+                user_id=self._settings.local_user_id,
+                session_id=session_id,
+                message_id=message_id,
+                value=action,
+                updated_at=self._now_factory(),
+            )
+            return FeedbackResult(message_id=message_id, feedback=action)

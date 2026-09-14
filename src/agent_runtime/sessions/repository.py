@@ -71,6 +71,11 @@ WHERE session_id = %s AND user_id = %s
 RETURNING session_id, user_id, title, created_at, updated_at
 """
 
+_DELETE_OWNED_SESSION = """
+DELETE FROM sessions
+WHERE session_id = %s AND user_id = %s
+"""
+
 
 class SessionNotFoundError(ApplicationError):
     """客户端指定的 Session 不存在。"""
@@ -130,6 +135,16 @@ class PostgresSessionRepository:
             )
             rows = await cursor.fetchall()
         return [UUID(str(row["session_id"])) for row in rows]
+
+    async def delete_owned(self, *, session_id: UUID, user_id: str) -> None:
+        """幂等删除指定用户拥有的 Session 行。"""
+
+        async with open_database_connection(self._settings) as connection:
+            await connection.execute(
+                _DELETE_OWNED_SESSION,
+                (session_id, user_id),
+            )
+            await connection.commit()
 
     async def list_page(
         self,

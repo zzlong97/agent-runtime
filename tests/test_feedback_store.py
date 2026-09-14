@@ -159,6 +159,52 @@ def test_feedback_store_cancel_is_idempotent_delete(monkeypatch) -> None:
     assert executed["params"] == ("configured-user", message_id)
 
 
+def test_feedback_store_deletes_all_session_rows_for_fixed_user(
+    monkeypatch,
+) -> None:
+    from agent_runtime import feedback
+    from agent_runtime.core.config import Settings
+
+    session_id = UUID("00000000-0000-0000-0000-000000002802")
+    executed: dict[str, object] = {}
+
+    class FakeConnection:
+        committed = False
+
+        async def execute(self, query: str, params=None):
+            executed["query"] = " ".join(query.split())
+            executed["params"] = params
+
+        async def commit(self) -> None:
+            self.committed = True
+
+    connection = FakeConnection()
+
+    @asynccontextmanager
+    async def fake_connection_factory(settings):
+        yield connection
+
+    monkeypatch.setattr(
+        feedback,
+        "open_database_connection",
+        fake_connection_factory,
+    )
+    store = feedback.PostgresFeedbackStore(Settings(_env_file=None))
+
+    asyncio.run(
+        store.delete_by_session(
+            user_id="configured-user",
+            session_id=session_id,
+        )
+    )
+
+    assert connection.committed is True
+    assert executed["query"] == (
+        "DELETE FROM message_feedback WHERE user_id = %s AND session_id = %s"
+    )
+    assert executed["params"] == ("configured-user", session_id)
+
+
 def test_feedback_store_bulk_reads_only_requested_user_and_messages(
     monkeypatch,
 ) -> None:
@@ -237,6 +283,7 @@ def test_feedback_store_skips_database_for_empty_message_list(monkeypatch) -> No
 def test_feedback_service_validates_target_then_saves_replaces_and_cancels() -> None:
     from agent_runtime.core.config import Settings
     from agent_runtime.feedback import FeedbackService
+    from agent_runtime.runs import ActiveRunRegistry
 
     message_id = UUID("00000000-0000-0000-0000-000000002725")
     session_id = UUID("00000000-0000-0000-0000-000000002726")
@@ -264,16 +311,23 @@ def test_feedback_service_validates_target_then_saves_replaces_and_cancels() -> 
         settings=Settings(_env_file=None, local_user_id="configured-user"),
         target_finder=finder,
         store=store,
+        operation_coordinator=ActiveRunRegistry(),
         now_factory=lambda: now,
     )
 
-    liked = asyncio.run(service.submit(message_id=message_id, action="like"))
-    disliked = asyncio.run(
-        service.submit(message_id=message_id, action="dislike")
-    )
-    cancelled = asyncio.run(
-        service.submit(message_id=message_id, action="cancel")
-    )
+    async def exercise():
+        liked = await service.submit(message_id=message_id, action="like")
+        disliked = await service.submit(
+            message_id=message_id,
+            action="dislike",
+        )
+        cancelled = await service.submit(
+            message_id=message_id,
+            action="cancel",
+        )
+        return liked, disliked, cancelled
+
+    liked, disliked, cancelled = asyncio.run(exercise())
 
     assert liked.feedback == "like"
     assert disliked.feedback == "dislike"
@@ -308,6 +362,111 @@ def test_feedback_service_validates_target_then_saves_replaces_and_cancels() -> 
             },
         ),
     ]
+
+
+def test_feedback_write_finishes_before_concurrent_session_deletion() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.feedback import FeedbackService
+    from agent_runtime.runs import ActiveRunRegistry
+
+    message_id = UUID("00000000-0000-0000-0000-000000002729")
+    session_id = UUID("00000000-0000-0000-0000-000000002730")
+
+    class FakeTargetFinder:
+        async def find_feedback_session(self, *, message_id: UUID) -> UUID:
+            return session_id
+
+    class BlockingStore:
+        def __init__(self) -> None:
+            self.write_started = asyncio.Event()
+            self.allow_write = asyncio.Event()
+
+        async def upsert(self, **kwargs) -> None:
+            self.write_started.set()
+            await self.allow_write.wait()
+
+        async def delete(self, **kwargs) -> None:
+            raise AssertionError("本测试不应取消反馈")
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+        store = BlockingStore()
+        service = FeedbackService(
+            settings=Settings(_env_file=None),
+            target_finder=FakeTargetFinder(),
+            store=store,
+            operation_coordinator=registry,
+        )
+        deletion_entered = asyncio.Event()
+
+        feedback_task = asyncio.create_task(
+            service.submit(message_id=message_id, action="like")
+        )
+        await store.write_started.wait()
+
+        async def delete_session() -> None:
+            async with registry.deleting(session_id):
+                deletion_entered.set()
+
+        deletion_task = asyncio.create_task(delete_session())
+        await asyncio.sleep(0)
+        assert deletion_entered.is_set() is False
+
+        store.allow_write.set()
+        result, _ = await asyncio.gather(feedback_task, deletion_task)
+        assert result.feedback == "like"
+        assert deletion_entered.is_set() is True
+
+    asyncio.run(exercise())
+
+
+def test_feedback_cannot_write_after_session_deletion_has_started() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.feedback import FeedbackService
+    from agent_runtime.runs import ActiveRunRegistry, SessionUnavailableError
+
+    message_id = UUID("00000000-0000-0000-0000-000000002731")
+    session_id = UUID("00000000-0000-0000-0000-000000002732")
+
+    class PausingTargetFinder:
+        def __init__(self) -> None:
+            self.validated = asyncio.Event()
+            self.allow_return = asyncio.Event()
+
+        async def find_feedback_session(self, *, message_id: UUID) -> UUID:
+            self.validated.set()
+            await self.allow_return.wait()
+            return session_id
+
+    class UnexpectedStore:
+        async def upsert(self, **kwargs) -> None:
+            raise AssertionError("删除开始后不得写入反馈")
+
+        async def delete(self, **kwargs) -> None:
+            raise AssertionError("删除开始后不得取消反馈")
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+        finder = PausingTargetFinder()
+        service = FeedbackService(
+            settings=Settings(_env_file=None),
+            target_finder=finder,
+            store=UnexpectedStore(),
+            operation_coordinator=registry,
+        )
+        feedback_task = asyncio.create_task(
+            service.submit(message_id=message_id, action="dislike")
+        )
+        await finder.validated.wait()
+
+        async with registry.deleting(session_id) as deletion:
+            finder.allow_return.set()
+            with pytest.raises(SessionUnavailableError) as captured:
+                await feedback_task
+            assert captured.value.code == "SESSION_NOT_FOUND"
+            deletion.mark_deleted()
+
+    asyncio.run(exercise())
 
 
 def test_feedback_store_maps_database_failure_to_stable_application_error(

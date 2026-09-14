@@ -3,7 +3,7 @@
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, Request
+from fastapi import APIRouter, HTTPException, Path, Query, Request, Response
 from starlette.background import BackgroundTask
 
 from agent_runtime.api.schemas.chat import ChatCompletionRequest
@@ -104,6 +104,36 @@ async def rename_session(
             detail=_application_error_detail(error),
         ) from error
     return SessionRenameResponse.model_validate(session, from_attributes=True)
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    status_code=204,
+    responses={204: {"description": "Session 已完成幂等硬删除"}},
+)
+async def delete_session(
+    session_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要硬删除的 Session UUID；仅删除固定本地用户的数据，不存在或不属于"
+                "该用户时也幂等返回 204。"
+            )
+        ),
+    ],
+    request: Request,
+) -> Response:
+    """停止当前 Run 后按固定顺序幂等硬删除 Session。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        await chat_service.delete_session(session_id=session_id)
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    return Response(status_code=204)
 
 
 @router.post(

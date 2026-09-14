@@ -29,6 +29,148 @@ def test_registry_rejects_second_run_for_same_session_before_release() -> None:
     asyncio.run(exercise())
 
 
+def test_registry_blocks_new_run_during_deletion_and_tombstones_success() -> None:
+    from agent_runtime.runs import (
+        ActiveRunRegistry,
+        SessionBusyError,
+        SessionUnavailableError,
+    )
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+
+        async with registry.deleting(SESSION_ID) as deletion:
+            with pytest.raises(SessionBusyError) as deleting_error:
+                await registry.reserve(SESSION_ID, MESSAGE_ID)
+            assert deleting_error.value.code == "SESSION_BUSY"
+            assert deleting_error.value.status_code == 409
+            deletion.mark_deleted()
+
+        with pytest.raises(SessionUnavailableError) as deleted_error:
+            await registry.reserve(SESSION_ID, MESSAGE_ID)
+        assert deleted_error.value.code == "SESSION_NOT_FOUND"
+        assert deleted_error.value.status_code == 404
+        assert deleted_error.value.retryable is False
+
+        other = await registry.reserve(OTHER_SESSION_ID, MESSAGE_ID)
+        await registry.release(other)
+
+    asyncio.run(exercise())
+
+
+def test_failed_deletion_reopens_session_for_retry_or_new_run() -> None:
+    from agent_runtime.runs import ActiveRunRegistry
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+
+        with pytest.raises(RuntimeError):
+            async with registry.deleting(SESSION_ID):
+                raise RuntimeError("删除清理失败")
+
+        run = await registry.reserve(SESSION_ID, MESSAGE_ID)
+        await registry.release(run)
+
+    asyncio.run(exercise())
+
+
+def test_concurrent_deletion_guards_keep_session_blocked_between_owners() -> None:
+    from agent_runtime.runs import ActiveRunRegistry, SessionBusyError
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+        deleting = registry.deleting
+        first_entered = asyncio.Event()
+        release_first = asyncio.Event()
+        second_entered = asyncio.Event()
+        release_second = asyncio.Event()
+
+        async def first_delete() -> None:
+            async with deleting(SESSION_ID):
+                first_entered.set()
+                await release_first.wait()
+
+        async def second_delete() -> None:
+            await first_entered.wait()
+            async with deleting(SESSION_ID):
+                second_entered.set()
+                await release_second.wait()
+
+        first_task = asyncio.create_task(first_delete())
+        second_task = asyncio.create_task(second_delete())
+        await first_entered.wait()
+        await asyncio.sleep(0)
+
+        with pytest.raises(SessionBusyError):
+            await registry.reserve(SESSION_ID, MESSAGE_ID)
+
+        release_first.set()
+        await second_entered.wait()
+        with pytest.raises(SessionBusyError):
+            await registry.reserve(SESSION_ID, MESSAGE_ID)
+
+        release_second.set()
+        await asyncio.gather(first_task, second_task)
+        run = await registry.reserve(SESSION_ID, MESSAGE_ID)
+        await registry.release(run)
+
+    asyncio.run(exercise())
+
+
+def test_deletion_waits_for_existing_session_operation_to_finish() -> None:
+    from agent_runtime.runs import ActiveRunRegistry
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+        session_operation = registry.session_operation
+        operation_started = asyncio.Event()
+        release_operation = asyncio.Event()
+        deletion_entered = asyncio.Event()
+
+        async def use_session() -> None:
+            async with session_operation(SESSION_ID):
+                operation_started.set()
+                await release_operation.wait()
+
+        async def delete_session() -> None:
+            await operation_started.wait()
+            async with registry.deleting(SESSION_ID):
+                deletion_entered.set()
+
+        operation_task = asyncio.create_task(use_session())
+        deletion_task = asyncio.create_task(delete_session())
+        await operation_started.wait()
+        await asyncio.sleep(0)
+
+        assert deletion_entered.is_set() is False
+        release_operation.set()
+        await asyncio.gather(operation_task, deletion_task)
+        assert deletion_entered.is_set() is True
+
+    asyncio.run(exercise())
+
+
+def test_session_operation_is_rejected_after_deletion_starts() -> None:
+    from agent_runtime.runs import ActiveRunRegistry, SessionUnavailableError
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+
+        async with registry.deleting(SESSION_ID) as deletion:
+            with pytest.raises(SessionUnavailableError) as captured:
+                async with registry.session_operation(SESSION_ID):
+                    raise AssertionError("删除开始后不得进入 Session 操作")
+            assert captured.value.code == "SESSION_NOT_FOUND"
+            assert captured.value.status_code == 404
+            deletion.mark_deleted()
+
+        with pytest.raises(SessionUnavailableError):
+            async with registry.session_operation(SESSION_ID):
+                raise AssertionError("删除完成后不得进入 Session 操作")
+
+    asyncio.run(exercise())
+
+
 def test_registry_allows_different_sessions_and_ignores_stale_release() -> None:
     from agent_runtime.runs import ActiveRunRegistry, SessionBusyError
 

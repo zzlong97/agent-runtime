@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-07
-Last Verified Task: S2-06
-Last Verified Commit: 4a0f109e5b7aaeb0fdc1d8e26f5650c55de271b3
+Current Task: S2-08
+Last Verified Task: S2-07
+Last Verified Commit: 0786bfef56760e3bed4d99ff013e593226172c15
 Blockers: None
 ```
 
@@ -1034,7 +1034,7 @@ POST /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate
 
 ## S2-07 Feedback
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-06
 
@@ -1079,13 +1079,14 @@ POST /api/v1/chat/messages/{message_id}/feedback
 - 2026-09-14：依赖锁、环境一致性、源码与测试编译、源码包和 wheel 构建、
   OpenAPI 契约及差异检查均通过；独立代码复审无 Critical、Important 或功能性
   Minor 问题，结论为 Ready；未跟踪 `.idea/` 继续明确排除在提交外
-- Result：S2-07 实现与工程验收完成，等待负责人确认后再进入 S2-08
+- 2026-09-14：负责人确认验收通过
+- Result：S2-07 已验收并更新为 `VERIFIED`；允许开始 S2-08
 
 ---
 
 ## S2-08 Session 删除
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-07
 
@@ -1107,11 +1108,39 @@ stop and wait
 
 ### Acceptance
 
-- [ ] 删除 active Session 时先完成停止和 Run 清理
-- [ ] Parent、两个 Child、Feedback 与 Session 均被删除
-- [ ] Session 在所有关联数据之后删除
-- [ ] 中途失败后可以使用同一 session_id 重试
-- [ ] 不存在或不属于固定用户的目标幂等返回 204
+- [x] 删除 active Session 时先完成停止和 Run 清理
+- [x] Parent、两个 Child、Feedback 与 Session 均被删除
+- [x] Session 在所有关联数据之后删除
+- [x] 中途失败后可以使用同一 session_id 重试
+- [x] 不存在或不属于固定用户的目标幂等返回 204
+
+### Execution Evidence
+
+- 2026-09-14：新增 `DELETE /api/v1/chat/sessions/{session_id}`；成功、重复删除、
+  目标不存在或不属于固定本地用户时均返回空响应 HTTP 204，非法 UUID 在进入
+  服务前返回 422，路径参数及 OpenAPI 成功响应使用明确中文说明
+- 2026-09-14：删除入口与单 Session 单 Run Registry 建立串行删除临界区；删除
+  期间拒绝新 Run，活动 Run 先按 stopped 终态完成持久化、SSE 生产端结束和
+  Registry 清理，真实删除成功后阻止已通过前置校验的迟到请求重新占用 Session
+- 2026-09-14：Feedback 写入与删除共用同一 Session 操作协调器；删除先封闭迟到
+  写入，再等待已通过目标校验且已进入临界区的写操作提交，随后清理反馈，确定性
+  并发测试与真实 PostgreSQL 交错测试均确认删除完成后不会产生孤儿反馈
+- 2026-09-14：持久化删除严格执行 `general_chat Child → en_to_zh Child → Parent
+  → Feedback → Session`；Session 行作为最后删除的重试锚点，任一步失败统一返回
+  可重试 `SESSION_DELETE_FAILED`，重复使用相同 `session_id` 会从头执行幂等清理
+- 2026-09-14：最终持久化删除使用独立受保护任务；请求取消时仍等待删除得到明确
+  结果，成功后先发布 tombstone 再传播取消，避免 Session 已提交删除但迟到 Run
+  重新占用；active Run 停止失败也统一映射为可重试删除错误
+- 2026-09-14：真实 PostgreSQL 集成测试预置 Parent、两个 Child checkpoint 和
+  Feedback，并在 active Run 输出部分内容时调用删除接口；验证 stopped 清理先
+  完成，三类 checkpoint 表、反馈表和 Session 表均无残留，连续第二次删除仍为 204
+- 2026-09-14：S2-08 定向测试 `91 passed`；默认全量回归
+  `269 passed, 13 skipped`；启用真实 PostgreSQL 后全量回归
+  `279 passed, 1 skipped`，唯一跳过项为真实百炼 smoke
+- 2026-09-14：依赖锁、环境一致性、源码与测试编译、源码包和 wheel 构建及差异
+  检查均通过；两轮独立复审发现的 Feedback/DELETE 竞态、取消窗口和停止错误契约
+  均已修复，最终结论为 Ready；未跟踪 `.idea/` 继续明确排除在提交外
+- Result：S2-08 实现与工程验收完成，等待负责人确认后再进入 S2-09
 
 ---
 

@@ -1046,6 +1046,272 @@ def test_chat_service_delegates_feedback_to_feedback_service() -> None:
     assert calls == [(message_id, "like")]
 
 
+def test_delete_session_missing_or_unowned_is_idempotent_without_cleanup() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+    from agent_runtime.sessions.repository import SessionNotFoundError
+
+    missing_id = UUID("00000000-0000-0000-0000-000000002820")
+    unowned_id = UUID("00000000-0000-0000-0000-000000002821")
+    registry = ActiveRunRegistry()
+
+    class FakeSessionRepository:
+        async def get(self, session_id: UUID):
+            if session_id == missing_id:
+                raise SessionNotFoundError(
+                    code="SESSION_NOT_FOUND",
+                    message="Session 不存在",
+                    status_code=404,
+                )
+            return _session(session_id, user_id="another-user")
+
+    class UnexpectedDeletionService:
+        async def delete_persisted_data(self, *, session_id: UUID) -> None:
+            raise AssertionError("不存在或越权 Session 不应执行关联数据删除")
+
+    service = ChatService(
+        settings=Settings(
+            _env_file=None,
+            local_user_id="configured-user",
+        ),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        run_registry=registry,
+        deletion_service=UnexpectedDeletionService(),
+    )
+
+    async def exercise() -> None:
+        assert await service.delete_session(session_id=missing_id) is None
+        assert await service.delete_session(session_id=unowned_id) is None
+        missing_run = await registry.reserve(missing_id, uuid4())
+        await registry.release(missing_run)
+        unowned_run = await registry.reserve(unowned_id, uuid4())
+        await registry.release(unowned_run)
+
+    asyncio.run(exercise())
+
+
+def test_delete_session_waits_for_active_run_cleanup_before_persisted_data() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000002822")
+    registry = ActiveRunRegistry()
+    events: list[str] = []
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id: UUID):
+            return _session(requested_session_id)
+
+    class RecordingDeletionService:
+        async def delete_persisted_data(self, *, session_id: UUID) -> None:
+            events.append("persisted_data_deleted")
+
+    service = ChatService(
+        settings=Settings(
+            _env_file=None,
+            local_user_id="configured-user",
+        ),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        run_registry=registry,
+        deletion_service=RecordingDeletionService(),
+    )
+
+    async def exercise() -> None:
+        run = await registry.reserve(session_id, uuid4())
+        producer_started = asyncio.Event()
+
+        async def producer() -> None:
+            try:
+                producer_started.set()
+                await asyncio.Event().wait()
+            finally:
+                events.append(f"run_cleaned:{run.cancel_reason}")
+                await registry.release(run)
+
+        task = asyncio.create_task(producer())
+        await registry.attach_producer(run, task)
+        await producer_started.wait()
+
+        await service.delete_session(session_id=session_id)
+
+        assert await registry.get_active(session_id) is None
+        assert events == ["run_cleaned:stopped", "persisted_data_deleted"]
+
+    asyncio.run(exercise())
+
+
+def test_delete_session_cleanup_failure_keeps_session_retryable() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry, SessionUnavailableError
+    from agent_runtime.session_deletion import SessionDeletionError
+
+    session_id = UUID("00000000-0000-0000-0000-000000002823")
+    registry = ActiveRunRegistry()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id: UUID):
+            return _session(requested_session_id)
+
+    class RetryableDeletionService:
+        calls = 0
+
+        async def delete_persisted_data(self, *, session_id: UUID) -> None:
+            self.calls += 1
+            if self.calls == 1:
+                raise SessionDeletionError(
+                    code="SESSION_DELETE_FAILED",
+                    message="Session 关联数据删除失败，请重试",
+                    status_code=500,
+                    retryable=True,
+                )
+
+    deletion_service = RetryableDeletionService()
+    service = ChatService(
+        settings=Settings(
+            _env_file=None,
+            local_user_id="configured-user",
+        ),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        run_registry=registry,
+        deletion_service=deletion_service,
+    )
+
+    async def exercise() -> None:
+        with pytest.raises(SessionDeletionError):
+            await service.delete_session(session_id=session_id)
+
+        run = await registry.reserve(session_id, uuid4())
+        await registry.release(run)
+        await service.delete_session(session_id=session_id)
+
+        with pytest.raises(SessionUnavailableError):
+            await registry.reserve(session_id, uuid4())
+        assert deletion_service.calls == 2
+
+    asyncio.run(exercise())
+
+
+def test_delete_session_publishes_tombstone_after_committed_cleanup_cancellation() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry, SessionUnavailableError
+
+    session_id = UUID("00000000-0000-0000-0000-000000002824")
+    registry = ActiveRunRegistry()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id: UUID):
+            return _session(requested_session_id)
+
+    class CommitThenPauseDeletionService:
+        def __init__(self) -> None:
+            self.committed = asyncio.Event()
+            self.allow_return = asyncio.Event()
+
+        async def delete_persisted_data(self, *, session_id: UUID) -> None:
+            self.committed.set()
+            await self.allow_return.wait()
+
+    deletion_service = CommitThenPauseDeletionService()
+    service = ChatService(
+        settings=Settings(_env_file=None, local_user_id="configured-user"),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        run_registry=registry,
+        deletion_service=deletion_service,
+    )
+
+    async def exercise() -> None:
+        deletion_task = asyncio.create_task(
+            service.delete_session(session_id=session_id)
+        )
+        await deletion_service.committed.wait()
+        deletion_task.cancel()
+        await asyncio.sleep(0)
+
+        assert deletion_task.done() is False
+        deletion_service.allow_return.set()
+        result = await asyncio.gather(deletion_task, return_exceptions=True)
+        assert isinstance(result[0], asyncio.CancelledError)
+        with pytest.raises(SessionUnavailableError):
+            await registry.reserve(session_id, uuid4())
+
+    asyncio.run(exercise())
+
+
+def test_delete_session_maps_stop_failure_and_allows_same_id_retry() -> None:
+    from agent_runtime.chat import ChatRuntimeError, ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry, SessionUnavailableError
+    from agent_runtime.session_deletion import SessionDeletionError
+
+    session_id = UUID("00000000-0000-0000-0000-000000002825")
+    registry = ActiveRunRegistry()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id: UUID):
+            return _session(requested_session_id)
+
+    class RecordingDeletionService:
+        calls = 0
+
+        async def delete_persisted_data(self, *, session_id: UUID) -> None:
+            self.calls += 1
+
+    class StopFailingOnceChatService(ChatService):
+        stop_calls = 0
+
+        async def cancel_run(self, run, *, reason):
+            self.stop_calls += 1
+            await registry.release(run)
+            if self.stop_calls == 1:
+                raise ChatRuntimeError(
+                    code="CHAT_STOP_PERSIST_FAILED",
+                    message="未能保存停止后的回复",
+                    retryable=False,
+                )
+            return True
+
+    deletion_service = RecordingDeletionService()
+    service = StopFailingOnceChatService(
+        settings=Settings(_env_file=None, local_user_id="configured-user"),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        run_registry=registry,
+        deletion_service=deletion_service,
+    )
+
+    async def exercise() -> None:
+        first_run = await registry.reserve(session_id, uuid4())
+        with pytest.raises(SessionDeletionError) as captured:
+            await service.delete_session(session_id=session_id)
+
+        assert captured.value.code == "SESSION_DELETE_FAILED"
+        assert captured.value.message == "Session 关联数据删除失败，请重试"
+        assert captured.value.retryable is True
+        assert first_run.terminal_future.done() is True
+        assert deletion_service.calls == 0
+
+        await registry.reserve(session_id, uuid4())
+        await service.delete_session(session_id=session_id)
+        assert deletion_service.calls == 1
+        with pytest.raises(SessionUnavailableError):
+            await registry.reserve(session_id, uuid4())
+
+    asyncio.run(exercise())
+
+
 def test_producer_queues_product_events_and_releases_completed_run() -> None:
     from agent_runtime.chat import ChatService
     from agent_runtime.core.config import Settings
@@ -1952,11 +2218,28 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         def __init__(self, **kwargs):
             captured["feedback_target_finder"] = kwargs["target_finder"]
             captured["service_feedback_store"] = kwargs["store"]
+            captured["feedback_operation_coordinator"] = kwargs[
+                "operation_coordinator"
+            ]
+
+    class FakeSessionDeletionService:
+        def __init__(self, **kwargs):
+            captured["delete_parent"] = kwargs["parent_checkpointer"]
+            captured["delete_general_chat"] = kwargs[
+                "general_chat_checkpointer"
+            ]
+            captured["delete_en_to_zh"] = kwargs["en_to_zh_checkpointer"]
+            captured["delete_feedback_store"] = kwargs["feedback_store"]
+            captured["delete_session_repository"] = kwargs[
+                "session_repository"
+            ]
 
     class FakeChatService:
         def __init__(self, **kwargs):
             events.append("service_created")
             captured["chat_feedback_service"] = kwargs["feedback_service"]
+            captured["chat_deletion_service"] = kwargs["deletion_service"]
+            captured["chat_run_registry"] = kwargs["run_registry"]
 
         async def close(self) -> None:
             events.append("runs_closed")
@@ -2027,6 +2310,11 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         "FeedbackService",
         FakeFeedbackService,
     )
+    monkeypatch.setattr(
+        chat_module,
+        "SessionDeletionService",
+        FakeSessionDeletionService,
+    )
     monkeypatch.setattr(chat_module, "ChatService", FakeChatService)
 
     async def exercise() -> None:
@@ -2047,4 +2335,14 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     assert captured["service_feedback_store"] is captured["feedback_store"]
     assert captured["feedback_target_finder"] is not None
     assert captured["chat_feedback_service"] is not None
+    assert (
+        captured["feedback_operation_coordinator"]
+        is captured["chat_run_registry"]
+    )
+    assert captured["delete_parent"] is None
+    assert captured["delete_general_chat"] is None
+    assert captured["delete_en_to_zh"] is None
+    assert captured["delete_feedback_store"] is captured["feedback_store"]
+    assert captured["delete_session_repository"] is not None
+    assert captured["chat_deletion_service"] is not None
     assert events[-2:] == ["runs_closed", "checkpointers_closed"]

@@ -1,7 +1,8 @@
 """Stage 2 单实例 Active Run 协调与产品事件队列。"""
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Literal
 from uuid import UUID, uuid4
@@ -20,6 +21,31 @@ type ProductEventData = MessageEventData | ErrorEventData | DoneEventData
 
 class SessionBusyError(ApplicationError):
     """同一 Session 已经存在活动 Run。"""
+
+
+class SessionUnavailableError(ApplicationError):
+    """已完成硬删除的 Session 不再接受新的 Run。"""
+
+
+@dataclass(slots=True)
+class SessionDeletionLease:
+    """一次 Session 删除临界区的完成标记。"""
+
+    session_id: UUID
+    deleted: bool = False
+
+    def mark_deleted(self) -> None:
+        """标记持久化删除成功，使迟到请求不能重新占用 Session。"""
+
+        self.deleted = True
+
+
+@dataclass(slots=True)
+class _SessionDeletionEntry:
+    """同一 Session 并发删除请求共享的串行锁和引用数。"""
+
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    users: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +83,11 @@ class ActiveRunRegistry:
 
     def __init__(self) -> None:
         self._active_runs: dict[UUID, ActiveRun] = {}
+        self._deletion_entries: dict[UUID, _SessionDeletionEntry] = {}
+        self._deleting_sessions: set[UUID] = set()
+        self._deleted_sessions: set[UUID] = set()
+        self._session_operation_counts: dict[UUID, int] = {}
+        self._session_operation_drained: dict[UUID, asyncio.Event] = {}
         self._lock = asyncio.Lock()
 
     async def reserve(
@@ -67,6 +98,19 @@ class ActiveRunRegistry:
         """在新增 HumanMessage 和建立 SSE 前原子占用 Session。"""
 
         async with self._lock:
+            if session_id in self._deleted_sessions:
+                raise SessionUnavailableError(
+                    code="SESSION_NOT_FOUND",
+                    message="Session 不存在",
+                    status_code=404,
+                )
+            if session_id in self._deleting_sessions:
+                raise SessionBusyError(
+                    code="SESSION_BUSY",
+                    message="当前 Session 正在删除",
+                    status_code=409,
+                    retryable=True,
+                )
             if session_id in self._active_runs:
                 raise SessionBusyError(
                     code="SESSION_BUSY",
@@ -80,6 +124,81 @@ class ActiveRunRegistry:
             )
             self._active_runs[session_id] = run
             return run
+
+    @asynccontextmanager
+    async def session_operation(self, session_id: UUID) -> AsyncIterator[None]:
+        """保护可能写入 Session 关联数据的短操作，避免与删除交错。"""
+
+        async with self._lock:
+            if (
+                session_id in self._deleting_sessions
+                or session_id in self._deleted_sessions
+            ):
+                raise SessionUnavailableError(
+                    code="SESSION_NOT_FOUND",
+                    message="Session 不存在",
+                    status_code=404,
+                )
+            operation_count = self._session_operation_counts.get(session_id, 0)
+            if operation_count == 0:
+                self._session_operation_drained[session_id] = asyncio.Event()
+            self._session_operation_counts[session_id] = operation_count + 1
+
+        try:
+            yield
+        finally:
+            async with self._lock:
+                operation_count = self._session_operation_counts[session_id] - 1
+                if operation_count == 0:
+                    self._session_operation_counts.pop(session_id, None)
+                    drained = self._session_operation_drained.pop(session_id)
+                    drained.set()
+                else:
+                    self._session_operation_counts[session_id] = operation_count
+
+    @asynccontextmanager
+    async def deleting(
+        self,
+        session_id: UUID,
+    ) -> AsyncIterator[SessionDeletionLease]:
+        """串行化同一 Session 删除，并在临界区内阻止新的 Run。"""
+
+        async with self._lock:
+            entry = self._deletion_entries.get(session_id)
+            if entry is None:
+                entry = _SessionDeletionEntry()
+                self._deletion_entries[session_id] = entry
+            entry.users += 1
+            self._deleting_sessions.add(session_id)
+
+        try:
+            await entry.lock.acquire()
+        except BaseException:
+            async with self._lock:
+                entry.users -= 1
+                if entry.users == 0:
+                    self._deleting_sessions.discard(session_id)
+                    self._deletion_entries.pop(session_id, None)
+            raise
+
+        lease = SessionDeletionLease(session_id=session_id)
+        try:
+            async with self._lock:
+                operation_drained = self._session_operation_drained.get(
+                    session_id
+                )
+            if operation_drained is not None:
+                await operation_drained.wait()
+            yield lease
+        finally:
+            async with self._lock:
+                if lease.deleted:
+                    self._deleted_sessions.add(session_id)
+                entry.users -= 1
+                entry.lock.release()
+                if entry.users == 0:
+                    self._deleting_sessions.discard(session_id)
+                    self._deletion_entries.pop(session_id, None)
 
     async def attach_producer(
         self,

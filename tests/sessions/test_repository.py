@@ -200,6 +200,54 @@ def test_session_repository_get_reports_missing_session(monkeypatch) -> None:
     assert captured.value.status_code == 404
 
 
+def test_session_repository_deletes_owned_session_last_and_idempotently(
+    monkeypatch,
+) -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions import repository
+
+    session_id = uuid4()
+    executed: dict[str, object] = {}
+
+    class FakeConnection:
+        committed = False
+
+        async def execute(self, query: str, params=None):
+            executed["query"] = " ".join(query.split())
+            executed["params"] = params
+
+        async def commit(self) -> None:
+            self.committed = True
+
+    connection = FakeConnection()
+
+    @asynccontextmanager
+    async def fake_connection_factory(settings):
+        yield connection
+
+    monkeypatch.setattr(
+        repository,
+        "open_database_connection",
+        fake_connection_factory,
+    )
+    session_repository = repository.PostgresSessionRepository(
+        Settings(_env_file=None)
+    )
+
+    asyncio.run(
+        session_repository.delete_owned(
+            session_id=session_id,
+            user_id="configured-user",
+        )
+    )
+
+    assert connection.committed is True
+    assert executed["query"] == (
+        "DELETE FROM sessions WHERE session_id = %s AND user_id = %s"
+    )
+    assert executed["params"] == (session_id, "configured-user")
+
+
 def test_session_repository_lists_owned_ids_for_feedback_lookup(monkeypatch) -> None:
     from agent_runtime.core.config import Settings
     from agent_runtime.sessions import repository

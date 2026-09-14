@@ -43,8 +43,15 @@ from agent_runtime.runs import (
     CancelReason,
     ProductRunEvent,
 )
+from agent_runtime.session_deletion import (
+    SessionDeletionError,
+    SessionDeletionService,
+)
 from agent_runtime.sessions.models import Session, SessionPage
-from agent_runtime.sessions.repository import PostgresSessionRepository
+from agent_runtime.sessions.repository import (
+    PostgresSessionRepository,
+    SessionNotFoundError,
+)
 from agent_runtime.sessions.service import SessionService
 
 type CompletionStatus = Literal["completed", "unsupported"]
@@ -82,6 +89,7 @@ class ChatService:
         parent_graph: Any,
         history_adapter: MessageHistoryAdapter | None = None,
         feedback_service: FeedbackService | None = None,
+        deletion_service: SessionDeletionService | None = None,
         checkpoint_forker: CheckpointForker | None = None,
         run_registry: ActiveRunRegistry | None = None,
         session_id_factory: Callable[[], UUID] = uuid4,
@@ -99,6 +107,7 @@ class ChatService:
             session_repository=session_repository,
         )
         self._feedback_service = feedback_service
+        self._deletion_service = deletion_service
         self._checkpoint_forker = checkpoint_forker or CheckpointForker(
             history_adapter=self._history_adapter,
             parent_graph=parent_graph,
@@ -346,6 +355,60 @@ class ChatService:
         if accepted and run.cancel_reason == "stopped":
             return "stopped"
         return "idle"
+
+    async def delete_session(self, *, session_id: UUID) -> None:
+        """幂等停止并硬删除固定本地用户的 Session。"""
+
+        async with self._run_registry.deleting(session_id) as deletion:
+            try:
+                session = await self._session_repository.get(session_id)
+            except SessionNotFoundError:
+                return
+            except Exception as error:
+                raise SessionDeletionError(
+                    code="SESSION_DELETE_FAILED",
+                    message="Session 关联数据删除失败，请重试",
+                    status_code=500,
+                    retryable=True,
+                ) from error
+
+            if session.user_id != self._settings.local_user_id:
+                return
+
+            run = await self._run_registry.get_active(session_id)
+            try:
+                if run is not None:
+                    await self.cancel_run(run, reason="stopped")
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                raise SessionDeletionError(
+                    code="SESSION_DELETE_FAILED",
+                    message="Session 关联数据删除失败，请重试",
+                    status_code=500,
+                    retryable=True,
+                ) from error
+
+            if self._deletion_service is None:
+                raise SessionDeletionError(
+                    code="SESSION_DELETE_FAILED",
+                    message="Session 关联数据删除失败，请重试",
+                    status_code=500,
+                    retryable=True,
+                )
+            persisted_deletion = asyncio.create_task(
+                self._deletion_service.delete_persisted_data(
+                    session_id=session_id
+                ),
+                name=f"session-delete:{session_id}",
+            )
+            try:
+                await asyncio.shield(persisted_deletion)
+            except asyncio.CancelledError:
+                await persisted_deletion
+                deletion.mark_deleted()
+                raise
+            deletion.mark_deleted()
 
     async def stream_turn(
         self,
@@ -910,10 +973,20 @@ async def open_chat_service(
             parent_state_store=parent_state_store,
             feedback_store=feedback_store,
         )
+        run_registry = ActiveRunRegistry()
         feedback_service = FeedbackService(
             settings=settings,
             target_finder=history_adapter,
             store=feedback_store,
+            operation_coordinator=run_registry,
+        )
+        deletion_service = SessionDeletionService(
+            settings=settings,
+            parent_checkpointer=checkpointers.parent,
+            general_chat_checkpointer=checkpointers.general_chat,
+            en_to_zh_checkpointer=checkpointers.en_to_zh,
+            feedback_store=feedback_store,
+            session_repository=session_repository,
         )
         checkpoint_forker = CheckpointForker(
             history_adapter=history_adapter,
@@ -926,7 +999,9 @@ async def open_chat_service(
             parent_graph=parent_graph,
             history_adapter=history_adapter,
             feedback_service=feedback_service,
+            deletion_service=deletion_service,
             checkpoint_forker=checkpoint_forker,
+            run_registry=run_registry,
         )
         try:
             yield service
