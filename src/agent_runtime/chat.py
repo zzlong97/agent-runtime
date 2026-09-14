@@ -30,6 +30,7 @@ from agent_runtime.graph.router import StageOneRouter
 from agent_runtime.history import MessageHistoryAdapter, MessagePage
 from agent_runtime.persistence.checkpointers import open_stage_one_checkpointers
 from agent_runtime.persistence.parent_state import PostgresParentStateStore
+from agent_runtime.regeneration import CheckpointForker
 from agent_runtime.runs import (
     ActiveRun,
     ActiveRunRegistry,
@@ -56,10 +57,11 @@ class PreparedChatTurn:
     """在建立 SSE 前完成校验并分配稳定标识的一轮聊天。"""
 
     session_id: UUID
-    human_message: HumanMessage
+    human_message: HumanMessage | None
     response_message_id: UUID
     config: RunnableConfig
     active_run: ActiveRun
+    is_regeneration: bool = False
 
 
 class ChatService:
@@ -73,6 +75,7 @@ class ChatService:
         session_service: SessionService,
         parent_graph: Any,
         history_adapter: MessageHistoryAdapter | None = None,
+        checkpoint_forker: CheckpointForker | None = None,
         run_registry: ActiveRunRegistry | None = None,
         session_id_factory: Callable[[], UUID] = uuid4,
         human_message_id_factory: Callable[[], UUID] = uuid4,
@@ -88,11 +91,19 @@ class ChatService:
             settings=self._settings,
             session_repository=session_repository,
         )
+        self._checkpoint_forker = checkpoint_forker or CheckpointForker(
+            history_adapter=self._history_adapter,
+            parent_graph=parent_graph,
+        )
         self._run_registry = run_registry or ActiveRunRegistry()
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
         self._response_message_id_factory = response_message_id_factory
         self._prepared_turns: dict[UUID, PreparedChatTurn] = {}
+        self._turn_preparation_barriers: dict[
+            UUID,
+            tuple[ActiveRun, asyncio.Future[None]],
+        ] = {}
 
     async def prepare_turn(
         self,
@@ -198,6 +209,95 @@ class ChatService:
             limit=limit,
         )
 
+    async def prepare_regeneration(
+        self,
+        *,
+        session_id: UUID,
+        message_id: UUID,
+    ) -> PreparedChatTurn:
+        """占用 Session，并从目标完成回答之前创建 Parent fork。"""
+
+        session = await self._session_repository.get(session_id)
+        if session.user_id != self._settings.local_user_id:
+            raise ChatSessionError(
+                code="SESSION_NOT_FOUND",
+                message="Session 不存在",
+                status_code=404,
+            )
+
+        response_message_id = self._response_message_id_factory()
+        active_run = await self._run_registry.reserve(
+            session_id,
+            response_message_id,
+        )
+        preparation_done = asyncio.get_running_loop().create_future()
+        self._turn_preparation_barriers[session_id] = (
+            active_run,
+            preparation_done,
+        )
+        fork_task: asyncio.Task[RunnableConfig] | None = None
+        turn: PreparedChatTurn | None = None
+        cancelled_error: asyncio.CancelledError | None = None
+        try:
+            fork_task = asyncio.create_task(
+                self._checkpoint_forker.create_fork(
+                    session_id=session_id,
+                    message_id=message_id,
+                    response_message_id=response_message_id,
+                ),
+                name=f"regeneration-fork:{session_id}",
+            )
+            while True:
+                try:
+                    config = await asyncio.shield(fork_task)
+                    break
+                except asyncio.CancelledError as error:
+                    if fork_task.done():
+                        if fork_task.cancelled():
+                            raise
+                        config = fork_task.result()
+                        cancelled_error = cancelled_error or error
+                        break
+                    cancelled_error = cancelled_error or error
+            turn = PreparedChatTurn(
+                session_id=session_id,
+                human_message=None,
+                response_message_id=response_message_id,
+                config=config,
+                active_run=active_run,
+                is_regeneration=True,
+            )
+            self._prepared_turns[session_id] = turn
+            self._finish_turn_preparation(active_run)
+            if cancelled_error is not None:
+                try:
+                    await self.cancel_run(active_run, reason="disconnected")
+                finally:
+                    raise cancelled_error
+            return turn
+        except BaseException as error:
+            if turn is None:
+                if fork_task is not None and not fork_task.done():
+                    fork_task.cancel()
+                    await asyncio.gather(fork_task, return_exceptions=True)
+                if isinstance(error, ApplicationError):
+                    active_run._terminal_error = ChatRuntimeError(
+                        code=error.code,
+                        message=error.message,
+                        status_code=error.status_code,
+                        retryable=error.retryable,
+                    )
+                else:
+                    active_run._terminal_error = ChatRuntimeError(
+                        code="MESSAGE_REGENERATE_FORK_FAILED",
+                        message="创建消息重新生成分支失败",
+                        retryable=True,
+                    )
+                await self._run_registry.release(active_run)
+            raise
+        finally:
+            self._finish_turn_preparation(active_run)
+
     async def stop_session(
         self,
         *,
@@ -226,8 +326,13 @@ class ChatService:
     ) -> AsyncIterator[BaseMessage]:
         """只转发 Parent custom stream 中的公共消息事件。"""
 
+        graph_input = (
+            None
+            if turn.is_regeneration
+            else {"messages": [turn.human_message]}
+        )
         async for event in self._parent_graph.astream(
-            {"messages": [turn.human_message]},
+            graph_input,
             turn.config,
             stream_mode="custom",
         ):
@@ -537,7 +642,9 @@ class ChatService:
 
         terminal_events: list[ProductRunEvent] = []
         try:
-            await self._run_registry.begin_finalization(run)
+            await self._wait_for_turn_preparation(run)
+            if not await self._run_registry.begin_finalization(run):
+                return
             turn = self._prepared_turns.get(run.session_id)
             if turn is not None and turn.active_run is run:
                 runtime_status: Literal["stopped", "incomplete"] = (
@@ -551,7 +658,7 @@ class ChatService:
                         "",
                         runtime_status=runtime_status,
                         capability_id=None,
-                        include_human=True,
+                        include_human=not turn.is_regeneration,
                     )
                     if runtime_status == "stopped":
                         terminal_events.append(
@@ -612,6 +719,23 @@ class ChatService:
             if cleanup_cancelled:
                 raise asyncio.CancelledError
 
+    async def _wait_for_turn_preparation(self, run: ActiveRun) -> None:
+        """等待 reservation 对应的完整 turn 发布，避免提前完成 Stop。"""
+
+        pending = self._turn_preparation_barriers.get(run.session_id)
+        if pending is not None and pending[0] is run:
+            await asyncio.shield(pending[1])
+
+    def _finish_turn_preparation(self, run: ActiveRun) -> None:
+        """原子发布准备完成信号，并忽略已被替代的旧 Run。"""
+
+        pending = self._turn_preparation_barriers.get(run.session_id)
+        if pending is None or pending[0] is not run:
+            return
+        del self._turn_preparation_barriers[run.session_id]
+        if not pending[1].done():
+            pending[1].set_result(None)
+
     async def close(self) -> None:
         """关闭服务前取消并等待仍在运行的全部 producer。"""
 
@@ -625,7 +749,9 @@ class ChatService:
     ) -> CompletionStatus:
         """从 Parent 最终状态读取本轮 completed 或 unsupported。"""
 
-        parent_state = await self._parent_graph.aget_state(turn.config)
+        parent_state = await self._parent_graph.aget_state(
+            parent_thread_config(turn.session_id)
+        )
         completion_status = parent_state.values.get("completion_status")
         if completion_status not in ("completed", "unsupported"):
             raise ChatRuntimeError(
@@ -671,6 +797,11 @@ class ChatService:
         )
         messages: list[BaseMessage] = [message]
         if include_human:
+            if turn.human_message is None:
+                raise ChatRuntimeError(
+                    code="CHAT_HUMAN_MESSAGE_MISSING",
+                    message="普通聊天终态缺少 HumanMessage",
+                )
             messages.insert(0, turn.human_message)
         await self._parent_graph.aupdate_state(
             turn.config,
@@ -749,12 +880,17 @@ async def open_chat_service(
             session_repository=session_repository,
             parent_state_store=parent_state_store,
         )
+        checkpoint_forker = CheckpointForker(
+            history_adapter=history_adapter,
+            parent_graph=parent_graph,
+        )
         service = ChatService(
             settings=settings,
             session_repository=session_repository,
             session_service=session_service,
             parent_graph=parent_graph,
             history_adapter=history_adapter,
+            checkpoint_forker=checkpoint_forker,
         )
         try:
             yield service

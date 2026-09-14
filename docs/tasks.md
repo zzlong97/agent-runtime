@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-05
-Last Verified Task: S2-04
-Last Verified Commit: 26c47ea966eb6bdcbbc2571279b4bc9ef5ec1506
+Current Task: S2-06
+Last Verified Task: S2-05
+Last Verified Commit: 4a6aaa7b147af6f269fb40236581e0681a37a798
 Blockers: None
 ```
 
@@ -924,7 +924,7 @@ POST /api/v1/chat/sessions/{session_id}/stop
 
 ## S2-05 历史消息 Adapter
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-04
 
@@ -970,13 +970,14 @@ GET /api/v1/chat/sessions/{session_id}/messages?before={message_id}&limit={limit
 - 2026-09-14：依赖锁、环境依赖一致性、源码与测试编译、源码包和 wheel 构建、
   OpenAPI 参数说明及差异检查均通过；独立代码复核无 Critical 或 Important
   问题，结论为 Ready；未跟踪 `.idea/` 继续排除在提交外
-- Result：S2-05 实现与工程验收完成，等待负责人确认后再进入 S2-06
+- 2026-09-14：负责人确认验收通过
+- Result：S2-05 已验收并更新为 `VERIFIED`；允许开始 S2-06
 
 ---
 
 ## S2-06 Regenerate / Checkpoint Fork
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-05
 
@@ -991,13 +992,42 @@ POST /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate
 
 ### Acceptance
 
-- [ ] 历史中间回答、unsupported、incomplete、stopped 均不可重新生成
-- [ ] 原 HumanMessage 不重复且 message_id 保持不变
-- [ ] 新 AIMessage 获得新 UUID
-- [ ] 普通历史只返回新活动分支
-- [ ] 原 checkpoint 和旧反馈仍保留
-- [ ] 新分支失败或停止时不回滚旧回答
-- [ ] 前端不能指定 Capability 或绕过 Parent
+- [x] 历史中间回答、unsupported、incomplete、stopped 均不可重新生成
+- [x] 原 HumanMessage 不重复且 message_id 保持不变
+- [x] 新 AIMessage 获得新 UUID
+- [x] 普通历史只返回新活动分支
+- [x] 原 checkpoint 和旧反馈仍保留
+- [x] 新分支失败或停止时不回滚旧回答
+- [x] 前端不能指定 Capability 或绕过 Parent
+
+### Execution Evidence
+
+- 2026-09-14：新增
+  `POST /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate`；
+  只接受两个路径 UUID，不定义请求体，也不允许客户端传入 Capability
+- 2026-09-14：新增 `CheckpointForker`，先从当前活动 Parent 历史确认目标是
+  最后一条 `completed` AIMessage，再按原回答 `message_id` 过滤 checkpoint
+  history，并定位 `next == ("invoke_capability",)` 的回答前状态
+- 2026-09-14：使用 `aupdate_state` 创建保留原 HumanMessage 和路由状态的新
+  checkpoint 分支，再以 `astream(None, fork_config)` 沿 Parent 继续；新回答使用
+  新服务端 UUID，未复制原 HumanMessage，客户端不能直接调用 Child
+- 2026-09-14：普通历史读取最新活动 checkpoint，因此成功、失败或停止后的新
+  分支均保持活动；旧回答只保留在旧 checkpoint 中且未被删除，当前阶段也未删除
+  或改写旧反馈，未提前实现 S2-07 Feedback Store 或产品级 branch_id
+- 2026-09-14：准备阶段增加与 Active Run 绑定的 turn 发布屏障；Stop 会等待 fork
+  配置完成交接后再持久化唯一 stopped 终态。fork 子任务全程受循环 shield 保护，
+  重复请求取消只记录取消意图，交接后保存 incomplete 并清理 Run
+- 2026-09-14：fork 内部应用错误、自身取消与并发 Stop 统一进行失败仲裁；失败先
+  写入稳定 Run 终态再释放 reservation，Stop 不会在没有 stopped AIMessage 时
+  伪报成功，也不会遗留过期 turn 或污染替代 Run
+- 2026-09-14：资格、HTTP/SSE、真实 Parent Graph、成功/失败/停止分支和竞态等
+  S2-06 定向测试 `62 passed`；默认全量回归 `220 passed, 11 skipped`
+- 2026-09-14：启用真实 PostgreSQL 后全量回归 `230 passed, 1 skipped`，唯一跳过
+  项为真实百炼 smoke；数据库端到端验证最新活动分支只包含原 HumanMessage 与
+  新回答，同时旧回答 checkpoint 仍可恢复
+- 2026-09-14：独立代码复核最终无 Critical、Important 或 Minor 问题，结论为
+  Ready；未跟踪 `.idea/` 继续明确排除在提交外
+- Result：S2-06 实现与工程验收完成，等待负责人确认后再进入 S2-07
 
 ---
 

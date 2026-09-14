@@ -168,6 +168,57 @@ async def list_messages(
     return MessageHistoryResponse.model_validate(page, from_attributes=True)
 
 
+@router.post("/sessions/{session_id}/messages/{message_id}/regenerate")
+async def regenerate_message(
+    session_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要重新生成最新完成回答的 Session UUID；只允许操作固定本地用户"
+                "拥有的 Session，不存在或不属于该用户时统一返回 404。"
+            )
+        ),
+    ],
+    message_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要重新生成的公共 AIMessage 稳定 UUID；必须是当前活动分支最后一条"
+                "且 runtime_status 为 completed 的 AIMessage。"
+            )
+        ),
+    ],
+    request: Request,
+) -> RunStreamingResponse:
+    """从回答前 Parent checkpoint fork，并复用产品 SSE 继续执行。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        turn = await chat_service.prepare_regeneration(
+            session_id=session_id,
+            message_id=message_id,
+        )
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+
+    return RunStreamingResponse(
+        stream_chat_sse(chat_service, turn),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+        background=BackgroundTask(
+            chat_service.cancel_run,
+            turn.active_run,
+            reason="disconnected",
+        ),
+    )
+
+
 @router.post("/completions")
 async def create_chat_completion(
     payload: ChatCompletionRequest,

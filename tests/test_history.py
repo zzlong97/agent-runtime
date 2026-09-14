@@ -171,6 +171,34 @@ def test_history_adapter_pages_backwards_and_keeps_each_page_chronological() -> 
     assert oldest.next_before is None
 
 
+def test_history_adapter_returns_complete_active_product_history() -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.history import MessageHistoryAdapter
+
+    session_id = UUID("00000000-0000-0000-0000-000000001425")
+    messages = [
+        HumanMessage(
+            content=f"消息 {index}",
+            id=f"00000000-0000-0000-0000-{index:012d}",
+        )
+        for index in range(1, 102)
+    ]
+    adapter = MessageHistoryAdapter(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(_session(session_id)),
+        parent_state_store=FakeParentStateStore(messages),
+    )
+
+    active_messages = asyncio.run(
+        adapter.get_active_messages(session_id=session_id)
+    )
+
+    assert len(active_messages) == 101
+    assert [message.message_id for message in active_messages] == [
+        UUID(str(message.id)) for message in messages
+    ]
+
+
 def test_history_adapter_rejects_before_outside_active_product_history() -> None:
     from agent_runtime.core.config import Settings
     from agent_runtime.history import MessageHistoryAdapter, MessageHistoryError

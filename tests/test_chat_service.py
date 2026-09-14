@@ -318,6 +318,589 @@ def test_new_session_preparation_failure_releases_reservation() -> None:
     asyncio.run(exercise())
 
 
+def test_prepare_regeneration_reserves_session_and_uses_checkpoint_fork() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry, SessionBusyError
+
+    session_id = UUID("00000000-0000-0000-0000-000000001801")
+    old_message_id = UUID("00000000-0000-0000-0000-000000001802")
+    new_message_id = UUID("00000000-0000-0000-0000-000000001803")
+    registry = ActiveRunRegistry()
+    fork_config = {
+        "configurable": {
+            "thread_id": str(session_id),
+            "checkpoint_id": "fork-checkpoint",
+            "message_id": str(new_message_id),
+        }
+    }
+    calls: list[tuple[UUID, UUID, UUID]] = []
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeCheckpointForker:
+        async def create_fork(
+            self,
+            *,
+            session_id,
+            message_id,
+            response_message_id,
+        ):
+            calls.append((session_id, message_id, response_message_id))
+            return fork_config
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        run_registry=registry,
+        checkpoint_forker=FakeCheckpointForker(),
+        response_message_id_factory=lambda: new_message_id,
+    )
+
+    async def exercise():
+        turn = await service.prepare_regeneration(
+            session_id=session_id,
+            message_id=old_message_id,
+        )
+        with pytest.raises(SessionBusyError):
+            await registry.reserve(session_id, uuid4())
+        await registry.release(turn.active_run)
+        return turn
+
+    prepared = asyncio.run(exercise())
+
+    assert calls == [(session_id, old_message_id, new_message_id)]
+    assert prepared.human_message is None
+    assert prepared.is_regeneration is True
+    assert prepared.response_message_id == new_message_id
+    assert prepared.config == fork_config
+
+
+def test_prepare_regeneration_failure_releases_session_reservation() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.regeneration import RegenerationError
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001811")
+    registry = ActiveRunRegistry()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FailingCheckpointForker:
+        async def create_fork(self, **kwargs):
+            raise RegenerationError(
+                code="MESSAGE_REGENERATE_NOT_ALLOWED",
+                message=(
+                    "仅允许重新生成当前活动分支最新的 completed AIMessage"
+                ),
+                status_code=409,
+            )
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        run_registry=registry,
+        checkpoint_forker=FailingCheckpointForker(),
+    )
+
+    async def exercise() -> None:
+        with pytest.raises(RegenerationError):
+            await service.prepare_regeneration(
+                session_id=session_id,
+                message_id=UUID(
+                    "00000000-0000-0000-0000-000000001812"
+                ),
+            )
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+
+    asyncio.run(exercise())
+
+
+def test_regeneration_stream_resumes_parent_with_none_input() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001821")
+    new_message_id = UUID("00000000-0000-0000-0000-000000001823")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+    parent.stream_events = [AIMessageChunk(content="新回复")]
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeCheckpointForker:
+        async def create_fork(self, **kwargs):
+            return {
+                "configurable": {
+                    "thread_id": str(session_id),
+                    "checkpoint_id": "fork-checkpoint",
+                    "message_id": str(new_message_id),
+                }
+            }
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=parent,
+        run_registry=registry,
+        checkpoint_forker=FakeCheckpointForker(),
+        response_message_id_factory=lambda: new_message_id,
+    )
+
+    async def exercise():
+        turn = await service.prepare_regeneration(
+            session_id=session_id,
+            message_id=UUID(
+                "00000000-0000-0000-0000-000000001822"
+            ),
+        )
+        messages = [message async for message in service.stream_turn(turn)]
+        status = await service.get_completion_status(turn)
+        await registry.release(turn.active_run)
+        return messages, status
+
+    messages, status = asyncio.run(exercise())
+
+    assert [str(message.text) for message in messages] == ["新回复"]
+    assert status == "completed"
+    assert parent.stream_calls == [
+        (
+            None,
+            {
+                "configurable": {
+                    "thread_id": str(session_id),
+                    "checkpoint_id": "fork-checkpoint",
+                    "message_id": str(new_message_id),
+                }
+            },
+            "custom",
+        )
+    ]
+
+
+def test_unstarted_regeneration_stop_persists_only_stopped_ai_message() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001831")
+    new_message_id = UUID("00000000-0000-0000-0000-000000001833")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id):
+            pass
+
+    class FakeCheckpointForker:
+        async def create_fork(self, **kwargs):
+            return {
+                "configurable": {
+                    "thread_id": str(session_id),
+                    "checkpoint_id": "fork-checkpoint",
+                    "message_id": str(new_message_id),
+                }
+            }
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+        checkpoint_forker=FakeCheckpointForker(),
+        response_message_id_factory=lambda: new_message_id,
+    )
+
+    async def exercise() -> str:
+        turn = await service.prepare_regeneration(
+            session_id=session_id,
+            message_id=UUID(
+                "00000000-0000-0000-0000-000000001832"
+            ),
+        )
+        result = await service.stop_session(session_id=session_id)
+        assert turn.active_run.terminal_future.done()
+        return result
+
+    result = asyncio.run(exercise())
+
+    assert result == "stopped"
+    assert len(parent.updates) == 1
+    _config, values, as_node = parent.updates[0]
+    assert as_node == "invoke_capability"
+    assert len(values["messages"]) == 1
+    stopped_message = values["messages"][0]
+    assert isinstance(stopped_message, AIMessage)
+    assert stopped_message.id == str(new_message_id)
+    assert stopped_message.additional_kwargs["runtime_status"] == "stopped"
+
+
+def test_stop_waits_for_regeneration_fork_handoff_before_persisting() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001841")
+    old_message_id = UUID("00000000-0000-0000-0000-000000001842")
+    new_message_id = UUID("00000000-0000-0000-0000-000000001843")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+    fork_started = asyncio.Event()
+    allow_fork_handoff = asyncio.Event()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id):
+            pass
+
+    class BlockingCheckpointForker:
+        async def create_fork(self, **kwargs):
+            fork_started.set()
+            await allow_fork_handoff.wait()
+            return {
+                "configurable": {
+                    "thread_id": str(session_id),
+                    "checkpoint_id": "fork-checkpoint",
+                    "message_id": str(new_message_id),
+                }
+            }
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+        checkpoint_forker=BlockingCheckpointForker(),
+        response_message_id_factory=lambda: new_message_id,
+    )
+
+    async def exercise():
+        preparation = asyncio.create_task(
+            service.prepare_regeneration(
+                session_id=session_id,
+                message_id=old_message_id,
+            )
+        )
+        await fork_started.wait()
+        stop = asyncio.create_task(service.stop_session(session_id=session_id))
+        await asyncio.sleep(0)
+
+        assert stop.done() is False
+        assert parent.updates == []
+        allow_fork_handoff.set()
+        turn, stop_result = await asyncio.gather(preparation, stop)
+
+        events = []
+        while True:
+            event = await turn.active_run.event_queue.get()
+            if event is None:
+                break
+            events.append(event)
+        assert await registry.get_active(session_id) is None
+        assert session_id not in service._prepared_turns
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+        return turn, stop_result, events
+
+    turn, stop_result, events = asyncio.run(exercise())
+
+    assert stop_result == "stopped"
+    assert [event.name for event in events] == ["done"]
+    assert events[0].data.status == "stopped"
+    assert len(parent.updates) == 1
+    config, values, as_node = parent.updates[0]
+    assert config == turn.config
+    assert as_node == "invoke_capability"
+    assert len(values["messages"]) == 1
+    stopped_message = values["messages"][0]
+    assert stopped_message.id == str(new_message_id)
+    assert stopped_message.content == ""
+    assert stopped_message.additional_kwargs["runtime_status"] == "stopped"
+
+
+def test_repeatedly_cancelled_regeneration_finishes_fork_handoff() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001851")
+    old_message_id = UUID("00000000-0000-0000-0000-000000001852")
+    new_message_id = UUID("00000000-0000-0000-0000-000000001853")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+    fork_committed = asyncio.Event()
+    allow_config_handoff = asyncio.Event()
+    fork_cancelled = asyncio.Event()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id):
+            pass
+
+    class CommittedCheckpointForker:
+        async def create_fork(self, **kwargs):
+            fork_committed.set()
+            try:
+                await allow_config_handoff.wait()
+            except asyncio.CancelledError:
+                fork_cancelled.set()
+                raise
+            return {
+                "configurable": {
+                    "thread_id": str(session_id),
+                    "checkpoint_id": "committed-fork",
+                    "message_id": str(new_message_id),
+                }
+            }
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+        checkpoint_forker=CommittedCheckpointForker(),
+        response_message_id_factory=lambda: new_message_id,
+    )
+
+    async def exercise():
+        preparation = asyncio.create_task(
+            service.prepare_regeneration(
+                session_id=session_id,
+                message_id=old_message_id,
+            )
+        )
+        await fork_committed.wait()
+        preparation.cancel()
+        await asyncio.sleep(0)
+        preparation.cancel()
+        await asyncio.sleep(0)
+        assert preparation.done() is False
+        allow_config_handoff.set()
+        result = await asyncio.gather(preparation, return_exceptions=True)
+
+        assert await registry.get_active(session_id) is None
+        assert session_id not in service._prepared_turns
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+        return result[0]
+
+    result = asyncio.run(exercise())
+
+    assert isinstance(result, asyncio.CancelledError)
+    assert fork_cancelled.is_set() is False
+    assert len(parent.updates) == 1
+    config, values, as_node = parent.updates[0]
+    assert config["configurable"]["checkpoint_id"] == "committed-fork"
+    assert as_node == "invoke_capability"
+    assert len(values["messages"]) == 1
+    incomplete_message = values["messages"][0]
+    assert incomplete_message.id == str(new_message_id)
+    assert incomplete_message.content == ""
+    assert incomplete_message.additional_kwargs["runtime_status"] == "incomplete"
+
+
+def test_repeated_preparation_cancel_and_stop_share_stopped_terminal() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001861")
+    old_message_id = UUID("00000000-0000-0000-0000-000000001862")
+    new_message_id = UUID("00000000-0000-0000-0000-000000001863")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+    fork_committed = asyncio.Event()
+    allow_config_handoff = asyncio.Event()
+    fork_cancelled = asyncio.Event()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id):
+            pass
+
+    class CommittedCheckpointForker:
+        async def create_fork(self, **kwargs):
+            fork_committed.set()
+            try:
+                await allow_config_handoff.wait()
+            except asyncio.CancelledError:
+                fork_cancelled.set()
+                raise
+            return {
+                "configurable": {
+                    "thread_id": str(session_id),
+                    "checkpoint_id": "committed-stop-fork",
+                    "message_id": str(new_message_id),
+                }
+            }
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+        checkpoint_forker=CommittedCheckpointForker(),
+        response_message_id_factory=lambda: new_message_id,
+    )
+
+    async def exercise():
+        preparation = asyncio.create_task(
+            service.prepare_regeneration(
+                session_id=session_id,
+                message_id=old_message_id,
+            )
+        )
+        await fork_committed.wait()
+        stop = asyncio.create_task(service.stop_session(session_id=session_id))
+        await asyncio.sleep(0)
+        preparation.cancel()
+        await asyncio.sleep(0)
+        preparation.cancel()
+        await asyncio.sleep(0)
+
+        assert stop.done() is False
+        assert preparation.done() is False
+        allow_config_handoff.set()
+        preparation_result = await asyncio.gather(
+            preparation,
+            return_exceptions=True,
+        )
+        stop_result = await stop
+
+        assert await registry.get_active(session_id) is None
+        assert session_id not in service._prepared_turns
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+        return preparation_result[0], stop_result
+
+    preparation_result, stop_result = asyncio.run(exercise())
+
+    assert isinstance(preparation_result, asyncio.CancelledError)
+    assert stop_result == "stopped"
+    assert fork_cancelled.is_set() is False
+    assert len(parent.updates) == 1
+    config, values, as_node = parent.updates[0]
+    assert config["configurable"]["checkpoint_id"] == "committed-stop-fork"
+    assert as_node == "invoke_capability"
+    assert len(values["messages"]) == 1
+    stopped_message = values["messages"][0]
+    assert stopped_message.id == str(new_message_id)
+    assert stopped_message.content == ""
+    assert stopped_message.additional_kwargs["runtime_status"] == "stopped"
+
+
+@pytest.mark.parametrize("failure_kind", ["application_error", "cancelled"])
+def test_regeneration_preparation_failure_is_not_reported_as_stopped(
+    failure_kind: str,
+) -> None:
+    from agent_runtime.chat import ChatRuntimeError, ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.regeneration import RegenerationError
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001871")
+    old_message_id = UUID("00000000-0000-0000-0000-000000001872")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+    fork_started = asyncio.Event()
+    allow_failure = asyncio.Event()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id):
+            pass
+
+    class FailingCheckpointForker:
+        async def create_fork(self, **kwargs):
+            fork_started.set()
+            await allow_failure.wait()
+            if failure_kind == "cancelled":
+                raise asyncio.CancelledError
+            raise RegenerationError(
+                code="MESSAGE_REGENERATE_FORK_FAILED",
+                message="创建消息重新生成分支失败",
+                retryable=True,
+            )
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+        checkpoint_forker=FailingCheckpointForker(),
+    )
+
+    async def exercise():
+        preparation = asyncio.create_task(
+            service.prepare_regeneration(
+                session_id=session_id,
+                message_id=old_message_id,
+            )
+        )
+        await fork_started.wait()
+        stop = asyncio.create_task(service.stop_session(session_id=session_id))
+        await asyncio.sleep(0)
+        assert stop.done() is False
+
+        allow_failure.set()
+        preparation_result, stop_result = await asyncio.gather(
+            preparation,
+            stop,
+            return_exceptions=True,
+        )
+        assert await registry.get_active(session_id) is None
+        assert session_id not in service._prepared_turns
+        assert session_id not in service._turn_preparation_barriers
+        return preparation_result, stop_result
+
+    preparation_result, stop_result = asyncio.run(exercise())
+
+    if failure_kind == "application_error":
+        assert isinstance(preparation_result, RegenerationError)
+    else:
+        assert isinstance(preparation_result, asyncio.CancelledError)
+    assert isinstance(stop_result, ChatRuntimeError)
+    assert stop_result.code == "MESSAGE_REGENERATE_FORK_FAILED"
+    assert stop_result.message == "创建消息重新生成分支失败"
+    assert stop_result.retryable is True
+    assert parent.updates == []
+
+
 def test_stream_turn_and_persist_incomplete_message_in_parent() -> None:
     from agent_runtime.chat import ChatService, PreparedChatTurn
     from agent_runtime.core.config import Settings

@@ -88,20 +88,7 @@ class MessageHistoryAdapter:
                 status_code=400,
             )
 
-        session = await self._session_repository.get(session_id)
-        if session.user_id != self._settings.local_user_id:
-            raise MessageHistoryError(
-                code="SESSION_NOT_FOUND",
-                message="Session 不存在",
-                status_code=404,
-            )
-
-        parent_messages = await self._parent_state_store.get_messages(session_id)
-        product_messages = tuple(
-            product_message
-            for message in parent_messages
-            if (product_message := self._to_product_message(message)) is not None
-        )
+        product_messages = await self.get_active_messages(session_id=session_id)
 
         end = len(product_messages)
         if before is not None:
@@ -124,6 +111,28 @@ class MessageHistoryAdapter:
         items = product_messages[start:end]
         next_before = items[0].message_id if start > 0 else None
         return MessagePage(items=items, next_before=next_before)
+
+    async def get_active_messages(
+        self,
+        *,
+        session_id: UUID,
+    ) -> tuple[ProductMessage, ...]:
+        """返回当前活动 Parent checkpoint 的完整产品消息。"""
+
+        session = await self._session_repository.get(session_id)
+        if session.user_id != self._settings.local_user_id:
+            raise MessageHistoryError(
+                code="SESSION_NOT_FOUND",
+                message="Session 不存在",
+                status_code=404,
+            )
+
+        parent_messages = await self._parent_state_store.get_messages(session_id)
+        return tuple(
+            product_message
+            for message in parent_messages
+            if (product_message := self._to_product_message(message)) is not None
+        )
 
     def _to_product_message(
         self,

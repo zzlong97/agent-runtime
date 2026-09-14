@@ -80,6 +80,28 @@ class StageOnePartiallyFailingFakeModel(StageOneStreamingFakeModel):
         raise RuntimeError("provider disconnected")
 
 
+class RegeneratingStreamingFakeModel(StageOneStreamingFakeModel):
+    """为首次回答和重新生成返回不同文本。"""
+
+    stream_call_count: int = 0
+
+    @property
+    def _llm_type(self) -> str:
+        return "regenerating-streaming-fake"
+
+    def _stream(
+        self,
+        messages,
+        stop=None,
+        run_manager=None,
+        **kwargs,
+    ):
+        responses = ("原始回答", "重新生成回答")
+        content = responses[self.stream_call_count]
+        self.stream_call_count += 1
+        yield ChatGenerationChunk(message=AIMessageChunk(content=content))
+
+
 def run_on_psycopg_compatible_loop(coroutine):
     from agent_runtime.core.event_loop import psycopg_compatible_loop_factory
 
@@ -232,6 +254,162 @@ def test_chat_endpoint_streams_and_persists_public_messages_in_postgres() -> Non
                 ) as checkpointer:
                     await checkpointer.adelete_thread(str(session_id))
                     await checkpointer.adelete_thread(f"{session_id}:general_chat")
+                    await checkpointer.adelete_thread(f"{session_id}:en_to_zh")
+
+    run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="set RUN_POSTGRES_TESTS=1 to run PostgreSQL integration tests",
+)
+def test_regenerate_endpoint_forks_active_branch_in_postgres() -> None:
+    from agent_runtime.chat import open_chat_service
+    from agent_runtime.core.config import Settings
+    from agent_runtime.main import create_app
+    from agent_runtime.persistence.database import open_database_connection
+
+    settings = Settings()
+    session_id: UUID | None = None
+
+    async def exercise() -> None:
+        nonlocal session_id
+        old_message_id: UUID | None = None
+        new_message_id: UUID | None = None
+        human_message_id: UUID | None = None
+        try:
+            async with open_chat_service(
+                settings,
+                model=RegeneratingStreamingFakeModel(),
+            ) as service:
+                app = create_app(settings, chat_service=service)
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url="http://testserver",
+                ) as client:
+                    initial_response = await client.post(
+                        "/api/v1/chat/completions",
+                        json={"message": {"content": "请给出一个回答"}},
+                    )
+                    initial_frames = initial_response.text.strip().split("\n\n")
+                    initial_events = [
+                        (
+                            frame.splitlines()[0].removeprefix("event: "),
+                            json.loads(
+                                frame.splitlines()[1].removeprefix("data: ")
+                            ),
+                        )
+                        for frame in initial_frames
+                    ]
+                    session_id = UUID(initial_events[0][1]["session_id"])
+                    old_message_id = UUID(initial_events[0][1]["message_id"])
+
+                    regenerate_response = await client.post(
+                        "/api/v1/chat/sessions/"
+                        f"{session_id}/messages/{old_message_id}/regenerate"
+                    )
+                    regenerate_frames = regenerate_response.text.strip().split(
+                        "\n\n"
+                    )
+                    regenerate_events = [
+                        (
+                            frame.splitlines()[0].removeprefix("event: "),
+                            json.loads(
+                                frame.splitlines()[1].removeprefix("data: ")
+                            ),
+                        )
+                        for frame in regenerate_frames
+                    ]
+                    new_message_id = UUID(
+                        regenerate_events[0][1]["message_id"]
+                    )
+
+                    history_response = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+
+                assert initial_response.status_code == 200
+                assert [name for name, _data in initial_events] == [
+                    "message",
+                    "done",
+                ]
+                assert initial_events[0][1]["delta"] == "原始回答"
+                assert regenerate_response.status_code == 200
+                assert [name for name, _data in regenerate_events] == [
+                    "message",
+                    "done",
+                ]
+                assert regenerate_events[0][1]["delta"] == "重新生成回答"
+                assert regenerate_events[-1][1]["status"] == "completed"
+                assert new_message_id != old_message_id
+
+                assert history_response.status_code == 200
+                history_items = history_response.json()["items"]
+                assert len(history_items) == 2
+                human_message_id = UUID(history_items[0]["message_id"])
+                assert history_items[0]["content"] == "请给出一个回答"
+                assert history_items[1] == {
+                    "message_id": str(new_message_id),
+                    "role": "assistant",
+                    "content": "重新生成回答",
+                    "runtime_status": "completed",
+                    "capability_id": "general_chat",
+                    "feedback": None,
+                }
+
+            assert session_id is not None
+            assert old_message_id is not None
+            assert new_message_id is not None
+            assert human_message_id is not None
+            async with AsyncPostgresSaver.from_conn_string(
+                settings.database_connection_string
+            ) as checkpointer:
+                latest = await checkpointer.aget_tuple(
+                    {"configurable": {"thread_id": str(session_id)}}
+                )
+                assert latest is not None
+                active_messages = latest.checkpoint["channel_values"]["messages"]
+                assert [message.id for message in active_messages] == [
+                    str(human_message_id),
+                    str(new_message_id),
+                ]
+                assert [message.content for message in active_messages] == [
+                    "请给出一个回答",
+                    "重新生成回答",
+                ]
+
+                checkpoints = [
+                    item
+                    async for item in checkpointer.alist(
+                        {"configurable": {"thread_id": str(session_id)}}
+                    )
+                ]
+                assert any(
+                    any(
+                        message.id == str(old_message_id)
+                        for message in item.checkpoint["channel_values"].get(
+                            "messages", []
+                        )
+                    )
+                    for item in checkpoints
+                )
+        finally:
+            if session_id is not None:
+                async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.commit()
+                async with AsyncPostgresSaver.from_conn_string(
+                    settings.database_connection_string
+                ) as checkpointer:
+                    await checkpointer.adelete_thread(str(session_id))
+                    await checkpointer.adelete_thread(
+                        f"{session_id}:general_chat"
+                    )
                     await checkpointer.adelete_thread(f"{session_id}:en_to_zh")
 
     run_on_psycopg_compatible_loop(exercise())
