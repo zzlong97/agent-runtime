@@ -181,7 +181,10 @@ def test_all_rejected_capabilities_emit_and_persist_unsupported_message() -> Non
     assert isinstance(events[0], AIMessage)
     assert events[0].content == UNSUPPORTED_REPLY
     assert events[0].id == str(unsupported_message_id)
-    assert events[0].additional_kwargs["runtime_status"] == "unsupported"
+    assert events[0].additional_kwargs == {
+        "runtime_status": "unsupported",
+        "capability_id": None,
+    }
 
 
 def test_failed_child_result_is_an_error_not_unsupported() -> None:

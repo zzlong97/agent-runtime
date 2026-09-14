@@ -43,6 +43,8 @@ class ActiveRun:
         default_factory=asyncio.Queue
     )
     _reservation_token: UUID = field(default_factory=uuid4, repr=False)
+    _finalizing: bool = field(default=False, repr=False)
+    _terminal_error: ApplicationError | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         """把终态 Future 绑定到创建本 Run 的当前事件循环。"""
@@ -83,7 +85,7 @@ class ActiveRunRegistry:
         self,
         run: ActiveRun,
         task: asyncio.Task[None],
-    ) -> None:
+    ) -> bool:
         """绑定 producer；已失效的旧 Run 不得启动或影响新 Run。"""
 
         async with self._lock:
@@ -93,11 +95,34 @@ class ActiveRunRegistry:
                 or current._reservation_token != run._reservation_token
             ):
                 task.cancel()
-                return
+                return False
             if run.producer_task is not None:
                 task.cancel()
+                if run.cancel_reason is not None:
+                    return False
                 raise RuntimeError("同一 Active Run 不能重复绑定 producer")
             run.producer_task = task
+            return True
+
+    async def get_active(self, session_id: UUID) -> ActiveRun | None:
+        """返回当前 Session 的活动 Run 快照；调用方不得据此取消替代 Run。"""
+
+        async with self._lock:
+            return self._active_runs.get(session_id)
+
+    async def begin_finalization(self, run: ActiveRun) -> bool:
+        """原子冻结当前 Run 的终态，阻止后到的 Stop 改写已确定结果。"""
+
+        async with self._lock:
+            current = self._active_runs.get(run.session_id)
+            if (
+                current is not run
+                or current._reservation_token != run._reservation_token
+                or run._finalizing
+            ):
+                return False
+            run._finalizing = True
+            return True
 
     async def request_cancel(
         self,
@@ -115,28 +140,35 @@ class ActiveRunRegistry:
                 or current._reservation_token != run._reservation_token
             ):
                 return False
-            should_cancel_task = run.cancel_reason is None
-            if should_cancel_task:
-                run.cancel_reason = reason
-            task = run.producer_task
-            if task is None:
-                if unstarted_finalizer is None:
-                    del self._active_runs[run.session_id]
-                    run.event_queue.put_nowait(None)
-                    if not run.terminal_future.done():
-                        run.terminal_future.set_result(None)
-                else:
-                    task = asyncio.create_task(
-                        unstarted_finalizer(),
-                        name=f"run-finalizer:{run.session_id}",
-                    )
-                    run.producer_task = task
-                    should_cancel_task = False
+            if run._finalizing:
+                task = None
+                accepted = run.cancel_reason is not None
+                wait_for_terminal = True
+            else:
+                accepted = True
+                wait_for_terminal = False
+                should_cancel_task = run.cancel_reason is None
+                if should_cancel_task:
+                    run.cancel_reason = reason
+                task = run.producer_task
+                if task is None:
+                    if unstarted_finalizer is None:
+                        del self._active_runs[run.session_id]
+                        run.event_queue.put_nowait(None)
+                        if not run.terminal_future.done():
+                            run.terminal_future.set_result(None)
+                    else:
+                        task = asyncio.create_task(
+                            unstarted_finalizer(),
+                            name=f"run-finalizer:{run.session_id}",
+                        )
+                        run.producer_task = task
+                        should_cancel_task = False
 
-        if task is not None and should_cancel_task:
+        if not wait_for_terminal and task is not None and should_cancel_task:
             task.cancel()
         await asyncio.shield(run.terminal_future)
-        return True
+        return accepted
 
     async def release(self, run: ActiveRun) -> None:
         """仅由当前 reservation token 释放 Session，忽略过期 Run。"""

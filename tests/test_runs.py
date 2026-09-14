@@ -161,3 +161,86 @@ def test_concurrent_cancel_requests_do_not_interrupt_producer_cleanup() -> None:
         await registry.release(replacement)
 
     asyncio.run(exercise())
+
+
+def test_registry_returns_current_run_without_exposing_internal_mapping() -> None:
+    from agent_runtime.runs import ActiveRunRegistry
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+
+        assert await registry.get_active(SESSION_ID) is None
+        run = await registry.reserve(SESSION_ID, MESSAGE_ID)
+        assert await registry.get_active(SESSION_ID) is run
+        await registry.release(run)
+        assert await registry.get_active(SESSION_ID) is None
+
+    asyncio.run(exercise())
+
+
+def test_cancel_does_not_reclassify_run_after_terminal_finalization_begins() -> None:
+    from agent_runtime.runs import ActiveRunRegistry
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+        run = await registry.reserve(SESSION_ID, MESSAGE_ID)
+        producer_cancelled = asyncio.Event()
+
+        async def producer() -> None:
+            try:
+                await run.terminal_future
+            except asyncio.CancelledError:
+                producer_cancelled.set()
+                raise
+
+        task = asyncio.create_task(producer())
+        await registry.attach_producer(run, task)
+        assert await registry.begin_finalization(run) is True
+
+        cancel_waiter = asyncio.create_task(
+            registry.request_cancel(run, "stopped")
+        )
+        await asyncio.sleep(0)
+
+        assert cancel_waiter.done() is False
+        assert run.cancel_reason is None
+        assert producer_cancelled.is_set() is False
+        await registry.release(run)
+        assert await cancel_waiter is False
+        await task
+
+    asyncio.run(exercise())
+
+
+def test_producer_attachment_is_ignored_while_unstarted_run_is_cancelling() -> None:
+    from agent_runtime.runs import ActiveRunRegistry
+
+    async def exercise() -> None:
+        registry = ActiveRunRegistry()
+        run = await registry.reserve(SESSION_ID, MESSAGE_ID)
+        finalizer_started = asyncio.Event()
+        allow_finalizer = asyncio.Event()
+
+        async def finalizer() -> None:
+            finalizer_started.set()
+            await allow_finalizer.wait()
+            await registry.release(run)
+
+        cancel_waiter = asyncio.create_task(
+            registry.request_cancel(
+                run,
+                "stopped",
+                unstarted_finalizer=finalizer,
+            )
+        )
+        await finalizer_started.wait()
+
+        late_task = asyncio.create_task(asyncio.Event().wait())
+        attached = await registry.attach_producer(run, late_task)
+
+        assert attached is False
+        await asyncio.gather(late_task, return_exceptions=True)
+        allow_finalizer.set()
+        assert await cancel_waiter is True
+
+    asyncio.run(exercise())

@@ -144,8 +144,11 @@ def test_chat_endpoint_streams_and_persists_public_messages_in_postgres() -> Non
                     "回复",
                 ]
                 assert events[-1][1]["status"] == "completed"
-                assert {data["message_id"] for _name, data in events[:2]} == {
+                assert {data["message_id"] for _name, data in events} == {
                     str(message_id)
+                }
+                assert {data["capability_id"] for _name, data in events} == {
+                    "general_chat"
                 }
 
                 restored_session = await PostgresSessionRepository(settings).get(
@@ -174,6 +177,10 @@ def test_chat_endpoint_streams_and_persists_public_messages_in_postgres() -> Non
                     "测试回复",
                 ]
                 assert parent_messages[-1].id == str(message_id)
+                assert parent_messages[-1].additional_kwargs == {
+                    "runtime_status": "completed",
+                    "capability_id": "general_chat",
+                }
                 assert parent_messages[0].id is not None
                 assert str(UUID(parent_messages[0].id)) == parent_messages[0].id
         finally:
@@ -189,6 +196,135 @@ def test_chat_endpoint_streams_and_persists_public_messages_in_postgres() -> Non
                 ) as checkpointer:
                     await checkpointer.adelete_thread(str(session_id))
                     await checkpointer.adelete_thread(f"{session_id}:general_chat")
+                    await checkpointer.adelete_thread(f"{session_id}:en_to_zh")
+
+    run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="set RUN_POSTGRES_TESTS=1 to run PostgreSQL integration tests",
+)
+def test_stop_persists_stopped_message_and_allows_immediate_next_run() -> None:
+    from langgraph.config import get_stream_writer
+
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
+    from agent_runtime.graph.parent import build_parent_graph
+    from agent_runtime.persistence.database import open_database_connection
+    from agent_runtime.persistence.parent_state import PostgresParentStateStore
+    from agent_runtime.sessions.repository import PostgresSessionRepository
+    from agent_runtime.sessions.service import SessionService
+
+    settings = Settings()
+    session_id: UUID | None = None
+
+    async def exercise() -> None:
+        nonlocal session_id
+        session_repository = PostgresSessionRepository(settings)
+        parent_state_store = PostgresParentStateStore(settings)
+        await session_repository.setup()
+        await parent_state_store.setup()
+        session_service = SessionService(
+            settings=settings,
+            session_repository=session_repository,
+            parent_state_store=parent_state_store,
+        )
+        started = await session_service.prepare_new_session(content="等待停止")
+        session_id = started.session.session_id
+
+        try:
+            async with AsyncPostgresSaver.from_conn_string(
+                settings.database_connection_string
+            ) as checkpointer:
+                async def route(state, config):
+                    return {"resolved_capability_id": "general_chat"}
+
+                async def invoke_capability(state, config):
+                    writer = get_stream_writer()
+                    writer(
+                        AIMessageChunk(
+                            content="已输出部分",
+                            additional_kwargs={
+                                "capability_id": "general_chat"
+                            },
+                        )
+                    )
+                    await asyncio.Event().wait()
+                    return CapabilityInvocation(
+                        result=ChildResult(
+                            status="completed",
+                            control_signal=None,
+                        ),
+                        message=AIMessage(content="不会到达"),
+                    )
+
+                parent_graph = build_parent_graph(
+                    route=route,
+                    invoke_capability=invoke_capability,
+                    checkpointer=checkpointer,
+                )
+                service = ChatService(
+                    settings=settings,
+                    session_repository=session_repository,
+                    session_service=session_service,
+                    parent_graph=parent_graph,
+                )
+                turn = await service.prepare_turn(
+                    session_id=session_id,
+                    content="请开始长任务",
+                )
+                await service.start_producer(turn)
+                message_event = await turn.active_run.event_queue.get()
+                assert message_event is not None
+                assert message_event.name == "message"
+
+                assert await service.stop_session(
+                    session_id=session_id
+                ) == "stopped"
+                done_event = await turn.active_run.event_queue.get()
+                assert done_event is not None
+                assert done_event.name == "done"
+                assert done_event.data.status == "stopped"
+                assert await turn.active_run.event_queue.get() is None
+
+                parent_state = await parent_graph.aget_state(turn.config)
+                parent_messages = parent_state.values["messages"]
+                assert [message.content for message in parent_messages][-2:] == [
+                    "请开始长任务",
+                    "已输出部分",
+                ]
+                assert parent_messages[-1].id == str(turn.response_message_id)
+                assert parent_messages[-1].additional_kwargs == {
+                    "runtime_status": "stopped",
+                    "capability_id": "general_chat",
+                }
+
+                next_turn = await service.prepare_turn(
+                    session_id=session_id,
+                    content="停止后立即继续",
+                )
+                assert await service.cancel_run(
+                    next_turn.active_run,
+                    reason="disconnected",
+                ) is True
+        finally:
+            if session_id is not None:
+                async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.commit()
+                async with AsyncPostgresSaver.from_conn_string(
+                    settings.database_connection_string
+                ) as checkpointer:
+                    await checkpointer.adelete_thread(str(session_id))
+                    await checkpointer.adelete_thread(
+                        f"{session_id}:general_chat"
+                    )
                     await checkpointer.adelete_thread(f"{session_id}:en_to_zh")
 
     run_on_psycopg_compatible_loop(exercise())

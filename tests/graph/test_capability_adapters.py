@@ -219,6 +219,11 @@ def test_adapters_refresh_child_views_and_keep_parent_authoritative() -> None:
         str(second_message_id),
         str(third_message_id),
     ]
+    assert [message.additional_kwargs for message in parent_history[1::2]] == [
+        {"runtime_status": "completed", "capability_id": "general_chat"},
+        {"runtime_status": "completed", "capability_id": "en_to_zh"},
+        {"runtime_status": "completed", "capability_id": "en_to_zh"},
+    ]
     assert general_saver.get_tuple(child_thread_config(session_id, "en_to_zh")) is None
     assert (
         translation_saver.get_tuple(

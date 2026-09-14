@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-03
-Last Verified Task: S2-02
-Last Verified Commit: 07a18f1c4a2fe83e72aaae36b257deaeb28a992a
+Current Task: S2-04
+Last Verified Task: S2-03
+Last Verified Commit: f17e2fe6ca3eed4f92fe1659d5236588580ebeff
 Blockers: None
 ```
 
@@ -822,7 +822,7 @@ PATCH /api/v1/chat/sessions/{session_id}/rename
 
 ## S2-03 单 Session 单 Run
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-02
 
@@ -863,13 +863,14 @@ active_runs[session_id] = ActiveRun
   聊天测试确认终态 `updated_at > created_at`
 - 2026-09-13：依赖锁、源码与测试编译、源码包和 wheel 构建、差异检查均通过；
   独立代码复审无 Critical、Important 或 Minor 问题，结论为 Ready
-- Result：S2-03 实现与工程验收完成，等待负责人确认后再进入 S2-04
+- 2026-09-13：负责人确认验收通过
+- Result：S2-03 已验收并更新为 `VERIFIED`；允许开始 S2-04
 
 ---
 
 ## S2-04 Stop
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-03
 
@@ -886,12 +887,37 @@ POST /api/v1/chat/sessions/{session_id}/stop
 
 ### Acceptance
 
-- [ ] 已输出文本完整保留并标记为 stopped
-- [ ] 零文本时仍保存稳定 UUID 的 stopped AIMessage
-- [ ] Stop 不发送 error，也不回滚历史
-- [ ] 无 active Run 时幂等成功
-- [ ] Stop 返回后同 Session 可以立即开始新 Run
-- [ ] 客户端断开会终止 Run 并按 incomplete 保存
+- [x] 已输出文本完整保留并标记为 stopped
+- [x] 零文本时仍保存稳定 UUID 的 stopped AIMessage
+- [x] Stop 不发送 error，也不回滚历史
+- [x] 无 active Run 时幂等成功
+- [x] Stop 返回后同 Session 可以立即开始新 Run
+- [x] 客户端断开会终止 Run 并按 incomplete 保存
+
+### Execution Evidence
+
+- 2026-09-14：新增 `POST /api/v1/chat/sessions/{session_id}/stop`；接口先校验
+  固定本地用户的 Session，再停止当前 Run，无 active Run 时返回幂等 `idle`
+- 2026-09-14：producer 聚合已输出文本；Stop 将部分或空内容以稳定响应 UUID、
+  `runtime_status=stopped` 和可空 `capability_id` 写回 Parent，随后只发送
+  `done(status=stopped)`，不删除 Session 或回滚历史
+- 2026-09-14：客户端或 SSE 意外断开时复用同一终态链路，将部分或空输出保存为
+  `runtime_status=incomplete`；`stopped` 与 `incomplete` 均不进入后续模型上下文
+- 2026-09-14：Run 终态冻结、reservation token、迟到 producer 防护和入口前取消
+  恢复共同覆盖 Stop/自然完成/旧 SSE/replacement Run 竞态；并发 Stop 共享同一
+  成功或失败终态，返回前已完成持久化、SSE producer 结束和 Registry 清理
+- 2026-09-14：Stage 2 SSE `message` 与 `done` 已补齐稳定 `message_id` 和可空
+  `capability_id`；新生成的 completed、unsupported、incomplete、stopped 公共
+  AIMessage 均保存规定的产品元数据
+- 2026-09-14：正常 Stop 不发送 `error`；停止终态持久化或 Session 时间刷新失败时
+  不伪报 stopped，而是使用稳定应用错误及 `error → done(failed)` 完成失败清理
+- 2026-09-14：默认全量回归 `180 passed, 10 skipped`；启用真实 PostgreSQL 后
+  全量回归 `189 passed, 1 skipped`，唯一跳过项为真实百炼 smoke；数据库集成
+  测试确认 stopped checkpoint 可恢复且 Stop 后同 Session 可立即开始新 Run
+- 2026-09-14：依赖锁、环境依赖一致性、源码与测试编译、源码包和 wheel 构建、
+  差异检查均通过；两轮独立代码复审后的最终结论为 Ready，无 Critical 或
+  Important 问题，未跟踪 `.idea/` 明确排除在提交外
+- Result：S2-04 实现与工程验收完成，等待负责人确认后再进入 S2-05
 
 ---
 

@@ -1,9 +1,11 @@
-"""Stage 1 聊天请求与 SSE 产品协议 Schema。"""
+"""Stage 2 聊天请求与 SSE 产品协议 Schema。"""
 
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+type CapabilityId = Literal["general_chat", "en_to_zh"]
 
 
 class ChatMessageRequest(BaseModel):
@@ -13,7 +15,7 @@ class ChatMessageRequest(BaseModel):
 
     content: str = Field(
         description=(
-            "当前用户提交的消息正文；Stage 1 必须是去除首尾空白后仍非空的"
+            "当前用户提交的消息正文；Stage 2 必须是去除首尾空白后仍非空的"
             "字符串，并作为本轮 HumanMessage 内容。"
         )
     )
@@ -37,11 +39,11 @@ class ChatCompletionRequest(BaseModel):
         default=None,
         description=(
             "要继续对话的 Session UUID；省略或传 null 时由服务端创建新 "
-            "Session，Stage 1 不接受客户端指定 user_id。"
+            "Session，Stage 2 不接受客户端指定 user_id。"
         ),
     )
     message: ChatMessageRequest = Field(
-        description="本轮唯一的用户消息；Stage 1 只接受文本 content。"
+        description="本轮唯一的用户消息；Stage 2 只接受文本 content。"
     )
 
 
@@ -55,6 +57,12 @@ class MessageEventData(BaseModel):
     )
     message_id: UUID = Field(
         description="本轮 AIMessage 的服务端稳定 UUID；同一回复的所有 delta 相同。"
+    )
+    capability_id: CapabilityId | None = Field(
+        description=(
+            "生成本次增量的能力标识；Stage 2 只允许 general_chat、"
+            "en_to_zh 或尚未确定能力时的 null。"
+        )
     )
     delta: str = Field(
         description="本次 SSE message 事件携带的增量文本，不包含内部图事件。"
@@ -90,8 +98,19 @@ class DoneEventData(BaseModel):
     session_id: UUID = Field(
         description="本轮对话所属的稳定 Session UUID。"
     )
-    status: Literal["completed", "unsupported", "failed"] = Field(
+    message_id: UUID = Field(
         description=(
-            "本轮最终状态；Stage 1 只允许 completed、unsupported 或 failed。"
+            "本轮 AIMessage 的服务端稳定 UUID；与同一回复的 message 事件一致。"
+        )
+    )
+    capability_id: CapabilityId | None = Field(
+        description=(
+            "本轮最终采用的能力标识；Stage 2 只允许 general_chat、"
+            "en_to_zh 或未采用能力时的 null。"
+        )
+    )
+    status: Literal["completed", "unsupported", "stopped", "failed"] = Field(
+        description=(
+            "本轮最终状态；Stage 2 只允许 completed、unsupported、stopped 或 failed。"
         )
     )

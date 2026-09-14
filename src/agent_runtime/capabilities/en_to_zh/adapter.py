@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from uuid import UUID, uuid4
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 
@@ -45,8 +45,16 @@ class EnglishToChineseAdapter:
 
         def emit(event: tuple[BaseMessage, dict[str, object]]) -> None:
             message, _metadata = event
-            emitted_messages.append(message)
-            writer(message)
+            public_event = message.model_copy(
+                update={
+                    "additional_kwargs": {
+                        **message.additional_kwargs,
+                        "capability_id": "en_to_zh",
+                    }
+                }
+            )
+            emitted_messages.append(public_event)
+            writer(public_event)
 
         session_id = session_id_from_parent_config(config)
         message_id = public_message_id_from_parent_config(config)
@@ -57,10 +65,22 @@ class EnglishToChineseAdapter:
         )
         if result.status != "completed":
             return CapabilityInvocation(result=result)
+        public_message = build_public_ai_message(
+            emitted_messages,
+            message_id=message_id or self._message_id_factory(),
+        )
+        public_message = AIMessage.model_validate(
+            public_message.model_copy(
+                update={
+                    "additional_kwargs": {
+                        **public_message.additional_kwargs,
+                        "runtime_status": "completed",
+                        "capability_id": "en_to_zh",
+                    }
+                }
+            )
+        )
         return CapabilityInvocation(
             result=result,
-            message=build_public_ai_message(
-                emitted_messages,
-                message_id=message_id or self._message_id_factory(),
-            ),
+            message=public_message,
         )

@@ -197,7 +197,10 @@ def build_parent_graph(
         message = AIMessage(
             content=UNSUPPORTED_REPLY,
             id=str(message_id or message_id_factory()),
-            additional_kwargs={"runtime_status": "unsupported"},
+            additional_kwargs={
+                "runtime_status": "unsupported",
+                "capability_id": None,
+            },
         )
         writer = get_stream_writer()
         writer(message)

@@ -79,7 +79,7 @@ def test_context_builder_preserves_system_messages_without_counting_them() -> No
     ]
 
 
-def test_context_builder_excludes_unsupported_and_incomplete_rounds() -> None:
+def test_context_builder_excludes_non_completed_rounds() -> None:
     from agent_runtime.graph.context import build_child_message_view
 
     completed = _completed_round(0)
@@ -95,6 +95,12 @@ def test_context_builder_excludes_unsupported_and_incomplete_rounds() -> None:
         id=str(uuid4()),
         additional_kwargs={"runtime_status": "incomplete"},
     )
+    stopped_human = HumanMessage(content="用户停止的问题", id=str(uuid4()))
+    stopped_ai = AIMessage(
+        content="停止前内容",
+        id=str(uuid4()),
+        additional_kwargs={"runtime_status": "stopped"},
+    )
     current_message = HumanMessage(content="新的问题", id=str(uuid4()))
     history = [
         *completed,
@@ -102,6 +108,8 @@ def test_context_builder_excludes_unsupported_and_incomplete_rounds() -> None:
         unsupported_ai,
         incomplete_human,
         incomplete_ai,
+        stopped_human,
+        stopped_ai,
         current_message,
     ]
 

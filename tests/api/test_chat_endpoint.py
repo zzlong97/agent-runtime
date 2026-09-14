@@ -35,7 +35,7 @@ class FakeChatService:
             settings=Settings(_env_file=None),
             session_repository=object(),
             session_service=self,
-            parent_graph=object(),
+            parent_graph=self,
             run_registry=self._run_registry,
         )
         self.events: list[object] = []
@@ -47,9 +47,13 @@ class FakeChatService:
         self.last_turn = None
         self.stream_blocker: asyncio.Event | None = None
         self.touched_session_ids: list[UUID] = []
+        self.parent_updates: list[tuple[object, object, object]] = []
 
     async def touch_session(self, *, session_id: UUID) -> None:
         self.touched_session_ids.append(session_id)
+
+    async def aupdate_state(self, config, values, *, as_node=None):
+        self.parent_updates.append((config, values, as_node))
 
     async def prepare_turn(self, *, session_id, content):
         from agent_runtime.chat import PreparedChatTurn
@@ -89,7 +93,7 @@ class FakeChatService:
     async def get_completion_status(self, turn):
         return self.status
 
-    async def persist_incomplete(self, turn, content):
+    async def persist_incomplete(self, turn, content, *, capability_id=None):
         self.incomplete_contents.append(content)
         if self.persist_error is not None:
             raise self.persist_error
@@ -102,6 +106,13 @@ class FakeChatService:
 
     async def cancel_run(self, run, *, reason):
         return await self._producer_service.cancel_run(run, reason=reason)
+
+    async def stop_session(self, *, session_id):
+        run = await self._run_registry.get_active(session_id)
+        if run is None:
+            return "idle"
+        accepted = await self.cancel_run(run, reason="stopped")
+        return "stopped" if accepted and run.cancel_reason == "stopped" else "idle"
 
 
 def _post(app, payload: dict[str, object]) -> httpx.Response:
@@ -141,6 +152,8 @@ def test_chat_endpoint_streams_message_deltas_with_stable_ids() -> None:
     assert {data["message_id"] for _event, data in events[:2]} == {
         str(service.message_id)
     }
+    assert {data["capability_id"] for _event, data in events} == {None}
+    assert events[-1][1]["message_id"] == str(service.message_id)
     assert events[-1][1]["status"] == "completed"
     assert "node" not in response.text
     assert "checkpoint" not in response.text
@@ -193,6 +206,7 @@ def test_chat_endpoint_emits_error_then_failed_and_persists_partial_output() -> 
         "retryable": True,
     }
     assert events[2][1]["status"] == "failed"
+    assert events[2][1]["message_id"] == str(service.message_id)
     assert service.incomplete_contents == ["部分"]
 
 
@@ -437,3 +451,81 @@ def test_chat_response_releases_run_when_asgi_send_disconnects() -> None:
         assert service.last_turn.active_run.terminal_future.done()
 
     asyncio.run(exercise())
+
+
+def test_stop_endpoint_finishes_open_sse_with_done_stopped_and_no_error() -> None:
+    from fastapi import Request
+
+    from agent_runtime.api.routes.chat import create_chat_completion
+    from agent_runtime.api.schemas.chat import ChatCompletionRequest
+    from agent_runtime.main import create_app
+
+    service = FakeChatService()
+    service.events = [
+        AIMessageChunk(
+            content="已输出",
+            additional_kwargs={"capability_id": "general_chat"},
+        )
+    ]
+    service.stream_blocker = asyncio.Event()
+    app = create_app(chat_service=service)
+    payload = ChatCompletionRequest.model_validate(
+        {"message": {"content": "请执行长任务"}}
+    )
+
+    async def exercise() -> tuple[httpx.Response, str]:
+        scope = {
+            "type": "http",
+            "asgi": {"spec_version": "2.4"},
+            "app": app,
+            "method": "POST",
+            "path": "/api/v1/chat/completions",
+            "headers": [],
+        }
+        route_request = Request(scope)
+        response = await create_chat_completion(payload, route_request)
+        first_message_sent = asyncio.Event()
+        body_parts: list[bytes] = []
+
+        async def receive():
+            await asyncio.Event().wait()
+
+        async def send(message):
+            if message["type"] != "http.response.body":
+                return
+            body = message.get("body", b"")
+            body_parts.append(body)
+            if b"event: message" in body:
+                first_message_sent.set()
+
+        response_task = asyncio.create_task(
+            response(scope, receive, send)
+        )
+        await first_message_sent.wait()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            stop_response = await client.post(
+                f"/api/v1/chat/sessions/{service.session_id}/stop"
+            )
+        await response_task
+        return stop_response, b"".join(body_parts).decode()
+
+    stop_response, stream_body = asyncio.run(exercise())
+
+    assert stop_response.json() == {
+        "session_id": str(service.session_id),
+        "status": "stopped",
+    }
+    events = _parse_sse(stream_body)
+    assert [name for name, _data in events] == ["message", "done"]
+    assert events[-1][1] == {
+        "session_id": str(service.session_id),
+        "message_id": str(service.message_id),
+        "capability_id": "general_chat",
+        "status": "stopped",
+    }
+    assert "event: error" not in stream_body

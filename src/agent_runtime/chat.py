@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 
 from agent_runtime.api.schemas.chat import (
+    CapabilityId,
     DoneEventData,
     ErrorEventData,
     MessageEventData,
@@ -85,6 +86,7 @@ class ChatService:
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
         self._response_message_id_factory = response_message_id_factory
+        self._prepared_turns: dict[UUID, PreparedChatTurn] = {}
 
     async def prepare_turn(
         self,
@@ -133,7 +135,7 @@ class ChatService:
                     id=str(human_message_id),
                 )
 
-            return PreparedChatTurn(
+            turn = PreparedChatTurn(
                 session_id=reserved_session_id,
                 human_message=human_message,
                 response_message_id=response_message_id,
@@ -143,6 +145,8 @@ class ChatService:
                 ),
                 active_run=active_run,
             )
+            self._prepared_turns[reserved_session_id] = turn
+            return turn
         except BaseException:
             await self._run_registry.release(active_run)
             raise
@@ -173,6 +177,28 @@ class ChatService:
             title=title,
         )
 
+    async def stop_session(
+        self,
+        *,
+        session_id: UUID,
+    ) -> Literal["stopped", "idle"]:
+        """停止固定本地用户 Session 的当前 Run，并等待终态清理。"""
+
+        session = await self._session_repository.get(session_id)
+        if session.user_id != self._settings.local_user_id:
+            raise ChatSessionError(
+                code="SESSION_NOT_FOUND",
+                message="Session 不存在",
+                status_code=404,
+            )
+        run = await self._run_registry.get_active(session_id)
+        if run is None:
+            return "idle"
+        accepted = await self.cancel_run(run, reason="stopped")
+        if accepted and run.cancel_reason == "stopped":
+            return "stopped"
+        return "idle"
+
     async def stream_turn(
         self,
         turn: PreparedChatTurn,
@@ -199,21 +225,55 @@ class ChatService:
             name=f"chat-producer:{turn.session_id}",
         )
         try:
-            await self._run_registry.attach_producer(turn.active_run, task)
+            attached = await self._run_registry.attach_producer(
+                turn.active_run,
+                task,
+            )
+            if not attached:
+                await asyncio.gather(task, return_exceptions=True)
+            else:
+                task.add_done_callback(
+                    lambda completed_task: self._recover_prestart_cancellation(
+                        turn,
+                        completed_task,
+                    )
+                )
         except BaseException:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
             raise
+
+    def _recover_prestart_cancellation(
+        self,
+        turn: PreparedChatTurn,
+        completed_task: asyncio.Task[None],
+    ) -> None:
+        """任务在进入 producer 前已取消时，补启动唯一的取消终态处理。"""
+
+        if (
+            not completed_task.cancelled()
+            or turn.active_run.terminal_future.done()
+        ):
+            return
+        asyncio.create_task(
+            self._finalize_unstarted_run(turn.active_run),
+            name=f"run-prestart-finalizer:{turn.session_id}",
+        )
 
     async def _produce_turn(self, turn: PreparedChatTurn) -> None:
         """执行 Parent Graph，并把产品事件写入本轮专用队列。"""
 
         partial_text: list[str] = []
         terminal_events: list[ProductRunEvent] = []
+        capability_id: CapabilityId | None = None
         cancelled = False
         try:
             try:
                 async for message in self.stream_turn(turn):
+                    capability_id = self._message_capability_id(
+                        message,
+                        fallback=capability_id,
+                    )
                     delta = str(message.text)
                     if not delta:
                         continue
@@ -224,6 +284,7 @@ class ChatService:
                             data=MessageEventData(
                                 session_id=turn.session_id,
                                 message_id=turn.response_message_id,
+                                capability_id=capability_id,
                                 delta=delta,
                             ),
                         )
@@ -234,6 +295,8 @@ class ChatService:
                         name="done",
                         data=DoneEventData(
                             session_id=turn.session_id,
+                            message_id=turn.response_message_id,
+                            capability_id=capability_id,
                             status=completion_status,
                         ),
                     )
@@ -242,7 +305,11 @@ class ChatService:
                 reported_error: Exception = error
                 if partial_text:
                     try:
-                        await self.persist_incomplete(turn, "".join(partial_text))
+                        await self.persist_incomplete(
+                            turn,
+                            "".join(partial_text),
+                            capability_id=capability_id,
+                        )
                     except Exception:
                         reported_error = ApplicationError(
                             code="CHAT_INCOMPLETE_PERSIST_FAILED",
@@ -251,16 +318,70 @@ class ChatService:
                         )
                 terminal_events = self._failed_terminal_events(
                     session_id=turn.session_id,
+                    message_id=turn.response_message_id,
+                    capability_id=capability_id,
                     error=reported_error,
                 )
+            await self._run_registry.begin_finalization(turn.active_run)
         except asyncio.CancelledError:
             cancelled = True
+            await self._run_registry.begin_finalization(turn.active_run)
+            reason = turn.active_run.cancel_reason or "disconnected"
+            runtime_status: Literal["stopped", "incomplete"] = (
+                "stopped" if reason == "stopped" else "incomplete"
+            )
+            try:
+                await self.persist_runtime_message(
+                    turn,
+                    "".join(partial_text),
+                    runtime_status=runtime_status,
+                    capability_id=capability_id,
+                )
+            except Exception:
+                terminal_error = ChatRuntimeError(
+                    code=(
+                        "CHAT_STOP_PERSIST_FAILED"
+                        if runtime_status == "stopped"
+                        else "CHAT_INCOMPLETE_PERSIST_FAILED"
+                    ),
+                    message=(
+                        "未能保存停止后的回复"
+                        if runtime_status == "stopped"
+                        else "未能保存模型的不完整输出"
+                    ),
+                    retryable=False,
+                )
+                turn.active_run._terminal_error = terminal_error
+                terminal_events = self._failed_terminal_events(
+                    session_id=turn.session_id,
+                    message_id=turn.response_message_id,
+                    capability_id=capability_id,
+                    error=terminal_error,
+                )
+            else:
+                terminal_events = (
+                    [
+                        ProductRunEvent(
+                            name="done",
+                            data=DoneEventData(
+                                session_id=turn.session_id,
+                                message_id=turn.response_message_id,
+                                capability_id=capability_id,
+                                status="stopped",
+                            ),
+                        )
+                    ]
+                    if runtime_status == "stopped"
+                    else []
+                )
 
-        cancelled = await self._finalize_run(
+        finalize_cancelled = await self._finalize_run(
             turn=turn,
             terminal_events=terminal_events,
-            cancelled=cancelled,
+            capability_id=capability_id,
+            cancelled=False,
         )
+        cancelled = cancelled or finalize_cancelled
 
         if cancelled:
             raise asyncio.CancelledError
@@ -270,6 +391,7 @@ class ChatService:
         *,
         turn: PreparedChatTurn,
         terminal_events: list[ProductRunEvent],
+        capability_id: CapabilityId | None,
         cancelled: bool,
     ) -> bool:
         """刷新 Session，并在任何终态下结束事件队列和释放占用。"""
@@ -290,14 +412,19 @@ class ChatService:
                     pass
             except Exception:
                 if not cancelled:
-                    terminal_events = self._failed_terminal_events(
-                        session_id=turn.session_id,
-                        error=ApplicationError(
-                            code="CHAT_SESSION_TOUCH_FAILED",
-                            message="未能更新 Session 的活跃时间",
-                            retryable=False,
-                        ),
+                    terminal_error = ApplicationError(
+                        code="CHAT_SESSION_TOUCH_FAILED",
+                        message="未能更新 Session 的活跃时间",
+                        retryable=False,
                     )
+                    if turn.active_run._terminal_error is None:
+                        turn.active_run._terminal_error = terminal_error
+                        terminal_events = self._failed_terminal_events(
+                            session_id=turn.session_id,
+                            message_id=turn.response_message_id,
+                            capability_id=capability_id,
+                            error=terminal_error,
+                        )
 
             if not cancelled:
                 for event in terminal_events:
@@ -326,11 +453,16 @@ class ChatService:
 
         await run.event_queue.put(None)
         await self._run_registry.release(run)
+        turn = self._prepared_turns.get(run.session_id)
+        if turn is not None and turn.active_run is run:
+            del self._prepared_turns[run.session_id]
 
     @staticmethod
     def _failed_terminal_events(
         *,
         session_id: UUID,
+        message_id: UUID,
+        capability_id: CapabilityId | None,
         error: Exception,
     ) -> list[ProductRunEvent]:
         """把内部异常转换为不泄漏实现细节的产品失败终态。"""
@@ -355,6 +487,8 @@ class ChatService:
                 name="done",
                 data=DoneEventData(
                     session_id=session_id,
+                    message_id=message_id,
+                    capability_id=capability_id,
                     status="failed",
                 ),
             ),
@@ -368,22 +502,90 @@ class ChatService:
     ) -> bool:
         """取消并等待指定响应对应的 producer 完成清理。"""
 
-        return await self._run_registry.request_cancel(
+        accepted = await self._run_registry.request_cancel(
             run,
             reason,
             unstarted_finalizer=lambda: self._finalize_unstarted_run(run),
         )
+        if accepted and run._terminal_error is not None:
+            raise run._terminal_error
+        return accepted
 
     async def _finalize_unstarted_run(self, run: ActiveRun) -> None:
-        """为尚未启动 producer 的断开请求刷新 Session 并释放占用。"""
+        """为尚未启动 producer 的取消请求保存可解释终态并释放占用。"""
 
+        terminal_events: list[ProductRunEvent] = []
         try:
+            await self._run_registry.begin_finalization(run)
+            turn = self._prepared_turns.get(run.session_id)
+            if turn is not None and turn.active_run is run:
+                runtime_status: Literal["stopped", "incomplete"] = (
+                    "stopped"
+                    if run.cancel_reason == "stopped"
+                    else "incomplete"
+                )
+                try:
+                    await self.persist_runtime_message(
+                        turn,
+                        "",
+                        runtime_status=runtime_status,
+                        capability_id=None,
+                        include_human=True,
+                    )
+                    if runtime_status == "stopped":
+                        terminal_events.append(
+                            ProductRunEvent(
+                                name="done",
+                                data=DoneEventData(
+                                    session_id=turn.session_id,
+                                    message_id=turn.response_message_id,
+                                    capability_id=None,
+                                    status="stopped",
+                                ),
+                            )
+                        )
+                except Exception:
+                    terminal_error = ChatRuntimeError(
+                        code=(
+                            "CHAT_STOP_PERSIST_FAILED"
+                            if runtime_status == "stopped"
+                            else "CHAT_INCOMPLETE_PERSIST_FAILED"
+                        ),
+                        message=(
+                            "未能保存停止后的回复"
+                            if runtime_status == "stopped"
+                            else "未能保存模型的不完整输出"
+                        ),
+                        retryable=False,
+                    )
+                    run._terminal_error = terminal_error
+                    for event in self._failed_terminal_events(
+                        session_id=turn.session_id,
+                        message_id=turn.response_message_id,
+                        capability_id=None,
+                        error=terminal_error,
+                    ):
+                        terminal_events.append(event)
             try:
                 await self._session_service.touch_session(
                     session_id=run.session_id
                 )
             except Exception:
-                pass
+                if run._terminal_error is None:
+                    terminal_error = ApplicationError(
+                        code="CHAT_SESSION_TOUCH_FAILED",
+                        message="未能更新 Session 的活跃时间",
+                        retryable=False,
+                    )
+                    run._terminal_error = terminal_error
+                    terminal_events = self._failed_terminal_events(
+                        session_id=run.session_id,
+                        message_id=run.response_message_id,
+                        capability_id=None,
+                        error=terminal_error,
+                    )
+            for event in terminal_events:
+                await run.event_queue.put(event)
         finally:
             cleanup_cancelled = await self._await_run_cleanup(run)
             if cleanup_cancelled:
@@ -415,19 +617,58 @@ class ChatService:
         self,
         turn: PreparedChatTurn,
         content: str,
+        *,
+        capability_id: CapabilityId | None = None,
     ) -> None:
         """把已发送的部分文本作为 incomplete AIMessage 写回 Parent。"""
+
+        await self.persist_runtime_message(
+            turn,
+            content,
+            runtime_status="incomplete",
+            capability_id=capability_id,
+        )
+
+    async def persist_runtime_message(
+        self,
+        turn: PreparedChatTurn,
+        content: str,
+        *,
+        runtime_status: Literal["incomplete", "stopped"],
+        capability_id: CapabilityId | None,
+        include_human: bool = False,
+    ) -> None:
+        """把非 completed 的公共 AIMessage 终态写回 Parent 权威历史。"""
 
         message = AIMessage(
             content=content,
             id=str(turn.response_message_id),
-            additional_kwargs={"runtime_status": "incomplete"},
+            additional_kwargs={
+                "runtime_status": runtime_status,
+                "capability_id": capability_id,
+            },
         )
+        messages: list[BaseMessage] = [message]
+        if include_human:
+            messages.insert(0, turn.human_message)
         await self._parent_graph.aupdate_state(
             turn.config,
-            {"messages": [message], "completion_status": None},
+            {"messages": messages, "completion_status": None},
             as_node="invoke_capability",
         )
+
+    @staticmethod
+    def _message_capability_id(
+        message: BaseMessage,
+        *,
+        fallback: CapabilityId | None,
+    ) -> CapabilityId | None:
+        """从公共消息元数据读取 Stage 2 允许的能力标识。"""
+
+        capability_id = message.additional_kwargs.get("capability_id")
+        if capability_id in ("general_chat", "en_to_zh"):
+            return cast(CapabilityId, capability_id)
+        return fallback
 
 
 @asynccontextmanager

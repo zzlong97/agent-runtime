@@ -17,11 +17,13 @@ from langchain_core.messages import AIMessageChunk
             {
                 "session_id": UUID("00000000-0000-0000-0000-000000000001"),
                 "message_id": UUID("00000000-0000-0000-0000-000000000002"),
+                "capability_id": "general_chat",
                 "delta": "你好",
             },
             {
                 "session_id": "00000000-0000-0000-0000-000000000001",
                 "message_id": "00000000-0000-0000-0000-000000000002",
+                "capability_id": "general_chat",
                 "delta": "你好",
             },
         ),
@@ -46,10 +48,14 @@ from langchain_core.messages import AIMessageChunk
             "DoneEventData",
             {
                 "session_id": UUID("00000000-0000-0000-0000-000000000001"),
+                "message_id": UUID("00000000-0000-0000-0000-000000000002"),
+                "capability_id": None,
                 "status": "completed",
             },
             {
                 "session_id": "00000000-0000-0000-0000-000000000001",
+                "message_id": "00000000-0000-0000-0000-000000000002",
+                "capability_id": None,
                 "status": "completed",
             },
         ),
@@ -86,6 +92,7 @@ def test_closing_sse_consumer_cancels_producer_and_releases_session() -> None:
     session_id = UUID("00000000-0000-0000-0000-000000001271")
     registry = ActiveRunRegistry()
     producer_cancelled = asyncio.Event()
+    parent_updates: list[dict[str, object]] = []
 
     class FakeSessionRepository:
         async def get(self, requested_session_id):
@@ -111,6 +118,9 @@ def test_closing_sse_consumer_cancels_producer_and_releases_session() -> None:
             finally:
                 producer_cancelled.set()
 
+        async def aupdate_state(self, config, values, *, as_node=None):
+            parent_updates.append(values)
+
     class FakeSessionService:
         async def touch_session(self, *, session_id: UUID) -> None:
             pass
@@ -133,6 +143,11 @@ def test_closing_sse_consumer_cancels_producer_and_releases_session() -> None:
         assert first_frame.startswith("event: message\n")
         assert producer_cancelled.is_set()
         assert turn.active_run.cancel_reason == "disconnected"
+        incomplete_message = parent_updates[-1]["messages"][0]
+        assert incomplete_message.content == "首段"
+        assert incomplete_message.additional_kwargs["runtime_status"] == (
+            "incomplete"
+        )
         replacement = await registry.reserve(session_id, uuid4())
         await registry.release(replacement)
 

@@ -660,11 +660,522 @@ def test_cancelled_producer_releases_run_for_every_cancel_reason(reason: str) ->
         assert producer_cancelled.is_set()
         assert turn.active_run.cancel_reason == reason
         assert session_service.touched == [session_id]
+        if reason == "stopped":
+            done = await turn.active_run.event_queue.get()
+            assert done is not None
+            assert done.name == "done"
+            assert done.data.status == "stopped"
         assert await turn.active_run.event_queue.get() is None
         replacement = await registry.reserve(session_id, uuid4())
         await registry.release(replacement)
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    ("stream_events", "expected_content", "expected_capability_id"),
+    [
+        ([], "", None),
+        (
+            [
+                AIMessageChunk(
+                    content="已经输出",
+                    additional_kwargs={"capability_id": "general_chat"},
+                )
+            ],
+            "已经输出",
+            "general_chat",
+        ),
+    ],
+)
+def test_stop_persists_partial_or_empty_message_and_waits_for_cleanup(
+    stream_events: list[AIMessageChunk],
+    expected_content: str,
+    expected_capability_id: str | None,
+) -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry, ProductRunEvent
+
+    session_id = UUID("00000000-0000-0000-0000-000000001262")
+    message_id = UUID("00000000-0000-0000-0000-000000001263")
+    registry = ActiveRunRegistry()
+    graph_started = asyncio.Event()
+    parent = FakeParentGraph()
+
+    async def blocking_stream(state, config, *, stream_mode):
+        graph_started.set()
+        for event in stream_events:
+            yield event
+        await asyncio.Event().wait()
+        yield
+
+    parent.astream = blocking_stream
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        def __init__(self) -> None:
+            self.touched: list[UUID] = []
+
+        async def touch_session(self, *, session_id: UUID):
+            self.touched.append(session_id)
+
+    session_service = FakeSessionService()
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=session_service,
+        parent_graph=parent,
+        run_registry=registry,
+        response_message_id_factory=lambda: message_id,
+    )
+
+    async def exercise() -> tuple[str, list[ProductRunEvent]]:
+        turn = await service.prepare_turn(session_id=session_id, content="继续")
+        await service.start_producer(turn)
+        await graph_started.wait()
+        if stream_events:
+            first = await turn.active_run.event_queue.get()
+            assert first is not None
+            assert first.name == "message"
+
+        result = await service.stop_session(session_id=session_id)
+        events: list[ProductRunEvent] = []
+        while True:
+            event = await turn.active_run.event_queue.get()
+            if event is None:
+                break
+            events.append(event)
+
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+        return result, events
+
+    result, events = asyncio.run(exercise())
+
+    assert result == "stopped"
+    assert [event.name for event in events] == ["done"]
+    assert events[0].data.message_id == message_id
+    assert events[0].data.capability_id == expected_capability_id
+    assert events[0].data.status == "stopped"
+    stopped_message = parent.updates[-1][1]["messages"][0]
+    assert stopped_message.id == str(message_id)
+    assert stopped_message.content == expected_content
+    assert stopped_message.additional_kwargs == {
+        "runtime_status": "stopped",
+        "capability_id": expected_capability_id,
+    }
+    assert session_service.touched == [session_id]
+
+
+def test_stop_without_active_run_is_idempotent_and_keeps_history_unchanged() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+
+    session_id = UUID("00000000-0000-0000-0000-000000001264")
+    parent = FakeParentGraph()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=parent,
+    )
+
+    result = asyncio.run(service.stop_session(session_id=session_id))
+
+    assert result == "idle"
+    assert parent.updates == []
+
+
+def test_disconnect_persists_empty_incomplete_message_without_done_event() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001267")
+    message_id = UUID("00000000-0000-0000-0000-000000001268")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id: UUID):
+            pass
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+        response_message_id_factory=lambda: message_id,
+    )
+
+    async def exercise() -> None:
+        turn = await service.prepare_turn(session_id=session_id, content="未开始即断开")
+        assert await service.cancel_run(
+            turn.active_run,
+            reason="disconnected",
+        ) is True
+        assert await turn.active_run.event_queue.get() is None
+
+    asyncio.run(exercise())
+
+    messages = parent.updates[-1][1]["messages"]
+    assert [message.content for message in messages] == ["未开始即断开", ""]
+    assert messages[-1].id == str(message_id)
+    assert messages[-1].additional_kwargs == {
+        "runtime_status": "incomplete",
+        "capability_id": None,
+    }
+
+
+def test_delayed_old_sse_start_cannot_overwrite_replacement_turn_cleanup() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001269")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id: UUID):
+            pass
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+    )
+
+    async def exercise() -> None:
+        stale_turn = await service.prepare_turn(
+            session_id=session_id,
+            content="旧请求",
+        )
+        assert await service.stop_session(session_id=session_id) == "stopped"
+
+        replacement = await service.prepare_turn(
+            session_id=session_id,
+            content="替代请求",
+        )
+        await service.start_producer(stale_turn)
+        await asyncio.sleep(0)
+        assert await service.cancel_run(
+            replacement.active_run,
+            reason="disconnected",
+        ) is True
+
+    asyncio.run(exercise())
+
+    replacement_messages = parent.updates[-1][1]["messages"]
+    assert [message.content for message in replacement_messages] == [
+        "替代请求",
+        "",
+    ]
+    assert replacement_messages[-1].additional_kwargs["runtime_status"] == (
+        "incomplete"
+    )
+
+
+def test_stop_immediately_after_attachment_recovers_prestart_cancellation() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001270")
+    response_message_id = UUID("00000000-0000-0000-0000-000000001271")
+    registry = ActiveRunRegistry()
+    parent = FakeParentGraph()
+    producer_entered = asyncio.Event()
+
+    async def never_entered_stream(state, config, *, stream_mode):
+        producer_entered.set()
+        await asyncio.Event().wait()
+        yield
+
+    parent.astream = never_entered_stream
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id: UUID):
+            pass
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+        response_message_id_factory=lambda: response_message_id,
+    )
+
+    async def exercise() -> None:
+        turn = await service.prepare_turn(
+            session_id=session_id,
+            content="绑定后立即停止",
+        )
+        await service.start_producer(turn)
+        result = await asyncio.wait_for(
+            service.stop_session(session_id=session_id),
+            timeout=1,
+        )
+
+        assert result == "stopped"
+        assert producer_entered.is_set() is False
+        done = await turn.active_run.event_queue.get()
+        assert done is not None
+        assert done.name == "done"
+        assert done.data.status == "stopped"
+        assert await turn.active_run.event_queue.get() is None
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+
+    asyncio.run(exercise())
+
+    messages = parent.updates[-1][1]["messages"]
+    assert [message.content for message in messages] == ["绑定后立即停止", ""]
+    assert messages[-1].id == str(response_message_id)
+    assert messages[-1].additional_kwargs == {
+        "runtime_status": "stopped",
+        "capability_id": None,
+    }
+
+
+@pytest.mark.parametrize("start_producer", [False, True])
+def test_stop_persistence_failure_is_reported_after_run_cleanup(
+    start_producer: bool,
+) -> None:
+    from agent_runtime.chat import ChatRuntimeError, ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry, ProductRunEvent
+
+    session_id = UUID("00000000-0000-0000-0000-000000001272")
+    registry = ActiveRunRegistry()
+    producer_started = asyncio.Event()
+
+    class FailingParentGraph(FakeParentGraph):
+        async def astream(self, state, config, *, stream_mode):
+            producer_started.set()
+            await asyncio.Event().wait()
+            yield
+
+        async def aupdate_state(self, config, values, *, as_node=None):
+            raise RuntimeError("数据库不可用")
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id: UUID):
+            pass
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=FailingParentGraph(),
+        run_registry=registry,
+    )
+
+    async def exercise() -> list[ProductRunEvent]:
+        turn = await service.prepare_turn(
+            session_id=session_id,
+            content="停止持久化失败",
+        )
+        if start_producer:
+            await service.start_producer(turn)
+            await producer_started.wait()
+
+        with pytest.raises(ChatRuntimeError) as captured:
+            await asyncio.wait_for(
+                service.stop_session(session_id=session_id),
+                timeout=1,
+            )
+        assert captured.value.code == "CHAT_STOP_PERSIST_FAILED"
+        assert captured.value.message == "未能保存停止后的回复"
+        assert turn.active_run.terminal_future.done()
+
+        events: list[ProductRunEvent] = []
+        while True:
+            event = await turn.active_run.event_queue.get()
+            if event is None:
+                break
+            events.append(event)
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+        return events
+
+    events = asyncio.run(exercise())
+
+    assert [event.name for event in events] == ["error", "done"]
+    assert events[0].data.code == "CHAT_STOP_PERSIST_FAILED"
+    assert events[1].data.status == "failed"
+
+
+@pytest.mark.parametrize("start_producer", [False, True])
+def test_stop_session_touch_failure_is_reported_after_run_cleanup(
+    start_producer: bool,
+) -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.core.errors import ApplicationError
+    from agent_runtime.runs import ActiveRunRegistry, ProductRunEvent
+
+    session_id = UUID("00000000-0000-0000-0000-000000001273")
+    registry = ActiveRunRegistry()
+    producer_started = asyncio.Event()
+    parent = FakeParentGraph()
+
+    async def blocking_stream(state, config, *, stream_mode):
+        producer_started.set()
+        await asyncio.Event().wait()
+        yield
+
+    parent.astream = blocking_stream
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FailingSessionService:
+        async def touch_session(self, *, session_id: UUID):
+            raise RuntimeError("更新时间失败")
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FailingSessionService(),
+        parent_graph=parent,
+        run_registry=registry,
+    )
+
+    async def exercise() -> list[ProductRunEvent]:
+        turn = await service.prepare_turn(
+            session_id=session_id,
+            content="停止时间更新失败",
+        )
+        if start_producer:
+            await service.start_producer(turn)
+            await producer_started.wait()
+
+        with pytest.raises(ApplicationError) as captured:
+            await asyncio.wait_for(
+                service.stop_session(session_id=session_id),
+                timeout=1,
+            )
+        assert captured.value.code == "CHAT_SESSION_TOUCH_FAILED"
+        assert turn.active_run.terminal_future.done()
+
+        events: list[ProductRunEvent] = []
+        while True:
+            event = await turn.active_run.event_queue.get()
+            if event is None:
+                break
+            events.append(event)
+        replacement = await registry.reserve(session_id, uuid4())
+        await registry.release(replacement)
+        return events
+
+    events = asyncio.run(exercise())
+
+    assert [event.name for event in events] == ["error", "done"]
+    assert events[0].data.code == "CHAT_SESSION_TOUCH_FAILED"
+    assert events[1].data.status == "failed"
+
+
+@pytest.mark.parametrize("fail_persistence", [False, True])
+def test_concurrent_stop_calls_share_the_same_terminal_result(
+    fail_persistence: bool,
+) -> None:
+    from agent_runtime.chat import ChatRuntimeError, ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRunRegistry
+
+    session_id = UUID("00000000-0000-0000-0000-000000001274")
+    registry = ActiveRunRegistry()
+    producer_started = asyncio.Event()
+    persistence_started = asyncio.Event()
+    allow_persistence = asyncio.Event()
+
+    class ControlledParentGraph(FakeParentGraph):
+        async def astream(self, state, config, *, stream_mode):
+            producer_started.set()
+            await asyncio.Event().wait()
+            yield
+
+        async def aupdate_state(self, config, values, *, as_node=None):
+            persistence_started.set()
+            await allow_persistence.wait()
+            if fail_persistence:
+                raise RuntimeError("停止终态持久化失败")
+            await super().aupdate_state(config, values, as_node=as_node)
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            return _session(requested_session_id)
+
+    class FakeSessionService:
+        async def touch_session(self, *, session_id: UUID):
+            pass
+
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=FakeSessionService(),
+        parent_graph=ControlledParentGraph(),
+        run_registry=registry,
+    )
+
+    async def exercise() -> list[object]:
+        turn = await service.prepare_turn(
+            session_id=session_id,
+            content="并发停止",
+        )
+        await service.start_producer(turn)
+        await producer_started.wait()
+
+        first = asyncio.create_task(service.stop_session(session_id=session_id))
+        await persistence_started.wait()
+        second = asyncio.create_task(service.stop_session(session_id=session_id))
+        await asyncio.sleep(0)
+        assert first.done() is False
+        assert second.done() is False
+        allow_persistence.set()
+        return await asyncio.gather(first, second, return_exceptions=True)
+
+    results = asyncio.run(exercise())
+
+    if fail_persistence:
+        assert all(isinstance(result, ChatRuntimeError) for result in results)
+        assert [result.code for result in results] == [
+            "CHAT_STOP_PERSIST_FAILED",
+            "CHAT_STOP_PERSIST_FAILED",
+        ]
+    else:
+        assert results == ["stopped", "stopped"]
 
 
 def test_cancel_waits_for_terminal_session_timestamp_update() -> None:
@@ -714,13 +1225,14 @@ def test_cancel_waits_for_terminal_session_timestamp_update() -> None:
         assert touch_cancelled.is_set() is False
         assert cancel_waiter.done() is False
         allow_touch.set()
-        assert await cancel_waiter is True
+        assert await cancel_waiter is False
         assert touch_finished.is_set()
+        assert turn.active_run.cancel_reason is None
 
     asyncio.run(exercise())
 
 
-def test_cancel_cannot_interrupt_producer_final_registry_release() -> None:
+def test_late_cancel_waits_for_producer_final_registry_release() -> None:
     from agent_runtime.chat import ChatService
     from agent_runtime.core.config import Settings
     from agent_runtime.runs import ActiveRunRegistry
@@ -730,10 +1242,12 @@ def test_cancel_cannot_interrupt_producer_final_registry_release() -> None:
     graph_started = asyncio.Event()
     allow_graph_finish = asyncio.Event()
     release_started = asyncio.Event()
+    allow_release = asyncio.Event()
     original_release = registry.release
 
     async def observed_release(run) -> None:
         release_started.set()
+        await allow_release.wait()
         await original_release(run)
 
     registry.release = observed_release
@@ -766,23 +1280,23 @@ def test_cancel_cannot_interrupt_producer_final_registry_release() -> None:
         await service.start_producer(turn)
         await graph_started.wait()
 
-        await registry._lock.acquire()
+        allow_graph_finish.set()
+        await release_started.wait()
         cancel_waiter = asyncio.create_task(
             service.cancel_run(turn.active_run, reason="disconnected")
         )
         await asyncio.sleep(0)
-        allow_graph_finish.set()
-        await release_started.wait()
-        registry._lock.release()
 
         try:
-            assert await asyncio.wait_for(cancel_waiter, timeout=1) is True
+            assert cancel_waiter.done() is False
+            allow_release.set()
+            assert await asyncio.wait_for(cancel_waiter, timeout=1) is False
             assert turn.active_run.terminal_future.done()
+            assert turn.active_run.cancel_reason is None
             replacement = await registry.reserve(session_id, uuid4())
             await registry.release(replacement)
         finally:
-            if registry._lock.locked():
-                registry._lock.release()
+            allow_release.set()
             if not turn.active_run.terminal_future.done():
                 await original_release(turn.active_run)
             await asyncio.gather(cancel_waiter, return_exceptions=True)

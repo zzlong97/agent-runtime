@@ -12,6 +12,7 @@ from agent_runtime.api.schemas.sessions import (
     SessionListResponse,
     SessionRenameRequest,
     SessionRenameResponse,
+    SessionStopResponse,
 )
 from agent_runtime.chat import ChatService
 from agent_runtime.core.errors import ApplicationError
@@ -98,6 +99,35 @@ async def rename_session(
             detail=_application_error_detail(error),
         ) from error
     return SessionRenameResponse.model_validate(session, from_attributes=True)
+
+
+@router.post(
+    "/sessions/{session_id}/stop",
+    response_model=SessionStopResponse,
+)
+async def stop_session(
+    session_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要停止当前 Run 的 Session UUID；只允许操作固定本地用户拥有的 "
+                "Session，不存在或不属于该用户时统一返回 404。"
+            )
+        ),
+    ],
+    request: Request,
+) -> SessionStopResponse:
+    """停止当前 active Run；无运行时返回幂等 idle 结果。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        status = await chat_service.stop_session(session_id=session_id)
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    return SessionStopResponse(session_id=session_id, status=status)
 
 
 @router.post("/completions")

@@ -130,3 +130,50 @@ def test_session_rename_schemas_describe_every_field_in_chinese() -> None:
             name: definition["description"]
             for name, definition in schema["properties"].items()
         } == descriptions
+
+
+def test_session_stop_response_uses_closed_stage_two_statuses() -> None:
+    from agent_runtime.api.schemas.sessions import SessionStopResponse
+
+    stopped = SessionStopResponse.model_validate(
+        {
+            "session_id": "00000000-0000-0000-0000-000000000001",
+            "status": "stopped",
+        }
+    )
+    idle = SessionStopResponse.model_validate(
+        {
+            "session_id": "00000000-0000-0000-0000-000000000001",
+            "status": "idle",
+        }
+    )
+
+    assert stopped.status == "stopped"
+    assert idle.status == "idle"
+    with pytest.raises(ValidationError):
+        SessionStopResponse.model_validate(
+            {
+                "session_id": "00000000-0000-0000-0000-000000000001",
+                "status": "failed",
+            }
+        )
+
+
+def test_session_stop_schema_describes_every_field_in_chinese() -> None:
+    from agent_runtime.api.schemas.sessions import SessionStopResponse
+
+    schema = SessionStopResponse.model_json_schema()
+
+    assert schema["additionalProperties"] is False
+    assert {
+        name: definition["description"]
+        for name, definition in schema["properties"].items()
+    } == {
+        "session_id": (
+            "Stop 所操作的 Session 稳定 UUID；只能对应固定本地用户拥有的 Session。"
+        ),
+        "status": (
+            "Stop 处理结果；stopped 表示当前 Run 已停止并完成清理，"
+            "idle 表示调用时没有可停止的 active Run。"
+        ),
+    }

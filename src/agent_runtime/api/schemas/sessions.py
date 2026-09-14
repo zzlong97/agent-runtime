@@ -1,7 +1,7 @@
 """Stage 2 Session 产品接口 Schema。"""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -127,5 +127,23 @@ class SessionRenameResponse(BaseModel):
         description=(
             "本次改名的持久化时间；用于 Session 列表首要降序排序，"
             "返回带时区的 ISO 8601 时间。"
+        )
+    )
+
+
+class SessionStopResponse(BaseModel):
+    """停止当前 Session 活动 Run 后的产品响应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: UUID = Field(
+        description=(
+            "Stop 所操作的 Session 稳定 UUID；只能对应固定本地用户拥有的 Session。"
+        )
+    )
+    status: Literal["stopped", "idle"] = Field(
+        description=(
+            "Stop 处理结果；stopped 表示当前 Run 已停止并完成清理，"
+            "idle 表示调用时没有可停止的 active Run。"
         )
     )
