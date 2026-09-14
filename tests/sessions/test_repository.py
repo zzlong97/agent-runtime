@@ -200,6 +200,47 @@ def test_session_repository_get_reports_missing_session(monkeypatch) -> None:
     assert captured.value.status_code == 404
 
 
+def test_session_repository_lists_owned_ids_for_feedback_lookup(monkeypatch) -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.sessions import repository
+
+    session_ids = [uuid4(), uuid4()]
+    executed: dict[str, object] = {}
+
+    class FakeCursor:
+        async def fetchall(self):
+            return [{"session_id": session_id} for session_id in session_ids]
+
+    class FakeConnection:
+        async def execute(self, query: str, params=None):
+            executed["query"] = " ".join(query.split())
+            executed["params"] = params
+            return FakeCursor()
+
+    @asynccontextmanager
+    async def fake_connection_factory(settings):
+        yield FakeConnection()
+
+    monkeypatch.setattr(
+        repository,
+        "open_database_connection",
+        fake_connection_factory,
+    )
+    session_repository = repository.PostgresSessionRepository(
+        Settings(_env_file=None)
+    )
+
+    result = asyncio.run(
+        session_repository.list_ids_by_user(user_id="configured-user")
+    )
+
+    assert result == session_ids
+    assert executed["query"] == (
+        "SELECT session_id FROM sessions WHERE user_id = %s"
+    )
+    assert executed["params"] == ("configured-user",)
+
+
 def test_session_repository_lists_first_page_with_stable_order_and_overfetch(
     monkeypatch,
 ) -> None:

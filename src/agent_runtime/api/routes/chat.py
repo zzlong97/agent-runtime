@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, Request
 from starlette.background import BackgroundTask
 
 from agent_runtime.api.schemas.chat import ChatCompletionRequest
+from agent_runtime.api.schemas.feedback import FeedbackRequest, FeedbackResponse
 from agent_runtime.api.schemas.messages import (
     MessageHistoryQuery,
     MessageHistoryResponse,
@@ -166,6 +167,39 @@ async def list_messages(
             detail=_application_error_detail(error),
         ) from error
     return MessageHistoryResponse.model_validate(page, from_attributes=True)
+
+
+@router.post(
+    "/messages/{message_id}/feedback",
+    response_model=FeedbackResponse,
+)
+async def submit_feedback(
+    message_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要反馈的公共 AIMessage 稳定 UUID；仅允许固定本地用户当前活动 Parent "
+                "分支中的 completed AIMessage。"
+            )
+        ),
+    ],
+    payload: FeedbackRequest,
+    request: Request,
+) -> FeedbackResponse:
+    """保存、替换或幂等取消当前活动回答的反馈。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        result = await chat_service.submit_feedback(
+            message_id=message_id,
+            action=payload.action,
+        )
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    return FeedbackResponse.model_validate(result, from_attributes=True)
 
 
 @router.post("/sessions/{session_id}/messages/{message_id}/regenerate")

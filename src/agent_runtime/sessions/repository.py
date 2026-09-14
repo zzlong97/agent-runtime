@@ -34,6 +34,12 @@ FROM sessions
 WHERE session_id = %s
 """
 
+_SELECT_SESSION_IDS_BY_USER = """
+SELECT session_id
+FROM sessions
+WHERE user_id = %s
+"""
+
 _SELECT_SESSION_PAGE = """
 SELECT session_id, user_id, title, created_at, updated_at
 FROM sessions
@@ -113,6 +119,17 @@ class PostgresSessionRepository:
                 status_code=404,
             )
         return Session(**row)
+
+    async def list_ids_by_user(self, *, user_id: str) -> list[UUID]:
+        """列出固定用户的 Session UUID，供跨活动分支定位消息使用。"""
+
+        async with open_database_connection(self._settings) as connection:
+            cursor = await connection.execute(
+                _SELECT_SESSION_IDS_BY_USER,
+                (user_id,),
+            )
+            rows = await cursor.fetchall()
+        return [UUID(str(row["session_id"])) for row in rows]
 
     async def list_page(
         self,

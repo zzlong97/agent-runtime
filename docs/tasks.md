@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-06
-Last Verified Task: S2-05
-Last Verified Commit: 4a6aaa7b147af6f269fb40236581e0681a37a798
+Current Task: S2-07
+Last Verified Task: S2-06
+Last Verified Commit: 4a0f109e5b7aaeb0fdc1d8e26f5650c55de271b3
 Blockers: None
 ```
 
@@ -977,7 +977,7 @@ GET /api/v1/chat/sessions/{session_id}/messages?before={message_id}&limit={limit
 
 ## S2-06 Regenerate / Checkpoint Fork
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-05
 
@@ -1027,13 +1027,14 @@ POST /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate
   新回答，同时旧回答 checkpoint 仍可恢复
 - 2026-09-14：独立代码复核最终无 Critical、Important 或 Minor 问题，结论为
   Ready；未跟踪 `.idea/` 继续明确排除在提交外
-- Result：S2-06 实现与工程验收完成，等待负责人确认后再进入 S2-07
+- 2026-09-14：负责人确认验收通过
+- Result：S2-06 已验收并更新为 `VERIFIED`；允许开始 S2-07
 
 ---
 
 ## S2-07 Feedback
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-06
 
@@ -1049,11 +1050,36 @@ POST /api/v1/chat/messages/{message_id}/feedback
 
 ### Acceptance
 
-- [ ] 只允许当前活动分支中的 completed AIMessage
-- [ ] like / dislike 覆盖旧值且不产生重复记录
-- [ ] cancel 删除当前反馈并保持幂等
-- [ ] unsupported / incomplete / stopped / HumanMessage 被拒绝
-- [ ] 历史查询返回当前最终反馈
+- [x] 只允许当前活动分支中的 completed AIMessage
+- [x] like / dislike 覆盖旧值且不产生重复记录
+- [x] cancel 删除当前反馈并保持幂等
+- [x] unsupported / incomplete / stopped / HumanMessage 被拒绝
+- [x] 历史查询返回当前最终反馈
+
+### Execution Evidence
+
+- 2026-09-14：新增 `POST /api/v1/chat/messages/{message_id}/feedback`；请求
+  只接受 `like`、`dislike`、`cancel`，不接受客户端 `user_id`、`session_id`
+  或其他扩展字段，路径、请求和响应 Schema 参数均提供明确中文说明
+- 2026-09-14：新增独立 PostgreSQL `message_feedback` 表，以
+  `(user_id, message_id)` 为主键并使用 `ON CONFLICT` 原子覆盖最终值；
+  `cancel` 按唯一键幂等删除，`session_id` 仅保存为 S2-08 清理索引
+- 2026-09-14：反馈写入前由 `MessageHistoryAdapter` 遍历固定本地用户各
+  Session 的最新活动 Parent checkpoint；只有当前活动分支中的 completed
+  AIMessage 通过校验，HumanMessage、unsupported、incomplete、stopped、
+  旧分支、未知消息和其他用户消息使用统一 409 错误拒绝
+- 2026-09-14：历史 Adapter 只为当前活动分支中的 completed AIMessage 批量
+  读取固定用户最终反馈；旧分支反馈记录继续保留，但不会出现在普通历史中
+- 2026-09-14：真实 PostgreSQL 端到端测试验证 like → dislike 只保留一行、
+  服务重启后可恢复最终反馈、Regenerate 后旧反馈保留且不可写/不可见、新分支
+  反馈独立，以及连续两次 cancel 均成功
+- 2026-09-14：S2-07 定向测试 `82 passed`；默认全量回归
+  `244 passed, 12 skipped`；启用真实 PostgreSQL 后全量回归
+  `255 passed, 1 skipped`，唯一跳过项为真实百炼 smoke
+- 2026-09-14：依赖锁、环境一致性、源码与测试编译、源码包和 wheel 构建、
+  OpenAPI 契约及差异检查均通过；独立代码复审无 Critical、Important 或功能性
+  Minor 问题，结论为 Ready；未跟踪 `.idea/` 继续明确排除在提交外
+- Result：S2-07 实现与工程验收完成，等待负责人确认后再进入 S2-08
 
 ---
 

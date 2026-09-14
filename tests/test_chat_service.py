@@ -1016,6 +1016,36 @@ def test_chat_service_delegates_session_rename_to_session_service() -> None:
     assert calls == [(session_id, "新标题")]
 
 
+def test_chat_service_delegates_feedback_to_feedback_service() -> None:
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.feedback import FeedbackResult
+
+    message_id = UUID("00000000-0000-0000-0000-000000002731")
+    expected_result = FeedbackResult(message_id=message_id, feedback="like")
+    calls: list[tuple[UUID, str]] = []
+
+    class FakeFeedbackService:
+        async def submit(self, *, message_id, action):
+            calls.append((message_id, action))
+            return expected_result
+
+    service = ChatService(
+        settings=Settings(_env_file=None),
+        session_repository=object(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        feedback_service=FakeFeedbackService(),
+    )
+
+    result = asyncio.run(
+        service.submit_feedback(message_id=message_id, action="like")
+    )
+
+    assert result is expected_result
+    assert calls == [(message_id, "like")]
+
+
 def test_producer_queues_product_events_and_releases_completed_run() -> None:
     from agent_runtime.chat import ChatService
     from agent_runtime.core.config import Settings
@@ -1894,6 +1924,7 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     from agent_runtime.core.config import Settings
 
     events: list[str] = []
+    captured: dict[str, object] = {}
 
     class FakeSessionRepository:
         def __init__(self, settings):
@@ -1906,9 +1937,26 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         def __init__(self, settings):
             pass
 
+    class FakeFeedbackStore:
+        def __init__(self, settings):
+            captured["feedback_store"] = self
+
+        async def setup(self) -> None:
+            events.append("feedback_setup")
+
+    class FakeHistoryAdapter:
+        def __init__(self, **kwargs):
+            captured["history_feedback_store"] = kwargs["feedback_store"]
+
+    class FakeFeedbackService:
+        def __init__(self, **kwargs):
+            captured["feedback_target_finder"] = kwargs["target_finder"]
+            captured["service_feedback_store"] = kwargs["store"]
+
     class FakeChatService:
         def __init__(self, **kwargs):
             events.append("service_created")
+            captured["chat_feedback_service"] = kwargs["feedback_service"]
 
         async def close(self) -> None:
             events.append("runs_closed")
@@ -1938,6 +1986,11 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     )
     monkeypatch.setattr(
         chat_module,
+        "PostgresFeedbackStore",
+        FakeFeedbackStore,
+    )
+    monkeypatch.setattr(
+        chat_module,
         "open_stage_one_checkpointers",
         fake_checkpointers,
     )
@@ -1964,6 +2017,16 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         "SessionService",
         lambda **kwargs: object(),
     )
+    monkeypatch.setattr(
+        chat_module,
+        "MessageHistoryAdapter",
+        FakeHistoryAdapter,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "FeedbackService",
+        FakeFeedbackService,
+    )
     monkeypatch.setattr(chat_module, "ChatService", FakeChatService)
 
     async def exercise() -> None:
@@ -1975,4 +2038,13 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
 
     asyncio.run(exercise())
 
+    assert events[:3] == [
+        "session_setup",
+        "feedback_setup",
+        "service_created",
+    ]
+    assert captured["history_feedback_store"] is captured["feedback_store"]
+    assert captured["service_feedback_store"] is captured["feedback_store"]
+    assert captured["feedback_target_finder"] is not None
+    assert captured["chat_feedback_service"] is not None
     assert events[-2:] == ["runs_closed", "checkpointers_closed"]

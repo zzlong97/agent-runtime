@@ -1,6 +1,6 @@
 """把当前活动 Parent 公共消息转换为分页产品历史。"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, cast
 from uuid import UUID
 
@@ -8,7 +8,11 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
-from agent_runtime.persistence.parent_state import PostgresParentStateStore
+from agent_runtime.feedback import PostgresFeedbackStore
+from agent_runtime.persistence.parent_state import (
+    ParentStateNotFoundError,
+    PostgresParentStateStore,
+)
 from agent_runtime.sessions.repository import PostgresSessionRepository
 
 type ProductMessageRole = Literal["user", "assistant"]
@@ -63,6 +67,7 @@ class MessageHistoryAdapter:
         settings: Settings | None = None,
         session_repository: PostgresSessionRepository | None = None,
         parent_state_store: PostgresParentStateStore | None = None,
+        feedback_store: PostgresFeedbackStore | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         self._session_repository = session_repository or PostgresSessionRepository(
@@ -71,6 +76,7 @@ class MessageHistoryAdapter:
         self._parent_state_store = parent_state_store or PostgresParentStateStore(
             self._settings
         )
+        self._feedback_store = feedback_store
 
     async def list_messages(
         self,
@@ -128,10 +134,68 @@ class MessageHistoryAdapter:
             )
 
         parent_messages = await self._parent_state_store.get_messages(session_id)
-        return tuple(
+        product_messages = tuple(
             product_message
             for message in parent_messages
             if (product_message := self._to_product_message(message)) is not None
+        )
+        if self._feedback_store is None:
+            return product_messages
+
+        completed_message_ids = tuple(
+            message.message_id
+            for message in product_messages
+            if message.role == "assistant"
+            and message.runtime_status == "completed"
+        )
+        feedback_by_message = await self._feedback_store.list_for_messages(
+            user_id=self._settings.local_user_id,
+            message_ids=completed_message_ids,
+        )
+        return tuple(
+            replace(
+                message,
+                feedback=feedback_by_message.get(message.message_id),
+            )
+            if message.message_id in feedback_by_message
+            else message
+            for message in product_messages
+        )
+
+    async def find_feedback_session(self, *, message_id: UUID) -> UUID:
+        """在固定用户所有当前活动 Parent 分支中定位可反馈回答。"""
+
+        session_ids = await self._session_repository.list_ids_by_user(
+            user_id=self._settings.local_user_id
+        )
+        for session_id in session_ids:
+            try:
+                parent_messages = await self._parent_state_store.get_messages(
+                    session_id
+                )
+            except ParentStateNotFoundError:
+                continue
+            for message in parent_messages:
+                if str(message.id) != str(message_id):
+                    continue
+                product_message = self._to_product_message(message)
+                if (
+                    product_message is not None
+                    and product_message.role == "assistant"
+                    and product_message.runtime_status == "completed"
+                ):
+                    return session_id
+                raise self._feedback_not_allowed()
+        raise self._feedback_not_allowed()
+
+    @staticmethod
+    def _feedback_not_allowed() -> MessageHistoryError:
+        """返回不泄露消息归属与历史分支信息的统一反馈错误。"""
+
+        return MessageHistoryError(
+            code="MESSAGE_FEEDBACK_NOT_ALLOWED",
+            message="仅允许反馈当前活动分支中的 completed AIMessage",
+            status_code=409,
         )
 
     def _to_product_message(

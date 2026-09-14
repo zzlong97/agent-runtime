@@ -24,6 +24,12 @@ from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.model import build_chat_model
+from agent_runtime.feedback import (
+    FeedbackAction,
+    FeedbackResult,
+    FeedbackService,
+    PostgresFeedbackStore,
+)
 from agent_runtime.graph.config import parent_thread_config
 from agent_runtime.graph.parent import build_parent_graph
 from agent_runtime.graph.router import StageOneRouter
@@ -75,6 +81,7 @@ class ChatService:
         session_service: SessionService,
         parent_graph: Any,
         history_adapter: MessageHistoryAdapter | None = None,
+        feedback_service: FeedbackService | None = None,
         checkpoint_forker: CheckpointForker | None = None,
         run_registry: ActiveRunRegistry | None = None,
         session_id_factory: Callable[[], UUID] = uuid4,
@@ -91,6 +98,7 @@ class ChatService:
             settings=self._settings,
             session_repository=session_repository,
         )
+        self._feedback_service = feedback_service
         self._checkpoint_forker = checkpoint_forker or CheckpointForker(
             history_adapter=self._history_adapter,
             parent_graph=parent_graph,
@@ -207,6 +215,25 @@ class ChatService:
             session_id=session_id,
             before=before,
             limit=limit,
+        )
+
+    async def submit_feedback(
+        self,
+        *,
+        message_id: UUID,
+        action: FeedbackAction,
+    ) -> FeedbackResult:
+        """保存、替换或取消当前活动完成回答的反馈。"""
+
+        if self._feedback_service is None:
+            raise ChatRuntimeError(
+                code="MESSAGE_FEEDBACK_UNAVAILABLE",
+                message="消息反馈服务尚未完成初始化",
+                retryable=True,
+            )
+        return await self._feedback_service.submit(
+            message_id=message_id,
+            action=action,
         )
 
     async def prepare_regeneration(
@@ -833,6 +860,8 @@ async def open_chat_service(
 
     session_repository = PostgresSessionRepository(settings)
     await session_repository.setup()
+    feedback_store = PostgresFeedbackStore(settings)
+    await feedback_store.setup()
     parent_state_store = PostgresParentStateStore(settings)
     runtime_model = model or build_chat_model(settings)
 
@@ -879,6 +908,12 @@ async def open_chat_service(
             settings=settings,
             session_repository=session_repository,
             parent_state_store=parent_state_store,
+            feedback_store=feedback_store,
+        )
+        feedback_service = FeedbackService(
+            settings=settings,
+            target_finder=history_adapter,
+            store=feedback_store,
         )
         checkpoint_forker = CheckpointForker(
             history_adapter=history_adapter,
@@ -890,6 +925,7 @@ async def open_chat_service(
             session_service=session_service,
             parent_graph=parent_graph,
             history_adapter=history_adapter,
+            feedback_service=feedback_service,
             checkpoint_forker=checkpoint_forker,
         )
         try:

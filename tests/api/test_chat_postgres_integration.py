@@ -633,3 +633,189 @@ def test_chat_endpoint_persists_partial_output_as_incomplete_in_postgres() -> No
                     await checkpointer.adelete_thread(f"{session_id}:en_to_zh")
 
     run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="set RUN_POSTGRES_TESTS=1 to run PostgreSQL integration tests",
+)
+def test_feedback_endpoint_persists_final_value_and_obeys_active_branch() -> None:
+    from agent_runtime.chat import open_chat_service
+    from agent_runtime.core.config import Settings
+    from agent_runtime.main import create_app
+    from agent_runtime.persistence.database import open_database_connection
+
+    settings = Settings()
+    session_id: UUID | None = None
+    old_message_id: UUID | None = None
+    new_message_id: UUID | None = None
+    human_message_id: UUID | None = None
+
+    async def request_client(service):
+        app = create_app(settings, chat_service=service)
+        transport = httpx.ASGITransport(app=app)
+        return httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        )
+
+    async def exercise() -> None:
+        nonlocal session_id, old_message_id, new_message_id, human_message_id
+        try:
+            model = RegeneratingStreamingFakeModel()
+            async with open_chat_service(settings, model=model) as service:
+                async with await request_client(service) as client:
+                    initial = await client.post(
+                        "/api/v1/chat/completions",
+                        json={"message": {"content": "反馈集成测试"}},
+                    )
+                    initial_frames = initial.text.strip().split("\n\n")
+                    initial_events = [
+                        json.loads(frame.splitlines()[1].removeprefix("data: "))
+                        for frame in initial_frames
+                    ]
+                    session_id = UUID(initial_events[0]["session_id"])
+                    old_message_id = UUID(initial_events[0]["message_id"])
+
+                    history = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+                    human_message_id = UUID(
+                        history.json()["items"][0]["message_id"]
+                    )
+                    assert (
+                        await client.post(
+                            f"/api/v1/chat/messages/{human_message_id}/feedback",
+                            json={"action": "like"},
+                        )
+                    ).status_code == 409
+
+                    liked = await client.post(
+                        f"/api/v1/chat/messages/{old_message_id}/feedback",
+                        json={"action": "like"},
+                    )
+                    disliked = await client.post(
+                        f"/api/v1/chat/messages/{old_message_id}/feedback",
+                        json={"action": "dislike"},
+                    )
+                    history = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+
+                assert liked.status_code == 200
+                assert liked.json()["feedback"] == "like"
+                assert disliked.status_code == 200
+                assert disliked.json()["feedback"] == "dislike"
+                assert history.json()["items"][-1]["feedback"] == "dislike"
+
+                async with open_database_connection(settings) as connection:
+                    cursor = await connection.execute(
+                        "SELECT value, COUNT(*) OVER () AS total "
+                        "FROM message_feedback "
+                        "WHERE user_id = %s AND message_id = %s",
+                        (settings.local_user_id, old_message_id),
+                    )
+                    row = await cursor.fetchone()
+                assert row == {"value": "dislike", "total": 1}
+
+            assert session_id is not None
+            assert old_message_id is not None
+            async with open_chat_service(settings, model=model) as service:
+                async with await request_client(service) as client:
+                    restored_history = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+                    assert (
+                        restored_history.json()["items"][-1]["feedback"]
+                        == "dislike"
+                    )
+
+                    regenerated = await client.post(
+                        "/api/v1/chat/sessions/"
+                        f"{session_id}/messages/{old_message_id}/regenerate"
+                    )
+                    regenerated_frames = regenerated.text.strip().split("\n\n")
+                    regenerated_events = [
+                        json.loads(frame.splitlines()[1].removeprefix("data: "))
+                        for frame in regenerated_frames
+                    ]
+                    new_message_id = UUID(regenerated_events[0]["message_id"])
+
+                    active_history = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+                    old_branch_feedback = await client.post(
+                        f"/api/v1/chat/messages/{old_message_id}/feedback",
+                        json={"action": "cancel"},
+                    )
+                    new_feedback = await client.post(
+                        f"/api/v1/chat/messages/{new_message_id}/feedback",
+                        json={"action": "like"},
+                    )
+                    liked_history = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+
+                assert active_history.json()["items"][-1]["message_id"] == str(
+                    new_message_id
+                )
+                assert active_history.json()["items"][-1]["feedback"] is None
+                assert old_branch_feedback.status_code == 409
+                assert new_feedback.status_code == 200
+                assert liked_history.json()["items"][-1]["feedback"] == "like"
+
+                async with open_database_connection(settings) as connection:
+                    cursor = await connection.execute(
+                        "SELECT value FROM message_feedback "
+                        "WHERE user_id = %s AND message_id = %s",
+                        (settings.local_user_id, old_message_id),
+                    )
+                    old_branch_row = await cursor.fetchone()
+                assert old_branch_row == {"value": "dislike"}
+
+            assert new_message_id is not None
+            async with open_chat_service(
+                settings,
+                model=StageOneStreamingFakeModel(),
+            ) as service:
+                async with await request_client(service) as client:
+                    first_cancel = await client.post(
+                        f"/api/v1/chat/messages/{new_message_id}/feedback",
+                        json={"action": "cancel"},
+                    )
+                    second_cancel = await client.post(
+                        f"/api/v1/chat/messages/{new_message_id}/feedback",
+                        json={"action": "cancel"},
+                    )
+                    final_history = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+
+                assert first_cancel.json()["feedback"] is None
+                assert second_cancel.json()["feedback"] is None
+                assert final_history.json()["items"][-1]["feedback"] is None
+        finally:
+            if session_id is not None:
+                async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM message_feedback WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.commit()
+                async with AsyncPostgresSaver.from_conn_string(
+                    settings.database_connection_string
+                ) as checkpointer:
+                    await checkpointer.adelete_thread(str(session_id))
+                    await checkpointer.adelete_thread(
+                        f"{session_id}:general_chat"
+                    )
+                    await checkpointer.adelete_thread(
+                        f"{session_id}:en_to_zh"
+                    )
+
+    run_on_psycopg_compatible_loop(exercise())

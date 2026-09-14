@@ -67,7 +67,7 @@ class ProductMessageResponse(BaseModel):
     feedback: Literal["like", "dislike"] | None = Field(
         description=(
             "固定本地用户对当前活动 AIMessage 的最终反馈，只允许 like、dislike "
-            "或尚无反馈时的 null；S2-05 尚未开放反馈写入。"
+            "或尚无反馈时的 null；只回显当前活动分支消息的最终反馈。"
         )
     )
 
