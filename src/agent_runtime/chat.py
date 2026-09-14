@@ -27,6 +27,7 @@ from agent_runtime.core.model import build_chat_model
 from agent_runtime.graph.config import parent_thread_config
 from agent_runtime.graph.parent import build_parent_graph
 from agent_runtime.graph.router import StageOneRouter
+from agent_runtime.history import MessageHistoryAdapter, MessagePage
 from agent_runtime.persistence.checkpointers import open_stage_one_checkpointers
 from agent_runtime.persistence.parent_state import PostgresParentStateStore
 from agent_runtime.runs import (
@@ -71,6 +72,7 @@ class ChatService:
         session_repository: PostgresSessionRepository,
         session_service: SessionService,
         parent_graph: Any,
+        history_adapter: MessageHistoryAdapter | None = None,
         run_registry: ActiveRunRegistry | None = None,
         session_id_factory: Callable[[], UUID] = uuid4,
         human_message_id_factory: Callable[[], UUID] = uuid4,
@@ -82,6 +84,10 @@ class ChatService:
         self._session_repository = session_repository
         self._session_service = session_service
         self._parent_graph = parent_graph
+        self._history_adapter = history_adapter or MessageHistoryAdapter(
+            settings=self._settings,
+            session_repository=session_repository,
+        )
         self._run_registry = run_registry or ActiveRunRegistry()
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
@@ -175,6 +181,21 @@ class ChatService:
         return await self._session_service.rename_session(
             session_id=session_id,
             title=title,
+        )
+
+    async def list_messages(
+        self,
+        *,
+        session_id: UUID,
+        before: UUID | None,
+        limit: int,
+    ) -> MessagePage:
+        """返回固定本地用户 Session 的当前活动分支消息。"""
+
+        return await self._history_adapter.list_messages(
+            session_id=session_id,
+            before=before,
+            limit=limit,
         )
 
     async def stop_session(
@@ -723,11 +744,17 @@ async def open_chat_service(
             session_repository=session_repository,
             parent_state_store=parent_state_store,
         )
+        history_adapter = MessageHistoryAdapter(
+            settings=settings,
+            session_repository=session_repository,
+            parent_state_store=parent_state_store,
+        )
         service = ChatService(
             settings=settings,
             session_repository=session_repository,
             session_service=session_service,
             parent_graph=parent_graph,
+            history_adapter=history_adapter,
         )
         try:
             yield service

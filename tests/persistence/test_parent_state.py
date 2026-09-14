@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
 from langchain_core.messages import HumanMessage
 
 
@@ -124,3 +125,30 @@ def test_parent_state_store_restores_public_messages(
     restored = asyncio.run(store.get_messages(session_id))
 
     assert restored == [message]
+
+
+def test_parent_state_store_reports_missing_parent_state(monkeypatch) -> None:
+    from agent_runtime.core.config import Settings
+    from agent_runtime.persistence import parent_state
+
+    class FakeCheckpointer:
+        async def aget_tuple(self, config):
+            return None
+
+    @asynccontextmanager
+    async def fake_open_checkpointer(settings):
+        yield FakeCheckpointer()
+
+    monkeypatch.setattr(
+        parent_state,
+        "_open_checkpointer",
+        fake_open_checkpointer,
+    )
+    store = parent_state.PostgresParentStateStore(Settings(_env_file=None))
+
+    with pytest.raises(parent_state.ParentStateNotFoundError) as captured:
+        asyncio.run(store.get_messages(uuid4()))
+
+    assert captured.value.code == "SESSION_STATE_NOT_FOUND"
+    assert captured.value.message == "Session 的 Parent 状态不存在"
+    assert captured.value.status_code == 409

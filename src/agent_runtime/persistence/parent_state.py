@@ -1,4 +1,4 @@
-"""Minimal Parent state persistence backed by LangGraph checkpoints."""
+"""基于 LangGraph checkpoint 的最小 Parent 状态持久化。"""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,6 +9,11 @@ from langgraph.checkpoint.base import empty_checkpoint
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from agent_runtime.core.config import Settings, get_settings
+from agent_runtime.core.errors import ApplicationError
+
+
+class ParentStateNotFoundError(ApplicationError):
+    """Session 对应的 Parent checkpoint 不存在。"""
 
 
 @asynccontextmanager
@@ -22,13 +27,13 @@ async def _open_checkpointer(
 
 
 class PostgresParentStateStore:
-    """Persist Parent public state without creating a second message store."""
+    """持久化 Parent 公共状态，不创建第二套消息存储。"""
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """Initialize LangGraph's PostgreSQL checkpoint tables."""
+        """初始化 LangGraph 的 PostgreSQL checkpoint 表。"""
 
         async with _open_checkpointer(self._settings) as checkpointer:
             await checkpointer.setup()
@@ -38,7 +43,7 @@ class PostgresParentStateStore:
         session_id: UUID,
         message: HumanMessage,
     ) -> None:
-        """Create the Parent checkpoint containing the first HumanMessage."""
+        """创建包含第一条 HumanMessage 的 Parent checkpoint。"""
 
         async with _open_checkpointer(self._settings) as checkpointer:
             version = checkpointer.get_next_version(None, None)
@@ -63,7 +68,7 @@ class PostgresParentStateStore:
             )
 
     async def get_messages(self, session_id: UUID) -> list[BaseMessage]:
-        """Restore the Parent's authoritative public message list."""
+        """恢复 Parent 权威公共消息列表。"""
 
         async with _open_checkpointer(self._settings) as checkpointer:
             checkpoint_tuple = await checkpointer.aget_tuple(
@@ -73,5 +78,11 @@ class PostgresParentStateStore:
                         "checkpoint_ns": "",
                     }
                 }
+            )
+        if checkpoint_tuple is None:
+            raise ParentStateNotFoundError(
+                code="SESSION_STATE_NOT_FOUND",
+                message="Session 的 Parent 状态不存在",
+                status_code=409,
             )
         return list(checkpoint_tuple.checkpoint["channel_values"]["messages"])

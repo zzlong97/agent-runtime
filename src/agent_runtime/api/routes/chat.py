@@ -7,6 +7,10 @@ from fastapi import APIRouter, HTTPException, Path, Query, Request
 from starlette.background import BackgroundTask
 
 from agent_runtime.api.schemas.chat import ChatCompletionRequest
+from agent_runtime.api.schemas.messages import (
+    MessageHistoryQuery,
+    MessageHistoryResponse,
+)
 from agent_runtime.api.schemas.sessions import (
     SessionListQuery,
     SessionListResponse,
@@ -128,6 +132,40 @@ async def stop_session(
             detail=_application_error_detail(error),
         ) from error
     return SessionStopResponse(session_id=session_id, status=status)
+
+
+@router.get(
+    "/sessions/{session_id}/messages",
+    response_model=MessageHistoryResponse,
+)
+async def list_messages(
+    session_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要读取当前活动 Parent 分支历史的 Session UUID；只允许读取固定"
+                "本地用户拥有的 Session，不存在或不属于该用户时统一返回 404。"
+            )
+        ),
+    ],
+    request: Request,
+    query: Annotated[MessageHistoryQuery, Query()],
+) -> MessageHistoryResponse:
+    """返回过滤内部状态后的当前活动公共消息。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        page = await chat_service.list_messages(
+            session_id=session_id,
+            before=query.before,
+            limit=query.limit,
+        )
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    return MessageHistoryResponse.model_validate(page, from_attributes=True)
 
 
 @router.post("/completions")

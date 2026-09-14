@@ -101,9 +101,10 @@ def test_chat_endpoint_streams_and_persists_public_messages_in_postgres() -> Non
 
     settings = Settings()
     session_id: UUID | None = None
+    history_human_message_id: str | None = None
 
     async def exercise() -> None:
-        nonlocal session_id
+        nonlocal history_human_message_id, session_id
         try:
             async with open_chat_service(
                 settings,
@@ -151,6 +152,40 @@ def test_chat_endpoint_streams_and_persists_public_messages_in_postgres() -> Non
                     "general_chat"
                 }
 
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url="http://testserver",
+                ) as history_client:
+                    history_response = await history_client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+                assert history_response.status_code == 200
+                history_body = history_response.json()
+                assert history_body["next_before"] is None
+                assert len(history_body["items"]) == 2
+                history_human_message_id = history_body["items"][0][
+                    "message_id"
+                ]
+                assert str(UUID(history_human_message_id)) == (
+                    history_human_message_id
+                )
+                assert history_body["items"][0] == {
+                    "message_id": history_human_message_id,
+                    "role": "user",
+                    "content": "介绍一下测试运行时",
+                    "runtime_status": None,
+                    "capability_id": None,
+                    "feedback": None,
+                }
+                assert history_body["items"][1] == {
+                    "message_id": str(message_id),
+                    "role": "assistant",
+                    "content": "测试回复",
+                    "runtime_status": "completed",
+                    "capability_id": "general_chat",
+                    "feedback": None,
+                }
+
                 restored_session = await PostgresSessionRepository(settings).get(
                     session_id
                 )
@@ -183,6 +218,7 @@ def test_chat_endpoint_streams_and_persists_public_messages_in_postgres() -> Non
                 }
                 assert parent_messages[0].id is not None
                 assert str(UUID(parent_messages[0].id)) == parent_messages[0].id
+                assert parent_messages[0].id == history_human_message_id
         finally:
             if session_id is not None:
                 async with open_database_connection(settings) as connection:

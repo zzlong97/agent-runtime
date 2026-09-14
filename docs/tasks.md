@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-04
-Last Verified Task: S2-03
-Last Verified Commit: f17e2fe6ca3eed4f92fe1659d5236588580ebeff
+Current Task: S2-05
+Last Verified Task: S2-04
+Last Verified Commit: 26c47ea966eb6bdcbbc2571279b4bc9ef5ec1506
 Blockers: None
 ```
 
@@ -870,7 +870,7 @@ active_runs[session_id] = ActiveRun
 
 ## S2-04 Stop
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-03
 
@@ -917,13 +917,14 @@ POST /api/v1/chat/sessions/{session_id}/stop
 - 2026-09-14：依赖锁、环境依赖一致性、源码与测试编译、源码包和 wheel 构建、
   差异检查均通过；两轮独立代码复审后的最终结论为 Ready，无 Critical 或
   Important 问题，未跟踪 `.idea/` 明确排除在提交外
-- Result：S2-04 实现与工程验收完成，等待负责人确认后再进入 S2-05
+- 2026-09-14：负责人确认验收通过
+- Result：S2-04 已验收并更新为 `VERIFIED`；允许开始 S2-05
 
 ---
 
 ## S2-05 历史消息 Adapter
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-04
 
@@ -939,12 +940,37 @@ GET /api/v1/chat/sessions/{session_id}/messages?before={message_id}&limit={limit
 
 ### Acceptance
 
-- [ ] 页内消息按时间正序返回
-- [ ] before 只能引用当前 Session 活动历史中的 message_id
-- [ ] completed / unsupported / incomplete / stopped 均正确展示
-- [ ] 返回 capability_id 和当前反馈
-- [ ] 兼容缺少 Stage 2 元数据的 Stage 1 消息
-- [ ] 不暴露 StateSnapshot、节点、tasks 或 checkpoint metadata
+- [x] 页内消息按时间正序返回
+- [x] before 只能引用当前 Session 活动历史中的 message_id
+- [x] completed / unsupported / incomplete / stopped 均正确展示
+- [x] 返回 capability_id 和当前反馈
+- [x] 兼容缺少 Stage 2 元数据的 Stage 1 消息
+- [x] 不暴露 StateSnapshot、节点、tasks 或 checkpoint metadata
+
+### Execution Evidence
+
+- 2026-09-14：新增 `GET /api/v1/chat/sessions/{session_id}/messages`；查询参数
+  `before` 为可空消息 UUID，`limit` 默认 50 且限制为 1～100，额外参数和非法
+  UUID 在进入服务前被拒绝
+- 2026-09-14：新增 `MessageHistoryAdapter`，先验证固定本地用户，再从未指定
+  checkpoint ID 的 Parent `aget_tuple()` 读取最新活动 checkpoint；过滤内部消息、
+  转换 Product Message DTO 并按 `before` 在内存中独占切片，页内保持对话正序
+- 2026-09-14：Product Message 仅返回 `message_id`、`role`、`content`、
+  `runtime_status`、`capability_id` 和 `feedback`；四种 AI 终态均可展示，
+  HumanMessage 状态为空，缺少 Stage 2 元数据的旧 AIMessage 按 completed 和空
+  capability 兼容
+- 2026-09-14：S2-07 前系统不存在可写反馈，因此历史接口准确返回当前空反馈；
+  未提前创建 Feedback Store、反馈写入、Regenerate 或分支浏览能力
+- 2026-09-14：无效或不在当前活动产品历史中的 `before` 返回 HTTP 400
+  `MESSAGE_BEFORE_INVALID`；不存在或不属于固定用户的 Session 统一返回 404，
+  Session 行存在但 Parent 状态缺失时返回稳定 409
+- 2026-09-14：默认全量回归 `194 passed, 10 skipped`；启用真实 PostgreSQL 后
+  全量回归 `203 passed, 1 skipped`，唯一跳过项为真实百炼 smoke；数据库测试
+  确认接口可恢复最新 Parent checkpoint 中的完整 Human + completed AI 历史
+- 2026-09-14：依赖锁、环境依赖一致性、源码与测试编译、源码包和 wheel 构建、
+  OpenAPI 参数说明及差异检查均通过；独立代码复核无 Critical 或 Important
+  问题，结论为 Ready；未跟踪 `.idea/` 继续排除在提交外
+- Result：S2-05 实现与工程验收完成，等待负责人确认后再进入 S2-06
 
 ---
 
