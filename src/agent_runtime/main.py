@@ -2,9 +2,12 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from agent_runtime import __version__
 from agent_runtime.api.routes.chat import router as chat_router
@@ -12,6 +15,9 @@ from agent_runtime.api.routes.health import router as health_router
 from agent_runtime.chat import open_chat_service
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.logging import configure_logging
+
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def create_app(
@@ -47,6 +53,18 @@ def create_app(
         application.state.chat_service = chat_service
     application.include_router(health_router)
     application.include_router(chat_router)
+    application.mount(
+        "/assets",
+        StaticFiles(directory=_STATIC_DIR / "assets", check_dir=False),
+        name="chat-assets",
+    )
+
+    @application.get("/chat", include_in_schema=False)
+    async def chat_page() -> FileResponse:
+        """返回已构建且可离线部署的聊天演示页面。"""
+
+        return FileResponse(_STATIC_DIR / "index.html", media_type="text/html")
+
     return application
 
 

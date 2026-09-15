@@ -228,7 +228,30 @@ ChildResult
 
 ---
 
-## 5. 文档导航
+## 5. 运行聊天演示页面
+
+已提交的生产构建由 FastAPI 同源托管，不依赖 Node.js。启动服务：
+
+```powershell
+uv run python -m agent_runtime
+```
+
+然后访问 `http://127.0.0.1:8000/chat`。
+
+只有修改前端源码后才需要重新安装依赖并构建：
+
+```powershell
+cd frontend
+npm install
+npm run build
+```
+
+构建产物会写入 `src/agent_runtime/static/`，并由 FastAPI 通过 `/chat` 和
+`/assets/*` 提供。
+
+---
+
+## 6. 文档导航
 
 - [AGENTS.md](./AGENTS.md)：Codex / Agent 工程操作规范
 - [docs/requirements.md](./docs/requirements.md)：需求与阶段边界
@@ -238,7 +261,7 @@ ChildResult
 
 ---
 
-## 6. 当前开发规则
+## 7. 当前开发规则
 
 任何开发开始前必须先阅读：
 

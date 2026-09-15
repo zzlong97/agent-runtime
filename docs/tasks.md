@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-08
-Last Verified Task: S2-07
-Last Verified Commit: 0786bfef56760e3bed4d99ff013e593226172c15
+Current Task: S2-09
+Last Verified Task: S2-08
+Last Verified Commit: 5bd851ea48aea1fcd2e933eb4237a30401b52b9b
 Blockers: None
 ```
 
@@ -1086,7 +1086,7 @@ POST /api/v1/chat/messages/{message_id}/feedback
 
 ## S2-08 Session 删除
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-07
 
@@ -1140,13 +1140,14 @@ stop and wait
 - 2026-09-14：依赖锁、环境一致性、源码与测试编译、源码包和 wheel 构建及差异
   检查均通过；两轮独立复审发现的 Feedback/DELETE 竞态、取消窗口和停止错误契约
   均已修复，最终结论为 Ready；未跟踪 `.idea/` 继续明确排除在提交外
-- Result：S2-08 实现与工程验收完成，等待负责人确认后再进入 S2-09
+- 2026-09-14：负责人确认验收通过
+- Result：S2-08 已验收并更新为 `VERIFIED`；允许开始 S2-09
 
 ---
 
 ## S2-09 完整聊天演示页面
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-08
 
@@ -1159,15 +1160,36 @@ stop and wait
 
 ### Acceptance
 
-- [ ] 页面支持会话新建、分页、选择、改名和二次确认删除
-- [ ] 页面支持流式聊天、Stop、Regenerate 和 Feedback
-- [ ] 运行面板显示 session_id、message_id、capability_id 与终态
-- [ ] Markdown 安全渲染，原始 HTML 不直接执行
-- [ ] 通用 UI 使用第三方开源组件，不自研组件库
-- [ ] HTML、JavaScript/JSX、API 模块和 CSS 源码分离
-- [ ] 构建产物包含独立且带内容哈希的 JS / CSS
-- [ ] `/chat` 和 `/assets/*` 可由 FastAPI 直接访问
-- [ ] 生产演示不要求安装 Node
+- [x] 页面支持会话新建、分页、选择、改名和二次确认删除
+- [x] 页面支持流式聊天、Stop、Regenerate 和 Feedback
+- [x] 运行面板显示 session_id、message_id、capability_id 与终态
+- [x] Markdown 安全渲染，原始 HTML 不直接执行
+- [x] 通用 UI 使用第三方开源组件，不自研组件库
+- [x] HTML、JavaScript/JSX、API 模块和 CSS 源码分离
+- [x] 构建产物包含独立且带内容哈希的 JS / CSS
+- [x] `/chat` 和 `/assets/*` 可由 FastAPI 直接访问
+- [x] 生产演示不要求安装 Node
+
+### Execution Evidence
+
+- 2026-09-15：新增 React 19 + Vite 8 + Ant Design / Ant Design X 双栏聊天页面，
+  完成 Session 游标分页、选择、新建、改名、二次确认删除，以及流式聊天、Stop、
+  Regenerate、like、dislike、cancel 和可折叠运行状态面板
+- 2026-09-15：前端仅消费 Stage 2 产品 DTO 与 `message/error/done` POST SSE；
+  正常终态及异常断流后均回读服务端活动分支，Session 和消息请求均具备代次保护，
+  避免旧响应覆盖权威状态
+- 2026-09-15：使用 `react-markdown + remark-gfm + rehype-highlight` 安全渲染
+  Markdown 与代码高亮；原始 HTML 不执行，危险协议被过滤，外链增加隔离属性
+- 2026-09-15：Vite 生产构建输出独立 HTML 与带内容哈希的 JS / CSS，并提交到
+  `src/agent_runtime/static/`；FastAPI 同源提供 `/chat` 与 `/assets/*`，构建后的
+  Python 生产演示不依赖 Node.js
+- 2026-09-15：Vitest + React Testing Library 共 20 项测试通过；默认 pytest 共
+  271 项通过、13 项按配置跳过；Vite 构建、依赖锁检查、环境一致性检查、源码编译、
+  sdist/wheel 构建与 wheel 静态资源检查均通过
+- 2026-09-15：两轮独立审查发现的代码高亮缺失、异常断流权威状态回读、消息与
+  Session 请求竞态及运行期删除竞态均已修复；最终复核无 Critical、Important 或
+  Minor 问题，结论为 Ready
+- Result：S2-09 实现与工程验收完成，等待负责人确认后再进入 S2-10
 
 ---
 
