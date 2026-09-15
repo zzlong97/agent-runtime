@@ -13,8 +13,9 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 
 ## 1. 当前定位
 
-当前项目已完成 **Stage 1：最小 Agent Runtime**，正在进入
-**Stage 2：完整聊天产品能力与演示页面**。
+当前项目已完成 **Stage 1：最小 Agent Runtime**，并已实现
+**Stage 2：完整聊天产品能力与演示页面**。Stage 2 的任务状态和最新验收证据
+以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
 的 OpenAI 兼容接口接入；自动化测试默认使用 Fake Model，真实模型只用于
@@ -41,7 +42,7 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-Stage 1 不提前建设 Capability 平台、权限系统、动态挂载、HITL、文件能力、复杂 Agent 编排等后续功能。
+Stage 2 不提前建设 Capability 平台、权限系统、动态挂载、HITL、文件能力、复杂 Agent 编排等后续功能。
 
 ---
 
@@ -251,7 +252,59 @@ npm run build
 
 ---
 
-## 6. 文档导航
+## 6. 分层验收
+
+默认后端验收使用 Fake Model，不读取真实模型密钥，也不访问模型网络：
+
+```powershell
+uv run pytest -q
+```
+
+前端组件、构建和静态资源边界验收：
+
+```powershell
+cd frontend
+npm install
+npm test
+npm run build
+cd ..
+uv run pytest -q tests/test_static_chat.py
+```
+
+PostgreSQL 集成测试需要根目录 `.env` 中的 `DATABASE_URL` 指向已创建且可连接的
+测试数据库，然后显式启用：
+
+```powershell
+$env:RUN_POSTGRES_TESTS='1'
+uv run pytest -q
+```
+
+可选浏览器端到端验收使用同一 PostgreSQL，并注入确定性 Fake Model。测试服务
+为每次运行生成独立端口和唯一的 `stage-two-playwright-*` 测试用户；启动时清理
+本运行遗留数据，并在每个用例结束及正常关闭时再次只清理该运行的数据：
+
+```powershell
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
+如果环境已安装受 Playwright 支持的系统浏览器，也可显式指定通道，例如 Windows
+上的 Edge：
+
+```powershell
+$env:PLAYWRIGHT_BROWSER_CHANNEL='msedge'
+npm run test:e2e
+```
+
+并发或固定环境也可通过 `PLAYWRIGHT_E2E_PORT` 和 `PLAYWRIGHT_E2E_RUN_ID`
+显式指定互不冲突的端口与运行标识。
+
+真实百炼调用仍仅通过独立 smoke test 显式启用，不属于默认或端到端验收门禁。
+
+---
+
+## 7. 文档导航
 
 - [AGENTS.md](./AGENTS.md)：Codex / Agent 工程操作规范
 - [docs/requirements.md](./docs/requirements.md)：需求与阶段边界
@@ -261,7 +314,7 @@ npm run build
 
 ---
 
-## 7. 当前开发规则
+## 8. 当前开发规则
 
 任何开发开始前必须先阅读：
 

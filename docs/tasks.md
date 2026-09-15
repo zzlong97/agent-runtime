@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2
-Current Task: S2-09
-Last Verified Task: S2-08
-Last Verified Commit: 5bd851ea48aea1fcd2e933eb4237a30401b52b9b
+Current Task: S2-10
+Last Verified Task: S2-09
+Last Verified Commit: 4c9922ce9de319b3f9966f76f7e2d1c95cc302f1
 Blockers: None
 ```
 
@@ -1147,7 +1147,7 @@ stop and wait
 
 ## S2-09 完整聊天演示页面
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-08
 
@@ -1189,27 +1189,64 @@ stop and wait
 - 2026-09-15：两轮独立审查发现的代码高亮缺失、异常断流权威状态回读、消息与
   Session 请求竞态及运行期删除竞态均已修复；最终复核无 Critical、Important 或
   Minor 问题，结论为 Ready
-- Result：S2-09 实现与工程验收完成，等待负责人确认后再进入 S2-10
+- 2026-09-15：负责人确认验收通过
+- Result：S2-09 已验收并更新为 `VERIFIED`；允许开始 S2-10
 
 ---
 
 ## S2-10 Stage 2 集成验收
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2-01 ~ S2-09
 
 ### Acceptance
 
-- [ ] 默认 `uv run pytest -q` 使用 Fake Model 并全部通过
-- [ ] 前端 Vitest + React Testing Library 全部通过
-- [ ] `npm run build` 成功且静态资源边界检查通过
-- [ ] 可选 PostgreSQL 后端集成测试通过
-- [ ] 可选 Playwright 真实浏览器端到端验收通过
-- [ ] 普通聊天、英译汉和有限 OUT_OF_SCOPE 回流未回归
-- [ ] 10/5 上下文规则继续排除 unsupported / incomplete / stopped
-- [ ] 未实现 Stage 3 或 Future 能力
-- [ ] README 和全部项目文档与实现一致
+- [x] 默认 `uv run pytest -q` 使用 Fake Model 并全部通过
+- [x] 前端 Vitest + React Testing Library 全部通过
+- [x] `npm run build` 成功且静态资源边界检查通过
+- [x] 可选 PostgreSQL 后端集成测试通过
+- [x] 可选 Playwright 真实浏览器端到端验收通过
+- [x] 普通聊天、英译汉和有限 OUT_OF_SCOPE 回流未回归
+- [x] 10/5 上下文规则继续排除 unsupported / incomplete / stopped
+- [x] 未实现 Stage 3 或 Future 能力
+- [x] README 和全部项目文档与实现一致
+
+### Execution Evidence
+
+- 2026-09-15：新增显式运行的 Playwright 1.63 浏览器验收；真实启动 FastAPI
+  生产构建、PostgreSQL 和确定性 Fake Model，每次运行使用独立端口和唯一测试
+  用户隔离数据，并在启动前、用例结束及正常关闭时执行幂等清理
+- 2026-09-15：真实 Edge 浏览器完成普通聊天、like、Regenerate、英译汉有限回流、
+  Session 改名、新建后重新选择、双 Capability 均拒绝后的 unsupported、二次确认
+  删除，以及部分输出期间 Stop 并收到 stopped 终态；`1 passed`
+- 2026-09-15：浏览器验收发现 S2-09 自定义 vendor 分组破坏 React / Ant Design
+  初始化顺序并导致 `/chat` 白屏；移除该分组后生产页面真实挂载，构建继续输出
+  独立且带内容哈希的 HTML、JavaScript 和 CSS，FastAPI 静态资源边界测试
+  `2 passed`
+- 2026-09-15：Vitest 收集范围限定到 `src/**/*.test.{js,jsx}`，与 Playwright
+  用例互不混入；从 lockfile 执行 `npm ci` 后，Vitest + React Testing Library
+  `20 passed`，`npm run build` 成功
+- 2026-09-15：默认 `uv run pytest -q` 使用 Fake Model，结果为
+  `271 passed, 13 skipped`；其中 12 项为显式 PostgreSQL 测试，1 项为真实百炼
+  smoke，不读取真实模型密钥或访问模型网络
+- 2026-09-15：初始化并连接 `agent_runtime` PostgreSQL 测试数据库后，显式启用
+  `RUN_POSTGRES_TESTS=1` 的完整后端验收为 `283 passed, 1 skipped`，唯一跳过项为
+  真实百炼 smoke
+- 2026-09-15：Stage 1 主链路、上下文及静态资源定向回归为
+  `14 passed, 1 skipped`；普通聊天、英译汉、有限 OUT_OF_SCOPE 回流与 10/5
+  上下文排除 unsupported / incomplete / stopped 均未回归
+- 2026-09-15：`uv lock --check`、`uv pip check`、源码与测试编译、sdist/wheel
+  构建、wheel 中哈希 JS/CSS 资源检查、`git diff --check` 与 Stage 3 / Future
+  范围审计均通过
+- 2026-09-15：独立审查发现固定 Playwright 端口和测试用户无法隔离多进程；改为
+  运行级端口、user_id 与 afterEach API 清理，并固定主进程与 worker 的配置继承；
+  两份真实 Edge 验收使用自动独立端口并发执行，结果均为 `1 passed`，结束后无
+  服务进程且专用测试 Session 残留为 0
+- 2026-09-15：独立终审确认无剩余 Critical、Important 或 Minor 问题，结论为
+  Ready
+- Result：S2-10 实现与工程验收完成，等待负责人确认后再将 Stage 2 更新为
+  `VERIFIED`；禁止提前进入 S3-01
 
 ---
 

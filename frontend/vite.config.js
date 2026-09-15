@@ -22,23 +22,9 @@ export default defineConfig(({ mode }) => ({
     outDir: '../src/agent_runtime/static',
     emptyOutDir: true,
     assetsDir: 'assets',
-    rolldownOptions: {
-      output: {
-        codeSplitting: {
-          groups: [
-            {
-              name: 'vendor',
-              test: /node_modules[\\/]/,
-              minSize: 100_000,
-              maxSize: 400_000,
-              priority: 10,
-            },
-          ],
-        },
-      },
-    },
   },
   test: {
+    include: ['src/**/*.test.{js,jsx}'],
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
     css: true,
