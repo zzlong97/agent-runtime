@@ -231,13 +231,36 @@ ChildResult
 
 ## 5. 运行聊天演示页面
 
-已提交的生产构建由 FastAPI 同源托管，不依赖 Node.js。启动服务：
+本地 PostgreSQL 由 Windows Docker Desktop 承载。先确认 Docker Desktop 已启动，
+然后在项目根目录启动依赖：
 
 ```powershell
-uv run python -m agent_runtime
+docker compose up -d postgres
+docker compose ps
+```
+
+PostgreSQL 使用 `agent-runtime-postgres` 命名卷持久化。普通停止和再次启动不会
+删除数据：
+
+```powershell
+docker compose stop postgres
+docker compose up -d postgres
+```
+
+已提交的前端生产构建由 FastAPI 同源托管，不依赖 Node.js。数据库状态为
+`healthy` 后启动服务：
+
+```powershell
+uv run --env-file .env python -m agent_runtime
 ```
 
 然后访问 `http://127.0.0.1:8000/chat`。
+
+只有明确需要清空全部本地会话、反馈和 Checkpoint 时才删除命名卷：
+
+```powershell
+docker compose down --volumes
+```
 
 只有修改前端源码后才需要重新安装依赖并构建：
 

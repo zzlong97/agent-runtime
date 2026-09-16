@@ -1245,6 +1245,18 @@ stop and wait
   服务进程且专用测试 Session 残留为 0
 - 2026-09-15：独立终审确认无剩余 Critical、Important 或 Minor 问题，结论为
   Ready
+- 2026-09-16：本地 PostgreSQL 从便携版迁移到 Windows Docker Desktop；项目根
+  目录新增最小 `compose.yaml`，仅部署 `postgres:17`，端口只绑定
+  `127.0.0.1:5432`，数据使用固定命名卷 `agent-runtime-postgres` 持久化
+- 2026-09-16：负责人明确允许丢弃迁移前历史数据；旧便携版 PostgreSQL 目录和旧
+  Docker 测试卷已删除，新容器初始化 `agent_runtime` 数据库及 `runtime` 用户，
+  健康检查通过
+- 2026-09-16：命名卷写入探针数据后重启容器仍可读取，随后已清理探针表；后端
+  自动创建 Session、Feedback 和 Checkpoint 共 6 张表，`/health` 与 `/chat`
+  均返回 200
+- 2026-09-16：显式启用 `RUN_POSTGRES_TESTS=1` 的完整后端验收为
+  `283 passed, 1 skipped`，唯一跳过项为真实百炼 smoke；Compose 配置解析、
+  数据库连通性和 PostgreSQL 17 运行版本均已验证
 - Result：S2-10 实现与工程验收完成，等待负责人确认后再将 Stage 2 更新为
   `VERIFIED`；禁止提前进入 S3-01
 

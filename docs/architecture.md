@@ -445,6 +445,10 @@ data: {"session_id": "...", "status": "completed|unsupported|failed"}
 
 ```text
 DATABASE_URL
+POSTGRES_USER
+POSTGRES_PASSWORD
+POSTGRES_DB
+POSTGRES_PORT
 DASHSCOPE_API_KEY
 LLM_BASE_URL
 LLM_MODEL
@@ -454,6 +458,11 @@ LOG_LEVEL
 
 `.env.example` 只保留字段名，`.env` 必须被 Git 忽略。百炼 API Key、Base
 URL 和模型必须与所选地域及业务空间匹配。
+
+Windows 本地开发的外部依赖统一由 Docker Desktop 和项目根目录
+`compose.yaml` 提供。PostgreSQL 只绑定本机回环地址，并使用
+`agent-runtime-postgres` 命名卷持久化；AgentRuntime 应用本身继续在主机通过
+`uv` 启动。
 
 ## 测试
 

@@ -280,6 +280,11 @@ control_signal
 
 使用 PostgreSQL。
 
+本地外部依赖统一通过 Windows Docker Desktop 和项目根目录 `compose.yaml`
+部署，不使用本机安装或便携版服务。PostgreSQL 使用名为
+`agent-runtime-postgres` 的 Docker 命名卷持久化；除非负责人明确要求重置，
+不得删除该卷。
+
 Stage 1：
 
 - Parent 使用持久化 Checkpointer
