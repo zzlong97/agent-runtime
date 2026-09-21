@@ -1,9 +1,10 @@
 """Environment-backed application settings."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
-from pydantic import AnyHttpUrl, PostgresDsn, SecretStr, field_validator
+from pydantic import AnyHttpUrl, Field, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
@@ -28,6 +29,13 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     local_user_id: str = "local-user"
     log_level: str = "INFO"
+    log_dir: Path = Field(
+        default=Path("logs"),
+        description=(
+            "按日期保存 AgentRuntime 中文业务日志的目录；默认使用项目运行目录下的 "
+            "logs，日志文件名为 agent-runtime-YYYY-MM-DD.log。"
+        ),
+    )
 
     @field_validator("database_url")
     @classmethod

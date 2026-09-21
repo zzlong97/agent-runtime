@@ -1,6 +1,7 @@
 """普通聊天能力与 Parent Graph 之间的固定 Stage 1 适配层。"""
 
 from collections.abc import Callable
+import logging
 from uuid import UUID, uuid4
 
 from langchain_core.messages import AIMessage, BaseMessage
@@ -8,6 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 
 from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
+from agent_runtime.core.logging import log_business_event
 from agent_runtime.graph.child_result import CapabilityInvocation
 from agent_runtime.graph.config import (
     child_thread_config,
@@ -17,6 +19,8 @@ from agent_runtime.graph.config import (
 from agent_runtime.graph.context import build_refreshed_child_input
 from agent_runtime.graph.parent import build_public_ai_message
 from agent_runtime.graph.state import ParentState
+
+logger = logging.getLogger(__name__)
 
 
 class GeneralChatAdapter:
@@ -58,12 +62,28 @@ class GeneralChatAdapter:
 
         session_id = session_id_from_parent_config(config)
         message_id = public_message_id_from_parent_config(config)
+        log_business_event(
+            logger,
+            "普通聊天能力入口",
+            session_id=session_id,
+            message_id=message_id,
+            capability_id="general_chat",
+        )
         result = await self._capability.run(
             messages=build_refreshed_child_input(state["messages"]),
             config=child_thread_config(session_id, "general_chat"),
             emit=emit,
         )
         if result.status != "completed":
+            log_business_event(
+                logger,
+                "普通聊天能力出口",
+                session_id=session_id,
+                message_id=message_id,
+                capability_id="general_chat",
+                status=result.status,
+                control_signal=result.control_signal,
+            )
             return CapabilityInvocation(result=result)
         public_message = build_public_ai_message(
             emitted_messages,
@@ -79,6 +99,14 @@ class GeneralChatAdapter:
                     }
                 }
             )
+        )
+        log_business_event(
+            logger,
+            "普通聊天能力出口",
+            session_id=session_id,
+            message_id=public_message.id,
+            capability_id="general_chat",
+            status=result.status,
         )
         return CapabilityInvocation(
             result=result,

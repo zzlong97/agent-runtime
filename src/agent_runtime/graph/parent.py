@@ -1,6 +1,8 @@
 """Stage 1 Parent Graph 的固定调度与有限回流控制。"""
 
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+import logging
+from time import perf_counter
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
@@ -16,12 +18,14 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Checkpointer, Command
 
 from agent_runtime.core.errors import ApplicationError
+from agent_runtime.core.logging import log_business_event
 from agent_runtime.graph.child_result import CapabilityInvocation
 from agent_runtime.graph.config import public_message_id_from_parent_config
 from agent_runtime.graph.state import ParentState
 
 UNSUPPORTED_REPLY = "抱歉，当前能力无法处理这个请求。"
 _CAPABILITY_IDS = ("general_chat", "en_to_zh")
+logger = logging.getLogger(__name__)
 
 
 class ParentGraphError(ApplicationError):
@@ -37,6 +41,14 @@ type CapabilityNode = Callable[
     Awaitable[CapabilityInvocation],
 ]
 type ChildMessageEvent = tuple[BaseMessage, dict[str, Any]]
+
+
+def _config_field(config: RunnableConfig, field_name: str) -> str | None:
+    """宽容读取仅用于日志关联的 RunnableConfig 字段。"""
+
+    configurable = config.get("configurable", {})
+    value = configurable.get(field_name)
+    return None if value is None else str(value)
 
 
 async def forward_child_message_stream(
@@ -92,6 +104,11 @@ def build_parent_graph(
     ) -> dict[str, Any]:
         """在每个新 HumanMessage 开始时重置本轮控制状态。"""
 
+        log_business_event(
+            logger,
+            "Parent轮次开始",
+            current_capability_id=state.get("resolved_capability_id"),
+        )
         return {
             "rejected_capability_ids": [],
             "completion_status": None,
@@ -112,6 +129,13 @@ def build_parent_graph(
     ) -> dict[str, Any]:
         """调用 Router，并禁止选择本轮已经拒绝的能力。"""
 
+        session_id = _config_field(config, "thread_id")
+        log_business_event(
+            logger,
+            "Parent路由开始",
+            session_id=session_id,
+            rejected_capability_ids=state["rejected_capability_ids"],
+        )
         update = await route(state, config)
         capability_id = update.get("resolved_capability_id")
         if capability_id not in _CAPABILITY_IDS:
@@ -124,6 +148,12 @@ def build_parent_graph(
                 code="PARENT_RESELECTED_CAPABILITY",
                 message="Router 选择了本轮已经拒绝的能力",
             )
+        log_business_event(
+            logger,
+            "Parent路由完成",
+            session_id=session_id,
+            capability_id=capability_id,
+        )
         return update
 
     async def invoke_selected_capability(
@@ -144,7 +174,36 @@ def build_parent_graph(
                 message="同一 HumanMessage 不能重复调用已经拒绝的能力",
             )
 
-        invocation = await invoke_capability(state, config)
+        session_id = _config_field(config, "thread_id")
+        message_id = _config_field(config, "message_id")
+        log_business_event(
+            logger,
+            "能力调用开始",
+            session_id=session_id,
+            message_id=message_id,
+            capability_id=capability_id,
+        )
+        capability_started_at = perf_counter()
+        try:
+            invocation = await invoke_capability(state, config)
+        except Exception as error:
+            log_business_event(
+                logger,
+                "能力调用异常",
+                level=logging.ERROR,
+                session_id=session_id,
+                message_id=message_id,
+                capability_id=capability_id,
+                error_type=type(error).__name__,
+                error_code=(
+                    error.code if isinstance(error, ApplicationError) else None
+                ),
+                duration_ms=round(
+                    (perf_counter() - capability_started_at) * 1000,
+                    2,
+                ),
+            )
+            raise
         result = invocation.result
         if result.status == "completed":
             if invocation.message is None:
@@ -152,6 +211,18 @@ def build_parent_graph(
                     code="PARENT_MISSING_PUBLIC_MESSAGE",
                     message="Child Agent 完成后未提供最终公共 AIMessage",
                 )
+            log_business_event(
+                logger,
+                "能力调用完成",
+                session_id=session_id,
+                message_id=message_id,
+                capability_id=capability_id,
+                status=result.status,
+                duration_ms=round(
+                    (perf_counter() - capability_started_at) * 1000,
+                    2,
+                ),
+            )
             return Command(
                 update={
                     "messages": [invocation.message],
@@ -161,6 +232,19 @@ def build_parent_graph(
             )
 
         if result.status == "failed":
+            log_business_event(
+                logger,
+                "能力调用失败",
+                level=logging.ERROR,
+                session_id=session_id,
+                message_id=message_id,
+                capability_id=capability_id,
+                status=result.status,
+                duration_ms=round(
+                    (perf_counter() - capability_started_at) * 1000,
+                    2,
+                ),
+            )
             raise ParentGraphError(
                 code="CHILD_EXECUTION_FAILED",
                 message="Child Agent 返回了执行失败状态",
@@ -179,6 +263,20 @@ def build_parent_graph(
             if candidate not in rejected_capability_ids
         ]
         next_node = "route" if remaining_capability_ids else "unsupported"
+        log_business_event(
+            logger,
+            "能力调用拒绝",
+            session_id=session_id,
+            message_id=message_id,
+            capability_id=capability_id,
+            status=result.status,
+            control_signal=result.control_signal,
+            next_node=next_node,
+            duration_ms=round(
+                (perf_counter() - capability_started_at) * 1000,
+                2,
+            ),
+        )
         return Command(
             update={
                 "resolved_capability_id": None,
@@ -204,6 +302,13 @@ def build_parent_graph(
         )
         writer = get_stream_writer()
         writer(message)
+        log_business_event(
+            logger,
+            "Parent生成不支持回复",
+            session_id=_config_field(config, "thread_id"),
+            message_id=message.id,
+            status="unsupported",
+        )
         return {
             "messages": [message],
             "resolved_capability_id": None,

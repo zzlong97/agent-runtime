@@ -475,3 +475,30 @@ Codex 不可以未经负责人明确裁决直接修改：
 - 代码标识符继续使用清晰、规范的英文命名
 - Pydantic Schema 的每个参数必须使用中文 `description` 明确说明用途、允许值
   和阶段性限制，禁止使用空泛或缺失的字段描述
+
+---
+
+# 19. 业务日志规范
+
+业务日志是贯穿所有 Stage 的工程规范，不属于独立产品能力。新增或修改业务链路时，
+必须在关键入口、关键出口、拒绝、取消和失败位置记录中文业务事件。
+
+统一使用 `agent_runtime.core.logging.log_business_event`，日志按本地日期写入：
+
+```text
+{LOG_DIR}/agent-runtime-YYYY-MM-DD.log
+```
+
+默认 `LOG_DIR=logs`。业务日志至少按场景记录可用的 `session_id`、`message_id`、
+`capability_id`、状态、错误码、错误类型和耗时，便于串联 HTTP、Session、Run、
+Parent、Router 与 Child Capability 的业务流转。
+
+禁止记录：
+
+- API Key、认证头、密码、数据库连接串等凭据
+- 用户消息正文、模型输出正文、System Prompt 或完整请求体
+- 每个流式 token / delta
+- Parent / Child 私有 State、Checkpoint 内容或工具原始结果
+
+日志只作为进程外可观测性旁路，不得写入 Parent / Child State，也不得改变 SSE、
+API 或 Checkpointer 契约。新增日志字段时必须继续通过统一脱敏入口输出。

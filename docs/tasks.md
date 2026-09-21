@@ -1211,6 +1211,7 @@ stop and wait
 - [x] 10/5 上下文规则继续排除 unsupported / incomplete / stopped
 - [x] 未实现 Stage 3 或 Future 能力
 - [x] README 和全部项目文档与实现一致
+- [x] 关键业务入口、出口、拒绝、取消和失败写入按日中文日志，敏感正文与凭据不落盘
 
 ### Execution Evidence
 
@@ -1257,6 +1258,20 @@ stop and wait
 - 2026-09-16：显式启用 `RUN_POSTGRES_TESTS=1` 的完整后端验收为
   `283 passed, 1 skipped`，唯一跳过项为真实百炼 smoke；Compose 配置解析、
   数据库连通性和 PostgreSQL 17 运行版本均已验证
+- 2026-09-21：补齐贯穿项目的业务日志规范与实现；应用生命周期、HTTP、聊天运行、
+  Session、Active Run、Parent、Router、普通聊天和英译汉 Capability 均记录中文
+  结构化入口、出口及异常事件，并通过统一入口脱敏正文、Prompt、凭据和数据库连接串
+- 2026-09-21：日志模块覆盖 UTF-8 按日日切、重复配置去重、并发写入、生命周期失败、
+  Capability 异常关联和常见敏感字段别名；默认 Fake Model 全量验收为
+  `280 passed, 13 skipped`，日志相关与关键业务路径定向回归为 `104 passed`
+- 2026-09-21：实际生成 `logs/agent-runtime-2026-09-21.log`，事件包含关联 ID、状态、
+  错误码和耗时；密钥、数据库凭据与对话正文样例扫描均为 0 命中
+- 2026-09-21：`uv lock --check`、`uv pip check`、源码与测试编译以及
+  `git diff --check` 均通过；独立复审确认无剩余 Critical 或 Important 问题，结论为
+  Ready
+- 2026-09-21：本次尝试复跑可选 PostgreSQL 集成测试时 Docker Desktop Engine 未
+  完成就绪，端口 5432 未监听，故未将该次运行计为通过；2026-09-16 的数据库完整
+  验收证据保持有效，本次日志改动未修改持久化结构或数据库访问路径
 - Result：S2-10 实现与工程验收完成，等待负责人确认后再将 Stage 2 更新为
   `VERIFIED`；禁止提前进入 S3-01
 

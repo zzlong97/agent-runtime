@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+import logging
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -13,10 +14,13 @@ from agent_runtime.api.schemas.chat import (
     MessageEventData,
 )
 from agent_runtime.core.errors import ApplicationError
+from agent_runtime.core.logging import log_business_event
 
 type CancelReason = Literal["stopped", "disconnected"]
 type ProductEventName = Literal["message", "error", "done"]
 type ProductEventData = MessageEventData | ErrorEventData | DoneEventData
+
+logger = logging.getLogger(__name__)
 
 
 class SessionBusyError(ApplicationError):
@@ -97,14 +101,35 @@ class ActiveRunRegistry:
     ) -> ActiveRun:
         """在新增 HumanMessage 和建立 SSE 前原子占用 Session。"""
 
+        log_business_event(
+            logger,
+            "Run占用开始",
+            session_id=session_id,
+            message_id=response_message_id,
+        )
         async with self._lock:
             if session_id in self._deleted_sessions:
+                log_business_event(
+                    logger,
+                    "Run占用拒绝",
+                    session_id=session_id,
+                    message_id=response_message_id,
+                    error_code="SESSION_NOT_FOUND",
+                )
                 raise SessionUnavailableError(
                     code="SESSION_NOT_FOUND",
                     message="Session 不存在",
                     status_code=404,
                 )
             if session_id in self._deleting_sessions:
+                log_business_event(
+                    logger,
+                    "Run占用拒绝",
+                    session_id=session_id,
+                    message_id=response_message_id,
+                    error_code="SESSION_BUSY",
+                    reason="deleting",
+                )
                 raise SessionBusyError(
                     code="SESSION_BUSY",
                     message="当前 Session 正在删除",
@@ -112,6 +137,14 @@ class ActiveRunRegistry:
                     retryable=True,
                 )
             if session_id in self._active_runs:
+                log_business_event(
+                    logger,
+                    "Run占用拒绝",
+                    session_id=session_id,
+                    message_id=response_message_id,
+                    error_code="SESSION_BUSY",
+                    reason="active_run",
+                )
                 raise SessionBusyError(
                     code="SESSION_BUSY",
                     message="当前 Session 正在生成回复",
@@ -123,7 +156,13 @@ class ActiveRunRegistry:
                 response_message_id=response_message_id,
             )
             self._active_runs[session_id] = run
-            return run
+        log_business_event(
+            logger,
+            "Run占用完成",
+            session_id=session_id,
+            message_id=response_message_id,
+        )
+        return run
 
     @asynccontextmanager
     async def session_operation(self, session_id: UUID) -> AsyncIterator[None]:
@@ -163,6 +202,7 @@ class ActiveRunRegistry:
     ) -> AsyncIterator[SessionDeletionLease]:
         """串行化同一 Session 删除，并在临界区内阻止新的 Run。"""
 
+        log_business_event(logger, "Session删除锁等待", session_id=session_id)
         async with self._lock:
             entry = self._deletion_entries.get(session_id)
             if entry is None:
@@ -189,6 +229,7 @@ class ActiveRunRegistry:
                 )
             if operation_drained is not None:
                 await operation_drained.wait()
+            log_business_event(logger, "Session删除锁进入", session_id=session_id)
             yield lease
         finally:
             async with self._lock:
@@ -199,6 +240,12 @@ class ActiveRunRegistry:
                 if entry.users == 0:
                     self._deleting_sessions.discard(session_id)
                     self._deletion_entries.pop(session_id, None)
+            log_business_event(
+                logger,
+                "Session删除锁退出",
+                session_id=session_id,
+                deleted=lease.deleted,
+            )
 
     async def attach_producer(
         self,
@@ -252,12 +299,26 @@ class ActiveRunRegistry:
     ) -> bool:
         """只取消与响应句柄完全匹配的 Run，并等待其完成清理。"""
 
+        log_business_event(
+            logger,
+            "Run取消开始",
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            reason=reason,
+        )
         async with self._lock:
             current = self._active_runs.get(run.session_id)
             if (
                 current is not run
                 or current._reservation_token != run._reservation_token
             ):
+                log_business_event(
+                    logger,
+                    "Run取消忽略",
+                    session_id=run.session_id,
+                    message_id=run.response_message_id,
+                    reason="stale_run",
+                )
                 return False
             if run._finalizing:
                 task = None
@@ -287,6 +348,14 @@ class ActiveRunRegistry:
         if not wait_for_terminal and task is not None and should_cancel_task:
             task.cancel()
         await asyncio.shield(run.terminal_future)
+        log_business_event(
+            logger,
+            "Run取消完成",
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            reason=run.cancel_reason,
+            accepted=accepted,
+        )
         return accepted
 
     async def release(self, run: ActiveRun) -> None:
@@ -301,6 +370,13 @@ class ActiveRunRegistry:
                 del self._active_runs[run.session_id]
             if not run.terminal_future.done():
                 run.terminal_future.set_result(None)
+        log_business_event(
+            logger,
+            "Run释放完成",
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            cancel_reason=run.cancel_reason,
+        )
 
     async def close(
         self,

@@ -15,6 +15,7 @@ def test_settings_read_runtime_values_from_environment(monkeypatch: pytest.Monke
     monkeypatch.setenv("LLM_MODEL", "qwen-plus")
     monkeypatch.setenv("LOCAL_USER_ID", "local-user-42")
     monkeypatch.setenv("LOG_LEVEL", "debug")
+    monkeypatch.setenv("LOG_DIR", "runtime-logs")
 
     from agent_runtime.core.config import Settings
 
@@ -31,6 +32,7 @@ def test_settings_read_runtime_values_from_environment(monkeypatch: pytest.Monke
     assert settings.llm_model == "qwen-plus"
     assert settings.local_user_id == "local-user-42"
     assert settings.log_level == "DEBUG"
+    assert settings.log_dir.as_posix() == "runtime-logs"
 
 
 def test_settings_do_not_require_a_real_model_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,7 +53,8 @@ def test_settings_ignore_blank_values_in_copied_env_example(tmp_path) -> None:
         "LLM_BASE_URL=\n"
         "LLM_MODEL=\n"
         "LOCAL_USER_ID=\n"
-        "LOG_LEVEL=\n",
+        "LOG_LEVEL=\n"
+        "LOG_DIR=\n",
         encoding="utf-8",
     )
 
@@ -64,6 +67,7 @@ def test_settings_ignore_blank_values_in_copied_env_example(tmp_path) -> None:
     assert settings.llm_model is None
     assert settings.local_user_id == "local-user"
     assert settings.log_level == "INFO"
+    assert settings.log_dir.as_posix() == "logs"
 
 
 def test_settings_reject_non_postgresql_database_urls() -> None:

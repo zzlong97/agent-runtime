@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Any
 
 import pytest
@@ -115,6 +116,45 @@ def test_router_routes_ordinary_chat_to_general_chat() -> None:
     assert "只负责选择能力，不回答用户问题" in ROUTER_SYSTEM_PROMPT
     assert "本轮候选能力" in str(model.captured_messages[-1][-1].content)
     assert "介绍一下 LangGraph" in str(model.captured_messages[-1][-1].content)
+
+
+def test_router_logs_decision_without_user_content(caplog) -> None:
+    from agent_runtime.graph.router import StageOneRouter
+
+    router = StageOneRouter(
+        FakeStructuredChatModel(
+            response={"capability_id": "general_chat", "confidence": 0.88}
+        )
+    )
+
+    with caplog.at_level(logging.INFO, logger="agent_runtime.graph.router"):
+        asyncio.run(
+            router.route(
+                {
+                    "messages": [
+                        HumanMessage(content="不允许出现在 Router 业务日志中的正文")
+                    ],
+                    "resolved_capability_id": None,
+                    "rejected_capability_ids": [],
+                },
+                {
+                    "configurable": {
+                        "thread_id": "router-log-session",
+                        "message_id": "router-log-message",
+                    }
+                },
+            )
+        )
+
+    log_text = "\n".join(caplog.messages)
+    assert "Router决策开始" in log_text
+    assert "Router决策完成" in log_text
+    assert "general_chat" in log_text
+    assert "0.88" in log_text
+    assert "duration_ms" in log_text
+    assert "router-log-session" in log_text
+    assert "router-log-message" in log_text
+    assert "不允许出现在 Router 业务日志中的正文" not in log_text
 
 
 def test_router_routes_explicit_english_to_chinese_request() -> None:

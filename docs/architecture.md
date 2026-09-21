@@ -454,6 +454,7 @@ LLM_BASE_URL
 LLM_MODEL
 LOCAL_USER_ID
 LOG_LEVEL
+LOG_DIR
 ```
 
 `.env.example` 只保留字段名，`.env` 必须被 Git 忽略。百炼 API Key、Base
@@ -463,6 +464,20 @@ Windows 本地开发的外部依赖统一由 Docker Desktop 和项目根目录
 `compose.yaml` 提供。PostgreSQL 只绑定本机回环地址，并使用
 `agent-runtime-postgres` 命名卷持久化；AgentRuntime 应用本身继续在主机通过
 `uv` 启动。
+
+## 业务日志
+
+业务日志使用 Python 标准日志模块，由 `agent_runtime.core.logging` 统一配置。
+控制台日志继续保留，同时按本地日期将 UTF-8 日志写入
+`{LOG_DIR}/agent-runtime-YYYY-MM-DD.log`，`LOG_DIR` 默认是项目运行目录下的
+`logs`。
+
+应用生命周期、HTTP、Session、Active Run、Parent、Router 和两个 Child
+Capability 在关键入口、出口、拒绝、取消和失败位置记录中文结构化事件。事件只携带
+关联 ID、能力标识、状态、错误码、错误类型和耗时等控制面信息，不记录用户或模型
+正文、Prompt、凭据、数据库连接串及逐 token 数据。日志是旁路，不进入 Parent /
+Child State、Checkpoint 或 SSE 协议。`configure_logging` 只在进程启动或测试重建
+应用时调用，业务模块只通过统一事件函数写日志，不在运行期重复配置 handler。
 
 ## 测试
 

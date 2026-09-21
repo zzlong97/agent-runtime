@@ -1,5 +1,6 @@
 """聊天 HTTP + SSE 与 Stage 2 Session 产品入口。"""
 
+import logging
 from typing import Annotated, Any, cast
 from uuid import UUID
 
@@ -21,9 +22,11 @@ from agent_runtime.api.schemas.sessions import (
 )
 from agent_runtime.chat import ChatService
 from agent_runtime.core.errors import ApplicationError
+from agent_runtime.core.logging import log_business_event
 from agent_runtime.streaming.sse import RunStreamingResponse, stream_chat_sse
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
 
 
 def _get_chat_service(request: Request) -> ChatService:
@@ -45,6 +48,15 @@ def _get_chat_service(request: Request) -> ChatService:
 def _application_error_detail(error: ApplicationError) -> dict[str, Any]:
     """把应用错误转换为稳定的 HTTP JSON 错误字段。"""
 
+    log_business_event(
+        logger,
+        "业务请求失败",
+        level=logging.WARNING,
+        error_code=error.code,
+        error_type=type(error).__name__,
+        status_code=error.status_code,
+        retryable=error.retryable,
+    )
     return {
         "code": error.code,
         "message": error.message,

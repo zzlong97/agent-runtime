@@ -1,11 +1,15 @@
 """Stage 1 固定能力路由器。"""
 
+import logging
+from time import perf_counter
+
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agent_runtime.core.errors import ApplicationError
+from agent_runtime.core.logging import log_business_event
 from agent_runtime.graph.state import ParentState
 
 ROUTER_SYSTEM_PROMPT = """你是 AgentRuntime 的意图路由器，只负责选择能力，不回答用户问题。
@@ -17,6 +21,7 @@ _CAPABILITY_DESCRIPTIONS = {
     "general_chat": "普通聊天、知识问答和简单咨询；不处理任何翻译任务。",
     "en_to_zh": "仅处理把英文内容忠实、完整地翻译成中文的请求。",
 }
+logger = logging.getLogger(__name__)
 
 
 class RouterError(ApplicationError):
@@ -60,6 +65,12 @@ class StageOneRouter:
     ) -> dict[str, str]:
         """根据最新 HumanMessage 返回 Parent Graph 的路由状态更新。"""
 
+        configurable = config.get("configurable", {})
+        log_context = {
+            "session_id": configurable.get("thread_id"),
+            "message_id": configurable.get("message_id"),
+        }
+        decision_started_at = perf_counter()
         latest_message = next(
             (
                 message
@@ -69,6 +80,17 @@ class StageOneRouter:
             None,
         )
         if latest_message is None:
+            log_business_event(
+                logger,
+                "Router决策失败",
+                level=logging.ERROR,
+                error_code="ROUTER_INVALID_INPUT",
+                duration_ms=round(
+                    (perf_counter() - decision_started_at) * 1000,
+                    2,
+                ),
+                **log_context,
+            )
             raise RouterError(
                 code="ROUTER_INVALID_INPUT",
                 message="Parent State 中缺少可路由的 HumanMessage",
@@ -80,6 +102,18 @@ class StageOneRouter:
             if capability_id not in rejected_capability_ids
         }
         if not candidates:
+            log_business_event(
+                logger,
+                "Router决策失败",
+                level=logging.ERROR,
+                error_code="ROUTER_NO_CANDIDATE",
+                rejected_capability_ids=sorted(rejected_capability_ids),
+                duration_ms=round(
+                    (perf_counter() - decision_started_at) * 1000,
+                    2,
+                ),
+                **log_context,
+            )
             raise RouterError(
                 code="ROUTER_NO_CANDIDATE",
                 message="本轮没有可供路由的能力",
@@ -94,6 +128,13 @@ class StageOneRouter:
                 f"待路由的用户消息：\n{latest_message.content}"
             )
         )
+        log_business_event(
+            logger,
+            "Router决策开始",
+            candidate_capability_ids=sorted(candidates),
+            rejected_capability_ids=sorted(rejected_capability_ids),
+            **log_context,
+        )
         try:
             output = await self._model.ainvoke(
                 [SystemMessage(content=ROUTER_SYSTEM_PROMPT), request],
@@ -101,18 +142,64 @@ class StageOneRouter:
             )
             decision = RouterDecision.model_validate(output)
         except ValidationError as error:
+            log_business_event(
+                logger,
+                "Router决策失败",
+                level=logging.ERROR,
+                error_code="ROUTER_INVALID_OUTPUT",
+                duration_ms=round(
+                    (perf_counter() - decision_started_at) * 1000,
+                    2,
+                ),
+                **log_context,
+            )
             raise RouterError(
                 code="ROUTER_INVALID_OUTPUT",
                 message="路由模型返回的结构化结果不符合 Schema",
             ) from error
         except Exception as error:
+            log_business_event(
+                logger,
+                "Router决策失败",
+                level=logging.ERROR,
+                error_code="ROUTER_CALL_FAILED",
+                error_type=type(error).__name__,
+                duration_ms=round(
+                    (perf_counter() - decision_started_at) * 1000,
+                    2,
+                ),
+                **log_context,
+            )
             raise RouterError(
                 code="ROUTER_CALL_FAILED",
                 message="路由模型调用失败",
             ) from error
         if decision.capability_id not in candidates:
+            log_business_event(
+                logger,
+                "Router决策失败",
+                level=logging.ERROR,
+                error_code="ROUTER_INVALID_CAPABILITY",
+                capability_id=decision.capability_id,
+                duration_ms=round(
+                    (perf_counter() - decision_started_at) * 1000,
+                    2,
+                ),
+                **log_context,
+            )
             raise RouterError(
                 code="ROUTER_INVALID_CAPABILITY",
                 message="路由模型选择了本轮候选列表之外的能力",
             )
+        log_business_event(
+            logger,
+            "Router决策完成",
+            capability_id=decision.capability_id,
+            confidence=decision.confidence,
+            duration_ms=round(
+                (perf_counter() - decision_started_at) * 1000,
+                2,
+            ),
+            **log_context,
+        )
         return {"resolved_capability_id": decision.capability_id}

@@ -1,9 +1,11 @@
 """聊天应用层，连接 Session 产品能力、Active Run 与 Parent Graph。"""
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
@@ -23,6 +25,7 @@ from agent_runtime.capabilities.general_chat.adapter import GeneralChatAdapter
 from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
+from agent_runtime.core.logging import log_business_event
 from agent_runtime.core.model import build_chat_model
 from agent_runtime.feedback import (
     FeedbackAction,
@@ -55,6 +58,8 @@ from agent_runtime.sessions.repository import (
 from agent_runtime.sessions.service import SessionService
 
 type CompletionStatus = Literal["completed", "unsupported"]
+
+logger = logging.getLogger(__name__)
 
 
 class ChatSessionError(ApplicationError):
@@ -131,6 +136,13 @@ class ChatService:
         """在建立 SSE 前创建或校验 Session，并分配本轮稳定消息 UUID。"""
 
         response_message_id = self._response_message_id_factory()
+        log_business_event(
+            logger,
+            "聊天轮次准备开始",
+            session_id=session_id,
+            message_id=response_message_id,
+            session_mode="existing" if session_id is not None else "new",
+        )
         if session_id is not None:
             session = await self._session_repository.get(session_id)
             if session.user_id != self._settings.local_user_id:
@@ -180,8 +192,27 @@ class ChatService:
                 active_run=active_run,
             )
             self._prepared_turns[reserved_session_id] = turn
+            log_business_event(
+                logger,
+                "聊天轮次准备完成",
+                session_id=reserved_session_id,
+                human_message_id=human_message.id,
+                message_id=response_message_id,
+                session_mode="existing" if session_id is not None else "new",
+            )
             return turn
-        except BaseException:
+        except BaseException as error:
+            log_business_event(
+                logger,
+                "聊天轮次准备失败",
+                level=logging.ERROR,
+                session_id=reserved_session_id,
+                message_id=response_message_id,
+                error_type=type(error).__name__,
+                error_code=(
+                    error.code if isinstance(error, ApplicationError) else None
+                ),
+            )
             await self._run_registry.release(active_run)
             raise
 
@@ -234,16 +265,30 @@ class ChatService:
     ) -> FeedbackResult:
         """保存、替换或取消当前活动完成回答的反馈。"""
 
+        log_business_event(
+            logger,
+            "消息反馈开始",
+            message_id=message_id,
+            action=action,
+        )
         if self._feedback_service is None:
             raise ChatRuntimeError(
                 code="MESSAGE_FEEDBACK_UNAVAILABLE",
                 message="消息反馈服务尚未完成初始化",
                 retryable=True,
             )
-        return await self._feedback_service.submit(
+        result = await self._feedback_service.submit(
             message_id=message_id,
             action=action,
         )
+        log_business_event(
+            logger,
+            "消息反馈完成",
+            message_id=message_id,
+            action=action,
+            feedback=result.feedback,
+        )
+        return result
 
     async def prepare_regeneration(
         self,
@@ -253,6 +298,12 @@ class ChatService:
     ) -> PreparedChatTurn:
         """占用 Session，并从目标完成回答之前创建 Parent fork。"""
 
+        log_business_event(
+            logger,
+            "重新生成准备开始",
+            session_id=session_id,
+            source_message_id=message_id,
+        )
         session = await self._session_repository.get(session_id)
         if session.user_id != self._settings.local_user_id:
             raise ChatSessionError(
@@ -310,8 +361,27 @@ class ChatService:
                     await self.cancel_run(active_run, reason="disconnected")
                 finally:
                     raise cancelled_error
+            log_business_event(
+                logger,
+                "重新生成准备完成",
+                session_id=session_id,
+                source_message_id=message_id,
+                message_id=response_message_id,
+            )
             return turn
         except BaseException as error:
+            log_business_event(
+                logger,
+                "重新生成准备失败",
+                level=logging.ERROR,
+                session_id=session_id,
+                source_message_id=message_id,
+                message_id=response_message_id,
+                error_type=type(error).__name__,
+                error_code=(
+                    error.code if isinstance(error, ApplicationError) else None
+                ),
+            )
             if turn is None:
                 if fork_task is not None and not fork_task.done():
                     fork_task.cancel()
@@ -341,6 +411,7 @@ class ChatService:
     ) -> Literal["stopped", "idle"]:
         """停止固定本地用户 Session 的当前 Run，并等待终态清理。"""
 
+        log_business_event(logger, "停止Session开始", session_id=session_id)
         session = await self._session_repository.get(session_id)
         if session.user_id != self._settings.local_user_id:
             raise ChatSessionError(
@@ -350,19 +421,46 @@ class ChatService:
             )
         run = await self._run_registry.get_active(session_id)
         if run is None:
+            log_business_event(
+                logger,
+                "停止Session完成",
+                session_id=session_id,
+                status="idle",
+            )
             return "idle"
         accepted = await self.cancel_run(run, reason="stopped")
         if accepted and run.cancel_reason == "stopped":
+            log_business_event(
+                logger,
+                "停止Session完成",
+                session_id=session_id,
+                message_id=run.response_message_id,
+                status="stopped",
+            )
             return "stopped"
+        log_business_event(
+            logger,
+            "停止Session完成",
+            session_id=session_id,
+            message_id=run.response_message_id,
+            status="idle",
+        )
         return "idle"
 
     async def delete_session(self, *, session_id: UUID) -> None:
         """幂等停止并硬删除固定本地用户的 Session。"""
 
+        log_business_event(logger, "删除Session开始", session_id=session_id)
         async with self._run_registry.deleting(session_id) as deletion:
             try:
                 session = await self._session_repository.get(session_id)
             except SessionNotFoundError:
+                log_business_event(
+                    logger,
+                    "删除Session完成",
+                    session_id=session_id,
+                    status="not_found",
+                )
                 return
             except Exception as error:
                 raise SessionDeletionError(
@@ -373,6 +471,12 @@ class ChatService:
                 ) from error
 
             if session.user_id != self._settings.local_user_id:
+                log_business_event(
+                    logger,
+                    "删除Session完成",
+                    session_id=session_id,
+                    status="not_owned",
+                )
                 return
 
             run = await self._run_registry.get_active(session_id)
@@ -409,6 +513,12 @@ class ChatService:
                 deletion.mark_deleted()
                 raise
             deletion.mark_deleted()
+        log_business_event(
+            logger,
+            "删除Session完成",
+            session_id=session_id,
+            status="deleted",
+        )
 
     async def stream_turn(
         self,
@@ -436,6 +546,13 @@ class ChatService:
     async def start_producer(self, turn: PreparedChatTurn) -> None:
         """为已占用的 Run 启动独立 Graph producer task。"""
 
+        log_business_event(
+            logger,
+            "聊天Producer启动",
+            session_id=turn.session_id,
+            message_id=turn.response_message_id,
+            is_regeneration=turn.is_regeneration,
+        )
         task = asyncio.create_task(
             self._produce_turn(turn),
             name=f"chat-producer:{turn.session_id}",
@@ -483,6 +600,15 @@ class ChatService:
         terminal_events: list[ProductRunEvent] = []
         capability_id: CapabilityId | None = None
         cancelled = False
+        terminal_status: str | None = None
+        run_started_at = perf_counter()
+        log_business_event(
+            logger,
+            "聊天运行开始",
+            session_id=turn.session_id,
+            message_id=turn.response_message_id,
+            is_regeneration=turn.is_regeneration,
+        )
         try:
             try:
                 async for message in self.stream_turn(turn):
@@ -506,6 +632,7 @@ class ChatService:
                         )
                     )
                 completion_status = await self.get_completion_status(turn)
+                terminal_status = completion_status
                 terminal_events.append(
                     ProductRunEvent(
                         name="done",
@@ -532,6 +659,21 @@ class ChatService:
                             message="未能保存模型的部分输出",
                             retryable=False,
                         )
+                terminal_status = "failed"
+                log_business_event(
+                    logger,
+                    "聊天运行失败",
+                    level=logging.ERROR,
+                    session_id=turn.session_id,
+                    message_id=turn.response_message_id,
+                    capability_id=capability_id,
+                    error_type=type(reported_error).__name__,
+                    error_code=(
+                        reported_error.code
+                        if isinstance(reported_error, ApplicationError)
+                        else None
+                    ),
+                )
                 terminal_events = self._failed_terminal_events(
                     session_id=turn.session_id,
                     message_id=turn.response_message_id,
@@ -546,6 +688,7 @@ class ChatService:
             runtime_status: Literal["stopped", "incomplete"] = (
                 "stopped" if reason == "stopped" else "incomplete"
             )
+            terminal_status = runtime_status
             try:
                 await self.persist_runtime_message(
                     turn,
@@ -568,6 +711,7 @@ class ChatService:
                     retryable=False,
                 )
                 turn.active_run._terminal_error = terminal_error
+                terminal_status = "failed"
                 terminal_events = self._failed_terminal_events(
                     session_id=turn.session_id,
                     message_id=turn.response_message_id,
@@ -590,6 +734,15 @@ class ChatService:
                     if runtime_status == "stopped"
                     else []
                 )
+            log_business_event(
+                logger,
+                "聊天运行取消",
+                session_id=turn.session_id,
+                message_id=turn.response_message_id,
+                capability_id=capability_id,
+                cancel_reason=reason,
+                status=terminal_status,
+            )
 
         finalize_cancelled = await self._finalize_run(
             turn=turn,
@@ -598,6 +751,21 @@ class ChatService:
             cancelled=False,
         )
         cancelled = cancelled or finalize_cancelled
+        final_status = (
+            "failed"
+            if turn.active_run._terminal_error is not None
+            else terminal_status
+        )
+        log_business_event(
+            logger,
+            "聊天运行结束",
+            session_id=turn.session_id,
+            message_id=turn.response_message_id,
+            capability_id=capability_id,
+            status=final_status,
+            output_chars=sum(len(part) for part in partial_text),
+            duration_ms=round((perf_counter() - run_started_at) * 1000, 2),
+        )
 
         if cancelled:
             raise asyncio.CancelledError
@@ -898,6 +1066,16 @@ class ChatService:
             {"messages": messages, "completion_status": None},
             as_node="invoke_capability",
         )
+        log_business_event(
+            logger,
+            "运行终态持久化完成",
+            session_id=turn.session_id,
+            message_id=turn.response_message_id,
+            capability_id=capability_id,
+            status=runtime_status,
+            output_chars=len(content),
+            include_human=include_human,
+        )
 
     @staticmethod
     def _message_capability_id(
@@ -921,6 +1099,7 @@ async def open_chat_service(
 ) -> AsyncIterator[ChatService]:
     """打开 Stage 1 数据库资源，并组装固定 Parent/Child 运行链路。"""
 
+    log_business_event(logger, "聊天服务初始化开始")
     session_repository = PostgresSessionRepository(settings)
     await session_repository.setup()
     feedback_store = PostgresFeedbackStore(settings)
@@ -1004,6 +1183,9 @@ async def open_chat_service(
             run_registry=run_registry,
         )
         try:
+            log_business_event(logger, "聊天服务初始化完成")
             yield service
         finally:
+            log_business_event(logger, "聊天服务关闭开始")
             await service.close()
+            log_business_event(logger, "聊天服务关闭完成")

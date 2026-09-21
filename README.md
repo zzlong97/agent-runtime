@@ -256,6 +256,18 @@ uv run --env-file .env python -m agent_runtime
 
 然后访问 `http://127.0.0.1:8000/chat`。
 
+应用会把生命周期、HTTP、Session、Run、Parent、Router 和 Capability 的关键
+入口、出口及失败事件写入当天日志。默认文件是
+`logs/agent-runtime-YYYY-MM-DD.log`；可在 `.env` 中通过 `LOG_DIR` 修改目录，
+通过 `LOG_LEVEL` 修改级别。PowerShell 可实时查看当天日志：
+
+```powershell
+Get-Content ".\logs\agent-runtime-$(Get-Date -Format yyyy-MM-dd).log" -Wait
+```
+
+业务日志包含 `session_id`、`message_id`、`capability_id`、状态和耗时等定位字段，
+不会记录对话正文、模型输出正文、Prompt 或凭据。
+
 只有明确需要清空全部本地会话、反馈和 Checkpoint 时才删除命名卷：
 
 ```powershell

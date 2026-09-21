@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from uuid import UUID
 
 import httpx
@@ -252,7 +253,7 @@ def test_chat_endpoint_still_finishes_when_incomplete_persistence_fails() -> Non
     assert events[2][1]["status"] == "failed"
 
 
-def test_chat_endpoint_returns_session_validation_error_before_sse() -> None:
+def test_chat_endpoint_returns_session_validation_error_before_sse(caplog) -> None:
     from agent_runtime.core.errors import ApplicationError
     from agent_runtime.main import create_app
 
@@ -265,10 +266,11 @@ def test_chat_endpoint_returns_session_validation_error_before_sse() -> None:
     app = create_app(chat_service=service)
     session_id = "00000000-0000-0000-0000-000000000899"
 
-    response = _post(
-        app,
-        {"session_id": session_id, "message": {"content": "继续"}},
-    )
+    with caplog.at_level(logging.INFO, logger="agent_runtime.api.routes.chat"):
+        response = _post(
+            app,
+            {"session_id": session_id, "message": {"content": "继续"}},
+        )
 
     assert response.status_code == 404
     assert not response.headers["content-type"].startswith("text/event-stream")
@@ -279,6 +281,10 @@ def test_chat_endpoint_returns_session_validation_error_before_sse() -> None:
             "retryable": False,
         }
     }
+    log_text = "\n".join(caplog.messages)
+    assert "业务请求失败" in log_text
+    assert "SESSION_NOT_FOUND" in log_text
+    assert "Session 不存在" not in log_text
 
 
 def test_chat_endpoint_returns_session_busy_before_sse() -> None:
