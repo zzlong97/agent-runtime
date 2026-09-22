@@ -109,6 +109,25 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
 
         pausing_feedback_store = PausingFeedbackStore()
 
+        class PausingDeletionService:
+            """在 Registry 删除临界区内暂停真实持久化清理。"""
+
+            def __init__(self, delegate: SessionDeletionService) -> None:
+                self._delegate = delegate
+                self.critical_section_entered = asyncio.Event()
+                self.allow_delete = asyncio.Event()
+
+            async def delete_persisted_data(
+                self,
+                *,
+                session_id: UUID,
+            ) -> None:
+                self.critical_section_entered.set()
+                await self.allow_delete.wait()
+                await self._delegate.delete_persisted_data(
+                    session_id=session_id
+                )
+
         try:
             async with open_stage_one_checkpointers(settings) as checkpointers:
                 await _store_child_checkpoint(
@@ -153,6 +172,9 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
                     feedback_store=feedback_store,
                     session_repository=session_repository,
                 )
+                pausing_deletion_service = PausingDeletionService(
+                    deletion_service
+                )
                 run_registry = ActiveRunRegistry()
                 feedback_service = FeedbackService(
                     settings=settings,
@@ -167,7 +189,7 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
                     session_service=session_service,
                     parent_graph=parent_graph,
                     feedback_service=feedback_service,
-                    deletion_service=deletion_service,
+                    deletion_service=pausing_deletion_service,
                     run_registry=run_registry,
                 )
                 turn = await service.prepare_turn(
@@ -198,19 +220,27 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
                             f"/api/v1/chat/sessions/{session_id}"
                         )
                     )
-                    await asyncio.sleep(0)
-                    assert deletion_task.done() is False
-                    with pytest.raises(SessionUnavailableError):
-                        async with run_registry.session_operation(session_id):
-                            raise AssertionError(
-                                "删除开始后不得接受新的反馈写操作"
-                            )
-
                     pausing_feedback_store.allow_write.set()
-                    feedback_result, response = await asyncio.gather(
-                        feedback_task,
-                        deletion_task,
-                    )
+                    try:
+                        feedback_result = await feedback_task
+                        async with asyncio.timeout(30):
+                            await pausing_deletion_service.critical_section_entered.wait()
+                        assert deletion_task.done() is False
+                        with pytest.raises(SessionUnavailableError):
+                            await service.submit_feedback(
+                                message_id=feedback_message_id,
+                                action="dislike",
+                            )
+                    except BaseException:
+                        deletion_task.cancel()
+                        raise
+                    finally:
+                        pausing_deletion_service.allow_delete.set()
+                        await asyncio.gather(
+                            deletion_task,
+                            return_exceptions=True,
+                        )
+                    response = deletion_task.result()
                     repeated = await client.delete(
                         f"/api/v1/chat/sessions/{session_id}"
                     )

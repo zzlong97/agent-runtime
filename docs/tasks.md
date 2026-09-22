@@ -1272,6 +1272,16 @@ stop and wait
 - 2026-09-21：本次尝试复跑可选 PostgreSQL 集成测试时 Docker Desktop Engine 未
   完成就绪，端口 5432 未监听，故未将该次运行计为通过；2026-09-16 的数据库完整
   验收证据保持有效，本次日志改动未修改持久化结构或数据库访问路径
+- 2026-09-22：最新复核发现 Session 删除 PostgreSQL 集成测试仅通过一次
+  `await asyncio.sleep(0)` 推断 DELETE 已进入 Registry 删除临界区，存在调度竞态；
+  复现结果为 `1 failed, 291 passed, 1 skipped`，该次结果不计为验收通过
+- 2026-09-22：将测试编排改为由包裹真实删除服务的 `asyncio.Event` 发出确定性信号；
+  信号只会在 DELETE 已进入 Registry 临界区、且持久化清理尚未放行时触发。测试通过
+  真实 `ChatService.submit_feedback()` 验证新反馈被拒绝，随后继续执行 Feedback、
+  Checkpoint 与 Session 的真实 PostgreSQL 清理断言，不增加固定 sleep 或生产测试钩子
+- 2026-09-22：按复核标准执行 `RUN_POSTGRES_TESTS=1 uv run --locked pytest -q`，
+  完整后端套件结果为 `292 passed, 1 skipped`，退出码为 0；唯一跳过项仍为需显式启用
+  的真实百炼 smoke，S2-10 PostgreSQL 验收门禁恢复通过
 - Result：S2-10 实现与工程验收完成，等待负责人确认后再将 Stage 2 更新为
   `VERIFIED`；禁止提前进入 S3-01
 
