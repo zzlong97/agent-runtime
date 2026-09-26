@@ -12,6 +12,7 @@ dependencies = [
     "langgraph-checkpoint-postgres==3.1.2",
     "psycopg[binary,pool]==3.3.5",
     "pydantic-settings==2.15.0",
+    "redis==8.1.0",
     "uvicorn[standard]==0.52.4",
 ]
 
@@ -34,4 +35,5 @@ testpaths = ["tests"]
 markers = [
     "bailian: 仅在显式启用真实百炼模型调用时运行",
     "postgres: 需要可连接的 PostgreSQL 测试数据库",
+    "redis: 需要可连接的 Redis 测试服务",
 ]

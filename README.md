@@ -6,23 +6,23 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 
 1. 先验证主图能够稳定调度多个子 Agent；
 2. 再补齐完整聊天产品能力；
-3. 再扩展为 Capability Runtime；
-4. 后续再演进到管理平台、复杂任务编排和工业级治理能力。
+3. 再把执行重构为持久、可重连、可取消、可中断和可恢复的 Run；
+4. 后续阶段根据这套 Runtime 的真实结果重新设计。
 
 ---
 
 ## 1. 当前定位
 
-当前项目已完成 **Stage 1：最小 Agent Runtime**，并已实现
-**Stage 2：完整聊天产品能力与演示页面**。Stage 2 的任务状态和最新验收证据
+当前项目已经验收通过 **Stage 1：最小 Agent Runtime** 和
+**Stage 2：完整聊天产品能力与演示页面**。当前正按任务顺序建设
+**Stage 2.5：持久化 Run 与可恢复 Runtime**；具体已验收边界、当前任务和最新证据
 以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
 的 OpenAI 兼容接口接入；自动化测试默认使用 Fake Model，真实模型只用于
 可选 smoke test。
 
-Stage 1 已证明以下 Runtime 主链路成立，Stage 2 在其外增加完整产品 API 和
-React 演示页面：
+当前已交付的 Stage 2 主链路为：
 
 ```text
 React / Ant Design X Chat Demo
@@ -42,7 +42,22 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-Stage 2 不提前建设 Capability 平台、权限系统、动态挂载、HITL、文件能力、复杂 Agent 编排等后续功能。
+Stage 2.5 将把 Run 从 POST SSE 和进程内 Registry 中解耦，目标链路为：
+
+```text
+POST 创建持久 Run → HTTP 202
+             ↓
+Single-process Coordinator / Executor
+             ↓
+Parent Graph → PostgreSQL Checkpoint
+             ↓
+PostgreSQL RuntimeEvent + Redis Stream
+             ↓
+GET SSE Gateway → /chat
+```
+
+当前代码仍是已验收的 Stage 2 实现；S2.5 能力必须按 `docs/tasks.md` 顺序逐项
+实现，不能因文档已经确认就宣称代码已具备。
 
 ---
 
@@ -185,7 +200,7 @@ ChildResult
 
 ### Stage 2：完整聊天产品能力
 
-实现：
+已验收实现：
 
 - 游标分页的 Session 列表
 - Session 改名和幂等硬删除
@@ -198,29 +213,34 @@ ChildResult
 - 独立 HTML、JavaScript/JSX 和 CSS 构建资源
 - pytest、Vitest 和可选 Playwright 分层验收
 
-### Stage 3：Capability Runtime 平台化
+### Stage 2.5：持久化 Run 与可恢复 Runtime
 
-实现：
+当前计划：
 
-- Capability Manifest
-- Capability Registry 正式化
-- 内部动态 `mount()/unmount()`
-- 优雅卸载
-- 用户 Capability 权限
-- Router confidence
-- 低置信度确认
-- `interrupt + Command(resume=...)`
-- `/resume`
+- PostgreSQL 持久 Run、幂等请求和数据库活动 Run 唯一约束
+- 类型化 RuntimeEvent、每 Run Sequencer 和公开/内部事件隔离
+- Redis Streams 短期公开实时事件与故障降级
+- HTTP 202 Run API、独立 GET SSE 和断点续传
+- 异步 Cancel、断线继续执行和 Session 完整清理
+- 同 Run Interrupt / Resume
+- Checkpoint-first 对账与最多三次崩溃恢复
+- 最小 Agent 执行契约
+- `/chat` 页面迁移和开发环境真实 Runtime 演示模式
 
-### Future：只规划，不实现
+### Future：候选方向，不构成阶段承诺
 
 - 文件上传 / 文件服务 / RAG
+- Capability Manifest / Registry
+- 动态 `mount()/unmount()` / DRAINING
+- Capability 权限 / RBAC
+- Router confidence 与确认策略
 - Capability Admin API
 - 管理平台
-- RBAC
 - Remote Capability
-- Redis 多实例协调
-- Run History
+- 多实例 Runtime / Worker Lease / 分布式任务队列
+- Transactional Outbox
+- Run History 产品能力与独立保留策略
+- 多审批人和并行中断
 - Observability / Evaluation
 - Complex Agent
 - Deep Agents
@@ -231,20 +251,24 @@ ChildResult
 
 ## 5. 运行聊天演示页面
 
-本地 PostgreSQL 由 Windows Docker Desktop 承载。先确认 Docker Desktop 已启动，
-然后在项目根目录启动依赖：
+以下说明运行当前已验收的 Stage 2 页面及 S2.5-03 开发依赖。Redis Stream 发布层
+的当前实现和验收状态以 `docs/tasks.md` 为准；页面切换到独立 Run SSE 的能力将在
+后续 S2.5 任务接入。
+
+本地 PostgreSQL 和 Redis 由 Windows Docker Desktop 承载。先确认 Docker Desktop
+已启动，然后在项目根目录启动依赖：
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d postgres redis
 docker compose ps
 ```
 
 PostgreSQL 使用 `agent-runtime-postgres` 命名卷持久化。普通停止和再次启动不会
-删除数据：
+删除数据。Redis 只保存 30 分钟短期公开实时事件，关闭 RDB/AOF 且不使用持久卷：
 
 ```powershell
-docker compose stop postgres
-docker compose up -d postgres
+docker compose stop postgres redis
+docker compose up -d postgres redis
 ```
 
 已提交的前端生产构建由 FastAPI 同源托管，不依赖 Node.js。数据库状态为
@@ -307,10 +331,12 @@ uv run pytest -q tests/test_static_chat.py
 ```
 
 PostgreSQL 集成测试需要根目录 `.env` 中的 `DATABASE_URL` 指向已创建且可连接的
-测试数据库，然后显式启用：
+测试数据库。Redis 集成测试需要 `REDIS_URL` 指向根 Compose 服务；两类测试分别
+通过环境变量显式启用：
 
 ```powershell
 $env:RUN_POSTGRES_TESTS='1'
+$env:RUN_REDIS_TESTS='1'
 uv run pytest -q
 ```
 
@@ -359,9 +385,10 @@ npm run test:e2e
 4. `docs/decisions.md`
 5. `docs/tasks.md`
 
-当前只允许执行 `docs/tasks.md` 中标记的 **Stage 2 当前任务**。
+当前只允许执行 `docs/tasks.md` 中标记的 **Stage 2.5 当前任务**。
 
-未通过 Stage 2 验收前，不允许提前实现 Stage 3 / Future 能力。
+S2.5-00 架构基线未验收前，不允许开始 S2.5-01；任何 S2.5 任务都不得顺手实现
+Future 候选能力。原 Stage 3 已移出正式阶段，后续范围必须在 S2.5 完成后重新设计。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、
 `LLM_BASE_URL` 和 `LLM_MODEL`；不得提交真实密钥。

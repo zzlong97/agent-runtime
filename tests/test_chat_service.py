@@ -2210,6 +2210,20 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         async def setup(self) -> None:
             events.append("feedback_setup")
 
+    class FakeRunRepository:
+        def __init__(self, settings):
+            pass
+
+        async def setup(self) -> None:
+            events.append("run_setup")
+
+    class FakeRuntimeEventRepository:
+        def __init__(self, settings):
+            pass
+
+        async def setup(self) -> None:
+            events.append("runtime_event_setup")
+
     class FakeHistoryAdapter:
         def __init__(self, **kwargs):
             captured["history_feedback_store"] = kwargs["feedback_store"]
@@ -2274,6 +2288,16 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     )
     monkeypatch.setattr(
         chat_module,
+        "PostgresRunRepository",
+        FakeRunRepository,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "PostgresRuntimeEventRepository",
+        FakeRuntimeEventRepository,
+    )
+    monkeypatch.setattr(
+        chat_module,
         "open_stage_one_checkpointers",
         fake_checkpointers,
     )
@@ -2326,9 +2350,11 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
 
     asyncio.run(exercise())
 
-    assert events[:3] == [
+    assert events[:5] == [
         "session_setup",
         "feedback_setup",
+        "run_setup",
+        "runtime_event_setup",
         "service_created",
     ]
     assert captured["history_feedback_store"] is captured["feedback_store"]

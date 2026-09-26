@@ -19,10 +19,10 @@ VERIFIED
 # 当前工作状态
 
 ```text
-Current Stage: Stage 2
-Current Task: S2-10
-Last Verified Task: S2-09
-Last Verified Commit: 4c9922ce9de319b3f9966f76f7e2d1c95cc302f1
+Current Stage: Stage 2.5
+Current Task: S2.5-03
+Last Verified Task: S2.5-02
+Last Verified Commit: 41ddcea3a2055a99b1428f8d3eb78a6ff2254ce2（S2.5-00～02 当前未提交）
 Blockers: None
 ```
 
@@ -1196,7 +1196,7 @@ stop and wait
 
 ## S2-10 Stage 2 集成验收
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2-01 ~ S2-09
 
@@ -1282,68 +1282,411 @@ stop and wait
 - 2026-09-22：按复核标准执行 `RUN_POSTGRES_TESTS=1 uv run --locked pytest -q`，
   完整后端套件结果为 `292 passed, 1 skipped`，退出码为 0；唯一跳过项仍为需显式启用
   的真实百炼 smoke，S2-10 PostgreSQL 验收门禁恢复通过
-- Result：S2-10 实现与工程验收完成，等待负责人确认后再将 Stage 2 更新为
-  `VERIFIED`；禁止提前进入 S3-01
+- 2026-09-23：负责人确认 Stage 2 验收通过
+- Result：Stage 2 已更新为 `VERIFIED`；允许进入已重新设计的 Stage 2.5，原
+  S3-01 不再是下一任务
 
 ---
 
-# Stage 3：Capability Runtime 平台化
+# Stage 2.5：持久化 Run 与可恢复 Runtime
 
-> Stage 2 VERIFIED 前禁止开始。
+> Stage 2 已 VERIFIED。Stage 2.5 是当前唯一允许实施的阶段；原 Stage 3 任务已
+> 移出正式任务序列。
 
-## S3-01 Capability Manifest
+## S2.5-00 Stage 2.5 架构基线确认
 
-**Status:** TODO
+**Status:** VERIFIED
 
----
+**Dependencies:** S2-10
 
-## S3-02 Capability Registry
+### Work
 
-**Status:** TODO
+- 审核负责人提供的 S2.5 草案与 Stage 2 当前实现
+- 识别持久输入、事件顺序、Redis/PG 一致性、Checkpoint 对账、Resume 幂等、
+  API 迁移、事件隐私、Session 删除和慢客户端等缺口
+- 逐项完成负责人裁决
+- 维护既有 requirements / architecture / decisions / tasks / README / AGENTS
+- 移除原 Stage 3 的正式阶段承诺，将仍有价值的内容降为 Future 候选
 
----
+### Acceptance
 
-## S3-03 Local Capability mount
+- [x] Stage 2 标记为 VERIFIED
+- [x] S2.5 的需求、架构、决策和任务边界一致
+- [x] Parent 公共消息权威源和 Parent / Child 状态隔离保持不变
+- [x] 持久 Run、RuntimeEvent、Redis、SSE、Cancel、Interrupt 和恢复边界明确
+- [x] 页面迁移和真实链路演示模式纳入阶段范围
+- [x] 原 Stage 3 不再作为已承诺的下一阶段
+- [x] 未编写或修改业务代码
 
-**Status:** TODO
+### Verification
 
----
-
-## S3-04 Graceful unmount / DRAINING
-
-**Status:** TODO
-
----
-
-## S3-05 User Capability Permission
-
-**Status:** TODO
-
----
-
-## S3-06 Router Confidence
-
-**Status:** TODO
-
----
-
-## S3-07 interrupt / resume
-
-**Status:** TODO
+- 2026-09-23：负责人逐项确认 S2.5 边界与修正，包括持久恢复输入、
+  Sequencer、公开事件协议、Checkpoint-first 对账、断线不取消、单 pending
+  Interrupt、非空终态消息和开发演示模式
+- 2026-09-23：文档维护完成后等待负责人进行 S2.5 架构文档验收；验收前不得开始
+  S2.5-01
+- 2026-09-24：负责人明确指示开始 Stage 2.5 编码阶段，S2.5 架构文档验收通过
+- Result：S2.5-00 已更新为 `VERIFIED`；下一允许任务为 `S2.5-01`
 
 ---
 
-## S3-08 /resume SSE
+## S2.5-01 Run 持久化与幂等
 
-**Status:** TODO
+**Status:** VERIFIED
+
+**Dependencies:** S2.5-00 VERIFIED
+
+### Work
+
+- 增加 Run 数据模型、迁移、Repository 和状态转换
+- 实现全局 `request_id`、请求指纹和稳定消息 ID
+- 实现活动 Run 的 Session 部分唯一约束
+- 实现最小恢复输入的活动期保留和终态清除
+- 只支持 `normal`、`regenerate`
+
+### Acceptance
+
+- [x] 相同 request_id + 相同请求返回原 Run
+- [x] 相同 request_id + 不同请求返回 409
+- [x] 数据库拒绝同一 Session 的第二个活动 Run
+- [x] 终态不可修改，输入正文已清除
+- [x] Stage 2 历史不被强制补建 Run
+
+### Verification
+
+- 2026-09-24：按 TDD 完成 Run 领域模型、规范化请求指纹、PostgreSQL Schema、
+  幂等创建和状态转换；应用启动会在 Session 表之后初始化 Run 表及活动 Run 部分
+  唯一索引
+- 2026-09-24：真实 PostgreSQL 并发测试验证相同 `request_id` 只创建一个 Run，
+  重复请求返回数据库中原始稳定消息 ID，不同指纹返回 409，同一 Session 的第二个
+  活动 Run 由数据库约束拒绝
+- 2026-09-24：真实 PostgreSQL 状态转换测试验证终态不可覆盖、终态清除
+  `input_payload`；Schema 初始化测试验证 Stage 2 历史 Session 不补建 Run
+- 2026-09-24：补齐 Run 创建、读取、拒绝、转换和失败链路的中文业务日志；日志包含
+  可用关联 ID、状态、稳定错误码、错误类型和耗时，不记录正文、恢复输入、请求指纹
+  或原始异常详情
+- 2026-09-24：`RUN_POSTGRES_TESTS=1 uv run --locked pytest -q` 结果为
+  `330 passed, 1 skipped`；唯一跳过项为需显式启用的真实百炼 smoke
+- 2026-09-24：默认 `uv run --locked pytest -q` 结果为
+  `316 passed, 15 skipped`；PostgreSQL 集成项按约定默认跳过
+- 2026-09-24：`git diff --check`、`uv lock --check`、Python `compileall`、
+  `uv pip check` 和 `uv build` 通过；独立代码审查无 Critical / Important 问题
+- 2026-09-24：负责人确认 S2.5-01 验收通过
+- Result：S2.5-01 已更新为 `VERIFIED`；允许开始 S2.5-02
 
 ---
 
-## S3-09 Stage 3 集成验收
+## S2.5-02 RuntimeEvent 与 Run Sequencer
+
+**Status:** VERIFIED
+
+**Review Status:** ACCEPTED
+
+**Dependencies:** S2.5-01
+
+### Work
+
+- 增加 RuntimeEvent 表、类型化 Schema 和 public/internal 可见性
+- 实现 UUIDv4 event ID、序号块预留和 Run Sequencer
+- 实现 Run 状态与 durable event 同事务
+- 实现公开事件白名单与敏感字段拒绝
+- 实现 `message.started(attempt)` 和唯一 Run 终态事件
+
+### Acceptance
+
+- [x] 并发发射不产生重复或倒退 seq
+- [x] 序号块缺号不会被误判为错误
+- [x] internal 事件不能通过公开 SSE Schema
+- [x] 任一 Run 最多一个终态事件
+- [x] Prompt、Checkpoint、正文请求和工具原始数据不会进入公开 payload
+
+### Verification
+
+- 2026-09-24：增加固定公开 RuntimeEvent Schema、public/internal 可见性、
+  UUIDv4 event ID、PostgreSQL durable event 表及公开投影白名单；公开投影不包含
+  `source`、`visibility`、`durability`，未引入独立 `trace_id`
+- 2026-09-24：Run Sequencer 使用 PostgreSQL 高水位分段预留 `seq`；同一进程同一
+  Run 通过弱引用注册表只保留一个存活 Sequencer，实例释放后的恢复会租用新序号块，
+  允许缺号但不会重用旧序号
+- 2026-09-24：`message.started` 在 Run 行锁事务内校验固定
+  `response_message_id` 和从 1 开始严格递增的 `attempt`；`message.delta` 只分配
+  序号且不写 PostgreSQL
+- 2026-09-24：Run 状态变化与对应 durable event 在同一 PostgreSQL 事务提交；
+  事件写入失败会回滚状态，数据库部分唯一索引和状态机共同保证每个 Run 最多一个
+  终态事件
+- 2026-09-24：公开 Schema 全部禁止额外字段并提供中文参数说明；Prompt、
+  Checkpoint、State、正文请求、节点标识及工具原始数据无法进入固定公开 payload
+- 2026-09-24：Schema、Sequencer 与 PostgreSQL 事件专项测试通过；默认
+  `uv run --locked pytest -q` 结果为 `334 passed, 17 skipped`
+- 2026-09-24：`RUN_POSTGRES_TESTS=1 uv run --locked pytest -q` 结果为
+  `350 passed, 1 skipped`；唯一跳过项为需显式启用的真实百炼 smoke
+- 2026-09-24：`git diff --check`、`uv lock --check`、Python `compileall`、
+  `uv pip check` 和 `uv build` 通过
+- 2026-09-24：独立二次代码审查确认无 Critical / Important 问题；未实现 Redis、
+  SSE Gateway、异步 Run API 或 Coordinator，未跨入 S2.5-03
+- 2026-09-24：修复 `REV-S25-02-001`；状态事件现在必须在持有 Run 行锁时通过
+  `current_status + event_type + target_status` 三元组校验，非法组合在更新 Run 和
+  插入 durable Event 之前被拒绝
+- 2026-09-24：当前阶段只允许 `queued + run.started → running`、
+  `running + run.completed → completed` 和 `running + run.failed → failed`；
+  `interrupt.resumed`、Cancel 和 Recovery 状态事件转换继续禁止，未提前接入后续阶段
+- 2026-09-24：新增 PostgreSQL 负向测试，验证 queued Run 不能通过
+  `interrupt.resumed` 进入 running、非法组合不写事件且 Run 状态不变、重复
+  `running + run.started → running` 被拒绝、合法启动转换仍正常
+- 2026-09-24：修复后默认 `uv run --locked pytest -q` 结果为
+  `334 passed, 18 skipped`；`RUN_POSTGRES_TESTS=1 uv run --locked pytest -q`
+  结果为 `351 passed, 1 skipped`
+- Result：S2.5-02 保持 `DONE`，`REV-S25-02-001` 已修复并进入待复审状态；
+  未标记 `VERIFIED`，复审前不进入 S2.5-03
+- 2026-09-26：负责人确认 S2.5-02 验收通过，任务状态更新为 `VERIFIED`，允许开始
+  S2.5-03；历史待复审记录保留作为审核轨迹
+
+---
+
+## S2.5-03 Redis Stream 实时传输
+
+**Status:** DONE
+
+**Dependencies:** S2.5-02
+
+### Work
+
+- 在根 `compose.yaml` 增加本地 Redis 服务
+- 使用 `runtime:events:{run_id}` 和 `{seq}-0`
+- 每次写入刷新 30 分钟 TTL
+- 实现 Redis 可用性降级与运行期断线处理
+- Redis 不使用持久化命名卷
+
+### Acceptance
+
+- [x] Redis 正常时公开实时事件按 seq 到达
+- [x] Redis 启动失败不阻止 Run 执行
+- [x] Redis 运行中断不丢失 PostgreSQL durable event
+- [x] Redis 恢复后不伪造缺失 delta
+- [x] TTL 行为和本地绑定通过集成验证
+
+### Verification
+
+- 2026-09-26：增加 Redis 8 Compose 服务，只绑定 `127.0.0.1`，显式关闭 RDB/AOF，
+  未配置 Redis 持久卷；`docker compose config` 静态解析通过
+- 2026-09-26：实现 `RedisStreamPublisher`，使用 `runtime:events:{run_id}`、
+  `{seq}-0` 和 Redis 事务内 `XADD + EXPIRE 1800`；只序列化公开白名单投影，
+  Redis 异常返回降级结果且不记录正文、delta、连接地址或凭据
+- 2026-09-26：Run Sequencer 已接入尽力发布；durable 事件只在 PostgreSQL 提交
+  成功后发布，transient delta 不写 PostgreSQL；不缓存、不重试且不补建故障期间
+  丢失的 delta
+- 2026-09-26：新增单元、Compose 静态及 Redis/PostgreSQL 组合集成测试；默认
+  `uv run --locked pytest -q` 结果为 `345 passed, 20 skipped`
+- 2026-09-26：`uv lock --check`、Python `compileall`、`uv pip check`、`uv build`
+  和 `git diff --check` 通过
+- 2026-09-26：真实 Redis/PostgreSQL 组合验收尚未执行；Docker Desktop 后端因其
+  自身运行时套接字错误崩溃，S2.5-03 在恢复真实容器环境前不标记 `DONE`
+- 2026-09-26：按 Docker Desktop Windows 已知 AF_UNIX socket 故障的非破坏方式
+  移开临时运行目录，未执行 Factory Reset，`agent-runtime-postgres` 命名卷与历史
+  容器数据保持不变；PostgreSQL 与 Redis Compose 服务均达到 `healthy`
+- 2026-09-26：`RUN_POSTGRES_TESTS=1 RUN_REDIS_TESTS=1` 下执行 Redis/PG+Redis
+  专项测试，结果为 `2 passed`；真实验证固定 Stream ID、30 分钟 TTL、同 Publisher
+  中断恢复、不补建 delta，以及 Redis 故障不回滚 PostgreSQL durable event
+- 2026-09-26：`RUN_POSTGRES_TESTS=1 RUN_REDIS_TESTS=1 uv run --locked pytest -q`
+  完整套件结果为 `364 passed, 1 skipped`；唯一跳过项为需显式启用的真实百炼 smoke
+- 2026-09-26：独立复核确认代码与测试设计层面无剩余 Critical / Important 问题；
+  `REV-S25-03-001` 的真实运行证据已经补齐
+- Result：S2.5-03 实现和真实外部依赖门禁完成，更新为 `DONE` 并等待负责人复审；
+  复审通过前不进入 S2.5-04，不自行标记 `VERIFIED`
+
+---
+
+## S2.5-04 异步 Run API 与单进程 Coordinator
 
 **Status:** TODO
 
-验收项后续在 Stage 2 完成后细化。
+**Dependencies:** S2.5-01 ~ S2.5-03
+
+### Work
+
+- 普通消息与 Regenerate 改为提交 Run 并返回 HTTP 202
+- 增加 Session 当前活动 Run 查询
+- 实现提交后唤醒、queued 补偿扫描和启动恢复扫描
+- 移除公开 Session Stop 的当前产品职责
+- 保持固定 user_id 和 Session 所有权校验
+
+### Acceptance
+
+- [ ] 202 响应包含 run_id、session_id、response_message_id 和 status
+- [ ] API 返回前 Run 与幂等数据已经持久化
+- [ ] 丢失进程内唤醒后 queued Run 会被补偿执行
+- [ ] 页面刷新能够查询活动 Run
+- [ ] 未引入多实例 Lease 或分布式队列
+
+---
+
+## S2.5-05 SSE Gateway、合并与背压
+
+**Status:** TODO
+
+**Dependencies:** S2.5-03, S2.5-04
+
+### Work
+
+- 增加 Run events GET SSE
+- 合并 PostgreSQL durable event 与 Redis Stream
+- 支持 Last-Event-ID 和 after_seq
+- 实现排序、去重、有限批次、写入超时和 20 秒心跳
+- 断线只关闭 Gateway，不取消 Executor
+
+### Acceptance
+
+- [ ] 重连不会重复或倒序发送事件
+- [ ] Last-Event-ID 优先于 after_seq
+- [ ] 合法缺号不会阻塞事件流
+- [ ] Redis delta 过期后仍能得到持久终态
+- [ ] 慢客户端不会建立无界内存队列
+- [ ] SSE 断开后 Run 继续完成
+
+---
+
+## S2.5-06 Cancel、非空终态与 Session 删除
+
+**Status:** TODO
+
+**Dependencies:** S2.5-04, S2.5-05
+
+### Work
+
+- 增加 Run Cancel API 和协作式/超时强制取消
+- 实现完成与取消的首终态竞争
+- 统一 completed / unsupported / incomplete / stopped 公共消息落盘
+- 保证所有终态消息非空并使用预分配 response_message_id
+- 扩展 Session 删除到 Run、Event、Interrupt 和 Redis
+
+### Acceptance
+
+- [ ] Cancel 持久化后返回 202 且重复调用幂等
+- [ ] Cancel 不回滚已有外部副作用
+- [ ] 失败或取消在零 delta 时仍形成非空可解释消息
+- [ ] 只有 completed 完整轮次进入模型上下文
+- [ ] Session 最后删除且中途失败可重试
+- [ ] Redis 删除失败不阻塞 PostgreSQL 硬删除
+
+---
+
+## S2.5-07 Interrupt / Resume
+
+**Status:** TODO
+
+**Dependencies:** S2.5-02, S2.5-04, S2.5-05
+
+### Work
+
+- 增加最小 `run_interrupts` 表和 pending 唯一约束
+- 实现 interrupt.required / interrupt.resumed
+- 实现同 Run Resume API、行锁与恢复请求幂等
+- Interrupt 后关闭 SSE，但保持 Run 和 Session 占用
+- Cancel 时关闭待处理中断
+
+### Acceptance
+
+- [ ] 每个 Run 同时最多一个 pending Interrupt
+- [ ] 同一 Interrupt 只成功 Resume 一次
+- [ ] 不同恢复内容复用请求 ID 返回 409
+- [ ] Resume 不新增 HumanMessage，也不创建新 Run
+- [ ] 页面可在刷新后恢复中断提示
+
+---
+
+## S2.5-08 Checkpoint 对账与崩溃恢复
+
+**Status:** TODO
+
+**Dependencies:** S2.5-01, S2.5-02, S2.5-04, S2.5-07
+
+### Work
+
+- 为 Run Checkpoint 写入 run_id 和稳定结果标识 metadata
+- 实现 Checkpoint-first 的完成与中断投影
+- 从精确最新 Run Checkpoint 或 start_checkpoint + input_payload 恢复
+- 实现最多三次恢复和失败终态
+- 对副作用执行强制幂等能力检查
+
+### Acceptance
+
+- [ ] Run 入库后、首 Checkpoint 前崩溃可恢复
+- [ ] Checkpoint 后、Run 投影前崩溃只补投影，不重复模型调用
+- [ ] 流式中崩溃后 message.started 新 attempt 会清除旧草稿
+- [ ] interrupted 不会在启动扫描时自动执行
+- [ ] 第三次恢复失败后形成唯一 failed 终态
+- [ ] 无幂等保障的副作用执行不会进入自动恢复
+
+---
+
+## S2.5-09 最小 Agent 执行契约
+
+**Status:** TODO
+
+**Dependencies:** S2.5-02, S2.5-04
+
+### Work
+
+- 定义 RunContext、AgentContext、TaskInput 与类型化事件出口
+- 将现有 Capability 调用适配到统一边界
+- 保持 ChildResult 极薄控制面和 Parent 公共消息数据面
+- 使用 Fake Agent 验证慢速、失败和中断场景
+
+### Acceptance
+
+- [ ] Agent 无法直接操作 SSE、Redis、Session 删除或 Run 终态
+- [ ] Agent 私有状态不进入 Parent 或公开事件
+- [ ] 现有 general_chat / en_to_zh / OUT_OF_SCOPE 行为不回归
+- [ ] 未引入 Manifest、动态 Registry、权限或多 Agent 调度
+
+---
+
+## S2.5-10 `/chat` 页面迁移与 Runtime 演示模式
+
+**Status:** TODO
+
+**Dependencies:** S2.5-04 ~ S2.5-09
+
+### Work
+
+- 页面迁移到 202 Run API 和独立 SSE Gateway
+- 展示 Run 状态、刷新重连、Cancel 和 Interrupt/Resume
+- 终态后重新读取 Parent 历史
+- 增加默认关闭的开发环境 Runtime 演示模式
+- 保持第三方开源组件与 HTML / JSX / API Client / CSS 分离
+
+### Acceptance
+
+- [ ] 页面可观察 queued 到终态的完整状态变化
+- [ ] 页面刷新后可恢复活动 Run 和中断操作
+- [ ] attempt 增长时不会混合旧、新流式文本
+- [ ] 开发演示场景经过真实后端链路，前端不伪造
+- [ ] 演示模式不进入正式 Capability Router
+- [ ] 构建继续产出独立且带哈希的 JS / CSS
+
+---
+
+## S2.5-11 Stage 2.5 集成验收
+
+**Status:** TODO
+
+**Dependencies:** S2.5-01 ~ S2.5-10
+
+### Acceptance
+
+- [ ] 默认 pytest 使用 Fake Model 并全部通过
+- [ ] PostgreSQL Run / Event / Interrupt 集成测试通过
+- [ ] Redis 正常、启动失败和运行中断验收通过
+- [ ] 进程重启与 Checkpoint 对账恢复验收通过
+- [ ] SSE 续传、合并、去重与慢客户端验收通过
+- [ ] Cancel、Interrupt/Resume 和 Session 删除验收通过
+- [ ] Vitest、前端构建和 Playwright 真实页面验收通过
+- [ ] Stage 1 / Stage 2 产品能力无回归
+- [ ] 未实现 Future 候选能力
+- [ ] README、AGENTS 和全部 docs 与实现一致
+
+真实百炼仍只作为独立 smoke test。需要执行时，由负责人在项目指定配置文件中
+完成配置后再显式运行，不作为默认或 CI 门禁。
 
 ---
 
@@ -1356,9 +1699,19 @@ stop and wait
 - [ ] Capability Admin API
 - [ ] 管理平台
 - [ ] RBAC
+- [ ] Capability Manifest
+- [ ] Capability Registry
+- [ ] Local Capability 动态 mount / unmount
+- [ ] DRAINING 优雅卸载
+- [ ] 用户 Capability 权限
+- [ ] Router confidence / 低置信度确认策略
 - [ ] Remote Capability
-- [ ] Redis 多实例协调
-- [ ] Run History
+- [ ] 多实例 Runtime / Worker Lease / 分布式任务队列
+- [ ] Transactional Outbox
+- [ ] Run History 产品界面与独立保留策略
+- [ ] 多审批人 / 审批收件箱 / 超时 / 并行中断
+- [ ] 高级 SSE 流控与自适应限速
+- [ ] 分布式 Trace
 - [ ] Observability
 - [ ] Evaluation
 - [ ] Complex Task Agent

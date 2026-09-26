@@ -379,6 +379,9 @@ Parent 生成固定简短 unsupported 回复
 
 # 14. Stage 2 约束
 
+本节记录已验收的 Stage 2 历史基线。进入 Stage 2.5 后，与持久 Run、异步
+Cancel、独立 SSE 和断线重连冲突的规则，以第 15 节和正式架构决策为准。
+
 Stage 2 继续使用配置中的固定 `user_id`，不实现认证或多用户隔离。
 
 产品接口必须遵守：
@@ -415,7 +418,52 @@ Ant Design X，并满足：
 
 ---
 
-# 15. 开发流程
+# 15. Stage 2.5 约束
+
+Stage 2.5 继续使用单用户可信环境，只支持单个 Runtime 进程。禁止把持久化 Run
+误解为已经支持多实例 Worker、Lease 或分布式任务队列。
+
+必须遵守：
+
+- PostgreSQL Run 是执行生命周期权威源，同一 Session 最多一个活动 Run
+- 普通消息和 Regenerate 先返回 HTTP 202 Run 摘要，再通过独立 GET SSE 获取事件
+- 客户端 `request_id` 必填且全局唯一；冲突内容复用同一 ID 返回 409
+- Run 类型只允许 `normal`、`regenerate`；恢复不得创建新的 retry Run
+- Parent `messages` 继续是完整公共消息唯一权威源
+- `input_payload` 只用于活动 Run 恢复，终态时清除正文，不得公开或写入业务日志
+- 所有事件通过 Run Sequencer 分配持久 `seq`；允许缺号，不允许重复或倒退
+- 公开事件必须使用固定 Schema 与白名单，不得暴露 Prompt、Checkpoint、State、
+  节点或工具原始参数和结果
+- Redis 只承载短期公开实时事件，不是事实权威，也不是应用启动硬依赖
+- SSE 或浏览器断开不取消 Run；只有显式 Cancel、Session 删除或执行失败停止执行
+- Cancel 异步返回 202；Session 删除必须等待活动 Run 终止，并最后删除 Session
+- 最终 AIMessage 或 Interrupt Checkpoint 必须先于 Run 终态 / 中断投影持久化
+- 恢复只承诺至少一次；无幂等保障的外部副作用不得进入自动恢复
+- 每个 Run 同时最多一个 pending Interrupt；Resume 沿用同一 Run 且不得新增
+  HumanMessage
+- completed / unsupported / incomplete / stopped 公共消息必须非空，只有 completed
+  完整轮次进入后续模型上下文
+- Agent 不能直接访问 SSE、Redis、Session 生命周期或顶层 Run 终态
+
+Stage 2.5 必须同步升级 `/chat` 页面，并提供默认关闭、显式启用的开发环境真实
+Runtime 演示模式。继续使用第三方开源组件并保持 HTML、JS/JSX、API Client 和
+CSS 分文件构建。
+
+Stage 2.5 禁止提前实现：
+
+- Capability Manifest / 动态 Registry
+- mount / unmount / DRAINING
+- Capability 权限 / RBAC
+- 多 Agent 调度或 Remote Agent
+- 多实例 Runtime / Worker Lease
+- Transactional Outbox
+- 完整 Run History 产品界面
+- 多审批人或并行中断
+- 文件、RAG 和管理平台
+
+---
+
+# 16. 开发流程
 
 每次任务执行：
 
@@ -434,7 +482,7 @@ Ant Design X，并满足：
 
 ---
 
-# 16. 修改文档规则
+# 17. 修改文档规则
 
 Codex 可以：
 
@@ -453,7 +501,7 @@ Codex 不可以未经负责人明确裁决直接修改：
 
 ---
 
-# 17. 完成定义
+# 18. 完成定义
 
 任务不是“代码已写完”即完成。
 
@@ -469,7 +517,7 @@ Codex 不可以未经负责人明确裁决直接修改：
 
 ---
 
-# 18. 代码文本与 Schema 描述
+# 19. 代码文本与 Schema 描述
 
 - 新增或修改的代码注释、docstring、模型提示词和用户可见提示信息使用中文
 - 代码标识符继续使用清晰、规范的英文命名
@@ -478,7 +526,7 @@ Codex 不可以未经负责人明确裁决直接修改：
 
 ---
 
-# 19. 业务日志规范
+# 20. 业务日志规范
 
 业务日志是贯穿所有 Stage 的工程规范，不属于独立产品能力。新增或修改业务链路时，
 必须在关键入口、关键出口、拒绝、取消和失败位置记录中文业务事件。

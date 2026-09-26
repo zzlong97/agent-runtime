@@ -46,6 +46,10 @@ from agent_runtime.runs import (
     CancelReason,
     ProductRunEvent,
 )
+from agent_runtime.runtime.event_repository import (
+    PostgresRuntimeEventRepository,
+)
+from agent_runtime.runtime.repository import PostgresRunRepository
 from agent_runtime.session_deletion import (
     SessionDeletionError,
     SessionDeletionService,
@@ -1097,13 +1101,17 @@ async def open_chat_service(
     *,
     model: BaseChatModel | None = None,
 ) -> AsyncIterator[ChatService]:
-    """打开 Stage 1 数据库资源，并组装固定 Parent/Child 运行链路。"""
+    """初始化运行所需数据库结构，并组装固定 Parent/Child 链路。"""
 
     log_business_event(logger, "聊天服务初始化开始")
     session_repository = PostgresSessionRepository(settings)
     await session_repository.setup()
     feedback_store = PostgresFeedbackStore(settings)
     await feedback_store.setup()
+    run_repository = PostgresRunRepository(settings)
+    await run_repository.setup()
+    runtime_event_repository = PostgresRuntimeEventRepository(settings)
+    await runtime_event_repository.setup()
     parent_state_store = PostgresParentStateStore(settings)
     runtime_model = model or build_chat_model(settings)
 

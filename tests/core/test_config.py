@@ -16,6 +16,9 @@ def test_settings_read_runtime_values_from_environment(monkeypatch: pytest.Monke
     monkeypatch.setenv("LOCAL_USER_ID", "local-user-42")
     monkeypatch.setenv("LOG_LEVEL", "debug")
     monkeypatch.setenv("LOG_DIR", "runtime-logs")
+    monkeypatch.setenv("REDIS_URL", "redis://cache.example.com:6380/2")
+    monkeypatch.setenv("REDIS_STREAM_TTL_SECONDS", "1800")
+    monkeypatch.setenv("REDIS_SOCKET_TIMEOUT_SECONDS", "0.75")
 
     from agent_runtime.core.config import Settings
 
@@ -33,6 +36,9 @@ def test_settings_read_runtime_values_from_environment(monkeypatch: pytest.Monke
     assert settings.local_user_id == "local-user-42"
     assert settings.log_level == "DEBUG"
     assert settings.log_dir.as_posix() == "runtime-logs"
+    assert settings.redis_connection_string == "redis://cache.example.com:6380/2"
+    assert settings.redis_stream_ttl_seconds == 1800
+    assert settings.redis_socket_timeout_seconds == 0.75
 
 
 def test_settings_do_not_require_a_real_model_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -54,7 +60,10 @@ def test_settings_ignore_blank_values_in_copied_env_example(tmp_path) -> None:
         "LLM_MODEL=\n"
         "LOCAL_USER_ID=\n"
         "LOG_LEVEL=\n"
-        "LOG_DIR=\n",
+        "LOG_DIR=\n"
+        "REDIS_URL=\n"
+        "REDIS_STREAM_TTL_SECONDS=\n"
+        "REDIS_SOCKET_TIMEOUT_SECONDS=\n",
         encoding="utf-8",
     )
 
@@ -68,6 +77,9 @@ def test_settings_ignore_blank_values_in_copied_env_example(tmp_path) -> None:
     assert settings.local_user_id == "local-user"
     assert settings.log_level == "INFO"
     assert settings.log_dir.as_posix() == "logs"
+    assert settings.redis_connection_string == "redis://localhost:6379/0"
+    assert settings.redis_stream_ttl_seconds == 1800
+    assert settings.redis_socket_timeout_seconds == 0.5
 
 
 def test_settings_reject_non_postgresql_database_urls() -> None:
@@ -96,3 +108,12 @@ def test_settings_reject_unknown_log_levels() -> None:
 
     with pytest.raises(ValidationError):
         Settings(log_level="verbose", _env_file=None)
+
+
+def test_settings_reject_non_positive_redis_limits() -> None:
+    from agent_runtime.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(redis_stream_ttl_seconds=0, _env_file=None)
+    with pytest.raises(ValidationError):
+        Settings(redis_socket_timeout_seconds=0, _env_file=None)

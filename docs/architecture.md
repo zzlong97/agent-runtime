@@ -172,7 +172,7 @@ admin/
 remote_executor/
 ```
 
-这些属于 Stage 3 或 Future。
+这些仍不属于 Stage 1 / 2；原 Stage 3 已移出正式阶段，目前只作为 Future 候选。
 
 ---
 
@@ -502,6 +502,10 @@ Parent 可调用 create_agent Child 和 StateGraph Child
 Stage 2 在现有 Runtime 外增加产品服务和演示前端，不改变 Parent Graph 与 Child
 Agent 的状态所有权。
 
+本节保留已经验收的 Stage 2 实现基线。Stage 2.5 开始后，进程内 Active Run、
+POST 直连 SSE、同步 Stop 和“连接断开即停止”等冲突设计由第 14 节取代，不再作为
+当前实现目标。
+
 ## 13.1 组件关系
 
 ```text
@@ -735,39 +739,311 @@ POST SSE 使用 `fetch + ReadableStream` 解析。前端收到事件后可进行
 
 ---
 
-# 14. Stage 3 架构增量
+# 14. Stage 2.5 架构增量
 
-Stage 3 新增：
+Stage 2.5 把执行生命周期从 HTTP 连接和进程内 Registry 中抽离，建立持久 Run、
+RuntimeEvent、Redis 实时事件、独立 SSE Gateway 和可恢复 Executor。Parent / Child
+状态所有权、Parent 公共消息权威源和有限 `OUT_OF_SCOPE` 回流规则保持不变。
 
-```text
-Capability Manifest
-Capability Registry
-User Capability Permission
-Dynamic mount/unmount
-Graceful draining
-Router confidence
-interrupt/resume
-```
-
-目标架构：
+## 14.1 组件关系
 
 ```text
-Manifest
-→ Registry
-→ Permission Filter
-→ Router
-→ Capability
+React / Ant Design X /chat
+        ↓ Product HTTP
+FastAPI Run API
+        ↓
+PostgreSQL Run / RuntimeEvent / Interrupt
+        ↓                     ↘ durable public event
+Single-process Coordinator      SSE Gateway ← Redis Stream
+        ↓                            ↓ merge by seq
+Run Executor → Parent Graph      Browser EventSource
+        ↓
+Parent / Child PostgreSQL Checkpointer
 ```
 
-Stage 3 仍只支持 Local Capability。
+事实数据所有权：
+
+```text
+完整公共消息        → Parent messages
+执行生命周期        → PostgreSQL Run
+持久运行事件        → PostgreSQL RuntimeEvent
+中断提交幂等        → PostgreSQL run_interrupts
+短期实时公开事件    → Redis Stream
+页面临时显示        → 非权威投影
+```
+
+S2.5 仍为单 Runtime 进程。PostgreSQL 负责跨进程重启后的恢复，但不提供多实例
+Worker 竞争、Lease 或分布式任务调度语义。
+
+## 14.2 Run 数据模型与状态机
+
+Run 业务表建议至少包含：
+
+```text
+runs
+├── run_id UUID PRIMARY KEY
+├── request_id UUID UNIQUE NOT NULL
+├── session_id UUID NOT NULL REFERENCES sessions
+├── thread_id TEXT NOT NULL
+├── parent_run_id UUID NULL REFERENCES runs
+├── run_type TEXT NOT NULL
+├── input_message_id UUID NOT NULL
+├── response_message_id UUID NOT NULL
+├── start_checkpoint_id TEXT NULL
+├── input_payload JSONB NULL
+├── request_fingerprint TEXT NOT NULL
+├── status TEXT NOT NULL
+├── recovery_attempts INTEGER NOT NULL DEFAULT 0
+├── seq_high_watermark BIGINT NOT NULL DEFAULT 0
+├── error_code TEXT NULL
+├── error_message TEXT NULL
+├── created_at / started_at / finished_at / updated_at
+```
+
+活动状态部分唯一索引覆盖：
+
+```text
+queued | running | recovering | interrupted | cancel_requested
+```
+
+并以 `session_id` 为键保证每个 Session 最多一个活动 Run。合法主状态转换：
+
+```text
+queued → running → completed | failed | interrupted | cancel_requested
+queued → cancelled | failed
+running → recovering            # 仅重启接管投影
+recovering → running | failed | interrupted | cancel_requested
+interrupted → running | cancelled
+cancel_requested → cancelled
+```
+
+完成与取消竞争时，条件更新只允许首个终态成功；所有终态均不可再修改。Run
+完成为 `unsupported` 时状态仍为 `completed`，公共消息保存 `unsupported`。
+
+创建 Run 的业务事务负责：
+
+```text
+必要时创建 Session
+→ 分配 input_message_id / response_message_id
+→ 捕获 start_checkpoint_id
+→ 写入 request_id / request_fingerprint / input_payload
+→ 创建 queued Run
+```
+
+事务提交后才返回 HTTP 202。执行 Checkpoint 不属于这个事务。规范化请求指纹用于
+终态清除 `input_payload` 后继续判断幂等冲突。
+
+## 14.3 Coordinator 与 Executor
+
+接口提交后进行一次低延迟的进程内唤醒。Coordinator 还必须：
+
+- 定期扫描未被本地执行的 `queued` Run，补偿通知丢失
+- 应用启动时扫描全部非终态 Run
+- 以本地表或任务映射防止同一进程重复启动同一个 Run
+- 不把该扫描器扩展为多实例 Worker 系统
+
+状态接管：
+
+```text
+queued           → 领取为 running
+running          → recovery_attempts + 1，进入 recovering
+recovering       → recovery_attempts + 1，重新接管
+cancel_requested → 完成取消投影
+interrupted      → 不执行，继续等待 Resume / Cancel
+```
+
+初次执行不计恢复次数。每次恢复接管前原子递增，最多三次；第三次恢复失败后必须
+形成非空 `incomplete` 公共消息并进入 `failed`。
+
+## 14.4 RuntimeEvent 与 Sequencer
+
+持久表建议包含：
+
+```text
+runtime_events
+├── event_id UUID PRIMARY KEY
+├── run_id UUID NOT NULL REFERENCES runs
+├── seq BIGINT NOT NULL
+├── event_type TEXT NOT NULL
+├── source TEXT NOT NULL
+├── visibility TEXT NOT NULL
+├── payload JSONB NOT NULL
+├── schema_version INTEGER NOT NULL
+├── durability TEXT NOT NULL
+├── created_at TIMESTAMPTZ NOT NULL
+└── UNIQUE (run_id, seq)
+```
+
+`event_id` 使用 UUIDv4，只承担唯一标识。每个 Run 的 Sequencer 从 PostgreSQL
+原子租用序号块，并串行处理所有事件发布。块内未使用序号可以永久形成缺号；任何
+消费者只能比较大小，不能要求连续。
+
+事件出口分为：
+
+```text
+public  → 固定公开 Schema → PG（durable）或 Redis（transient）→ SSE
+internal → 内部 Schema → 仅允许受控持久化和服务端诊断
+```
+
+公共投影必须显式白名单。`source` 和可选内部 `node_id` 不允许成为前端对
+LangGraph 拓扑的依赖；Prompt、Checkpoint、State、工具原始参数和结果不得进入
+公开 payload。
+
+持久公开事件写入流程：
+
+```text
+BEGIN
+  条件更新 Run / Interrupt 状态
+  INSERT RuntimeEvent
+COMMIT
+→ Redis XADD best effort
+```
+
+瞬时 `message.delta` 不写 PostgreSQL，只经 Sequencer 写 Redis。每次执行尝试开始
+前先持久化 `message.started(response_message_id, attempt)`；恢复尝试的 `attempt`
+递增，使页面可以抛弃旧草稿。
+
+## 14.5 Redis Stream 与 SSE Gateway
+
+Redis key 为 `runtime:events:{run_id}`，显式 Stream ID 为 `{seq}-0`。写入与刷新
+30 分钟 TTL 应在同一个 Redis 事务或等价原子操作中完成。Redis 不使用持久卷，
+任何错误均降级而不是令 Run 失败。
+
+SSE Gateway 维护单调递增的 `last_emitted_seq`：
+
+```text
+读取 Last-Event-ID，否则读取 after_seq
+→ 查询 PostgreSQL seq > cursor 的 durable public 事件
+→ XREAD Redis seq > cursor 的实时事件
+→ 合并、按 seq 排序、去重
+→ 仅发送 seq > last_emitted_seq
+→ Run 终态且无剩余事件时关闭
+```
+
+Gateway 不以数值缺号推断丢失。Redis 已经过期或不可用时，瞬时 delta 可以缺失；
+终态事件仍从 PostgreSQL 到达，页面随后重新读取 Parent 历史替换本地草稿。
+
+连接读取采用有限批次，上一批未写完前不预取下一批。写入超时或客户端断开只结束
+该 Gateway 任务，不触碰 Executor。每 20 秒发送 SSE 注释心跳，不占用事件序号。
+
+## 14.6 Checkpoint 与恢复对账
+
+Run 的 `start_checkpoint_id` 是接受请求时捕获的确定起点。每个后续 Checkpoint
+metadata 必须包含 `run_id`，最终消息还必须可以通过稳定 `response_message_id`
+识别；中断快照必须能够定位稳定 `interrupt_id`。
+
+终态与中断的写入顺序固定为：
+
+```text
+1. Checkpointer 持久化最终 AIMessage 或 interrupt snapshot
+2. PostgreSQL 事务写 Run / Interrupt 投影与 durable RuntimeEvent
+3. Redis best-effort publish
+```
+
+恢复器先读取该 Run 的精确最新 Checkpoint：
+
+- 已有最终 `response_message_id`：只补齐消息终态、Run 和事件投影
+- 已有待处理中断：只补齐 `run_interrupts`、Run 和事件投影
+- 有中间 Checkpoint：从该精确 Checkpoint 恢复
+- 没有 Run Checkpoint：从 `start_checkpoint_id + input_payload` 重放
+
+同一稳定消息 ID 的重复写入必须按消息归并语义覆盖或去重，不得产生第二条公共
+HumanMessage / AIMessage。所有可能产生外部副作用的节点在进入恢复范围前必须实现
+幂等键或操作账本；否则执行器应拒绝自动恢复，而不是宣称恰好一次。
+
+## 14.7 Cancel、Interrupt 与 Session 删除
+
+Cancel API 只负责把请求持久化为 `cancel_requested` 并返回 202。Executor 先发出
+协作式取消，超过配置的宽限时间后取消本地任务；最终 Checkpoint 和公共消息写入
+完成后再提交 `run.cancelled`。重复 Cancel 读取当前状态，不重复执行副作用。
+
+`run_interrupts` 建议使用：
+
+```text
+run_id + interrupt_id UNIQUE
+status
+interrupt_payload
+resume_payload
+resume_request_id
+created_at / resumed_at / cancelled_at
+```
+
+另建只覆盖 pending 状态的唯一约束，确保每个 Run 最多一个待处理中断。Resume
+在事务中锁定记录，校验恢复请求指纹并只允许一次状态转换。Checkpoint 中断快照
+先于 `interrupt.required` 投影；Resume 调用 `Command(resume=...)` 时沿用原 Run，
+不增加 HumanMessage。
+
+Session 删除由 Session 级删除协调器形成进程内屏障：
+
+```text
+拒绝新 Run
+→ Cancel active Run and wait terminal
+→ collect run_ids
+→ best-effort delete Redis keys
+→ delete run_interrupts / runtime_events / runs
+→ delete Child / Parent checkpoints and feedback
+→ delete Session last
+```
+
+Redis 删除失败不阻塞 PostgreSQL 硬删除。Session 最后删除，使失败请求可以安全
+重试。
+
+## 14.8 Agent 执行边界
+
+统一执行入口只传入：
+
+```text
+RunContext   → run_id、request_id、稳定消息 ID、取消与事件出口
+AgentContext → capability_id、Child thread/config 等受控执行上下文
+TaskInput    → 本次由 Parent 派生的输入视图
+```
+
+事件出口接受类型化事件并交给 Sequencer。Agent 不获得 Redis Client、SSE Response、
+Session 删除能力或顶层 Run Repository，不能自行改变 Run 终态。现有 `ChildResult`
+继续只承载控制状态；完整公共文本沿数据面写回 Parent。
+
+开发环境 Fake Agent 可以在显式开关下产生正常、慢速、失败和中断场景，但必须经过
+同一 Executor、Event、Redis、SSE 和 Checkpoint 链路，不能由前端伪造。
+
+## 14.9 页面迁移与验收结构
+
+前端从 POST SSE 改为：
+
+```text
+POST create Run → 202
+→ GET active Run / event stream
+→ message.started 清理草稿
+→ message.delta 更新草稿
+→ message.finalized / run.* terminal
+→ GET Parent history 重新校准
+```
+
+Run 状态面板展示公开状态、Run ID、消息 ID、Capability、恢复尝试和中断操作，
+不得显示内部事件正文。开发演示模式由后端配置控制，默认关闭。
+
+测试层次：
+
+```text
+unit        → 状态机、Schema、Sequencer、幂等与事件过滤
+PostgreSQL  → 事务、唯一约束、恢复对账与删除
+Redis       → Stream ID、续传、TTL 与故障降级
+integration → 进程重启、取消、中断恢复和非空终态
+frontend    → 状态投影、重连、Cancel、Resume
+Playwright  → 构建页面端到端真实链路
+```
+
+默认测试继续使用 Fake Model。真实百炼 smoke 只在负责人配置指定环境文件后显式
+执行，不作为默认门禁。
 
 ---
 
 # 15. Future 边界
 
-未来复杂任务 Agent 不应把串并联逻辑塞入 Parent Graph。
+原 Stage 3 的 Manifest、Registry、动态挂载、权限、DRAINING 和 Router confidence
+不再是已承诺阶段，只保留为 Stage 2.5 之后的候选增量。多实例 Runtime 必须先设计
+Worker Lease、任务所有权和故障接管，不能直接复用 S2.5 单进程 Coordinator。
 
-正确演进：
+未来复杂任务 Agent 仍不应把串并联逻辑塞入 Parent Graph：
 
 ```text
 Parent Router
@@ -775,4 +1051,5 @@ Parent Router
 → 内部负责多个 Capability / SubAgent 编排
 ```
 
-这样 Parent Graph 长期保持轻量稳定。
+这样 Parent Graph 长期保持轻量稳定。后续阶段的名称、顺序和验收范围必须在
+Stage 2.5 完成后重新裁决。
