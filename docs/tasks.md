@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2.5
-Current Task: S2.5-03
-Last Verified Task: S2.5-02
-Last Verified Commit: 41ddcea3a2055a99b1428f8d3eb78a6ff2254ce2（S2.5-00～02 当前未提交）
+Current Task: S2.5-04
+Last Verified Task: S2.5-03
+Last Verified Commit: 1f8a132（S2.5-00～03 累计实现基线）
 Blockers: None
 ```
 
@@ -1445,7 +1445,7 @@ stop and wait
 
 ## S2.5-03 Redis Stream 实时传输
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-02
 
@@ -1493,12 +1493,14 @@ stop and wait
   `REV-S25-03-001` 的真实运行证据已经补齐
 - Result：S2.5-03 实现和真实外部依赖门禁完成，更新为 `DONE` 并等待负责人复审；
   复审通过前不进入 S2.5-04，不自行标记 `VERIFIED`
+- 2026-09-26：负责人确认 S2.5-03 验收通过，任务状态更新为 `VERIFIED`；
+  累计实现基线已提交为 `1f8a132`，允许开始 S2.5-04
 
 ---
 
 ## S2.5-04 异步 Run API 与单进程 Coordinator
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 
 **Dependencies:** S2.5-01 ~ S2.5-03
 
