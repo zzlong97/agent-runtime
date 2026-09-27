@@ -22,7 +22,7 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 的 OpenAI 兼容接口接入；自动化测试默认使用 Fake Model，真实模型只用于
 可选 smoke test。
 
-当前已交付的 Stage 2 主链路为：
+已验收的 Stage 2 页面历史基线为：
 
 ```text
 React / Ant Design X Chat Demo
@@ -42,7 +42,7 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-Stage 2.5 将把 Run 从 POST SSE 和进程内 Registry 中解耦，目标链路为：
+当前后端已完成到 S2.5-04，Run 已从 POST SSE 和进程内 Registry 中解耦：
 
 ```text
 POST 创建持久 Run → HTTP 202
@@ -53,11 +53,12 @@ Parent Graph → PostgreSQL Checkpoint
              ↓
 PostgreSQL RuntimeEvent + Redis Stream
              ↓
-GET SSE Gateway → /chat
+GET SSE Gateway → /chat（S2.5-05 及后续任务）
 ```
 
-当前代码仍是已验收的 Stage 2 实现；S2.5 能力必须按 `docs/tasks.md` 顺序逐项
-实现，不能因文档已经确认就宣称代码已具备。
+当前代码已具备 PostgreSQL 持久 Run、RuntimeEvent、Redis Stream 尽力发布、
+HTTP 202 Run API、活动 Run 查询和单进程 Coordinator。独立 GET SSE、Cancel、
+Interrupt/Resume、崩溃恢复及页面迁移仍须按 `docs/tasks.md` 后续任务逐项实现。
 
 ---
 
@@ -215,12 +216,16 @@ ChildResult
 
 ### Stage 2.5：持久化 Run 与可恢复 Runtime
 
-当前计划：
+当前已实现到 S2.5-04：
 
 - PostgreSQL 持久 Run、幂等请求和数据库活动 Run 唯一约束
 - 类型化 RuntimeEvent、每 Run Sequencer 和公开/内部事件隔离
 - Redis Streams 短期公开实时事件与故障降级
-- HTTP 202 Run API、独立 GET SSE 和断点续传
+- HTTP 202 Run API、活动 Run 查询和单进程 Coordinator
+
+后续计划：
+
+- 独立 GET SSE、事件合并、背压和断点续传
 - 异步 Cancel、断线继续执行和 Session 完整清理
 - 同 Run Interrupt / Resume
 - Checkpoint-first 对账与最多三次崩溃恢复
@@ -249,11 +254,11 @@ ChildResult
 
 ---
 
-## 5. 运行聊天演示页面
+## 5. 运行当前 Runtime
 
-以下说明运行当前已验收的 Stage 2 页面及 S2.5-03 开发依赖。Redis Stream 发布层
-的当前实现和验收状态以 `docs/tasks.md` 为准；页面切换到独立 Run SSE 的能力将在
-后续 S2.5 任务接入。
+以下说明运行 S2.5-04 后端及其 PostgreSQL / Redis 开发依赖。当前
+`/chat` 仍是已验收的 Stage 2 构建产物，尚未迁移到 HTTP 202 Run API；完整
+页面迁移属于 S2.5-10。在该任务完成前，请使用下方 API 验证当前后端。
 
 本地 PostgreSQL 和 Redis 由 Windows Docker Desktop 承载。先确认 Docker Desktop
 已启动，然后在项目根目录启动依赖：
@@ -278,7 +283,32 @@ docker compose up -d postgres redis
 uv run --env-file .env python -m agent_runtime
 ```
 
-然后访问 `http://127.0.0.1:8000/chat`。
+普通消息必须提供全局唯一 `request_id`，成功提交后立即返回 HTTP
+202 和公开 Run 摘要：
+
+```powershell
+$requestId = [guid]::NewGuid().ToString()
+$body = @{
+  request_id = $requestId
+  message = @{ content = "你好" }
+} | ConvertTo-Json
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/chat/completions" `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+页面刷新恢复时使用返回的 `session_id` 查询当前活动 Run；空闲时返回
+JSON `null`：
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "http://127.0.0.1:8000/api/v1/chat/sessions/{session_id}/active-run"
+```
+
+独立 Run SSE Gateway 属于 S2.5-05，当前阶段不对外提供事件连接。
 
 应用会把生命周期、HTTP、Session、Run、Parent、Router 和 Capability 的关键
 入口、出口及失败事件写入当天日志。默认文件是

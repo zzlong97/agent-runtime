@@ -66,6 +66,14 @@ class Settings(BaseSettings):
             "不得阻塞 PostgreSQL Run 主流程。"
         ),
     )
+    run_coordinator_scan_interval_seconds: float = Field(
+        default=1.0,
+        gt=0,
+        description=(
+            "单进程 Run Coordinator 扫描 queued Run 的补偿间隔秒数；"
+            "Stage 2.5 默认 1 秒，只补偿进程内唤醒丢失，不提供多实例 Lease。"
+        ),
+    )
 
     @field_validator("database_url")
     @classmethod

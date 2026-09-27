@@ -22,6 +22,7 @@ from agent_runtime.runtime.models import (
     RunSubmission,
     RunType,
 )
+from agent_runtime.sessions.models import Session
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,53 @@ FROM runs
 WHERE request_id = %s
 """
 
+_SELECT_RUN_BY_RESPONSE_MESSAGE = f"""
+SELECT {_RUN_COLUMNS}
+FROM runs
+WHERE session_id = %s
+AND response_message_id = %s
+ORDER BY created_at DESC, run_id DESC
+LIMIT 1
+"""
+
+_INSERT_SESSION = """
+INSERT INTO sessions (session_id, user_id, title, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s)
+"""
+
+_SELECT_ACTIVE_RUN_FOR_SESSION = f"""
+SELECT {_RUN_COLUMNS}
+FROM runs
+WHERE session_id = %s
+AND status IN (
+    'queued',
+    'running',
+    'recovering',
+    'interrupted',
+    'cancel_requested'
+)
+"""
+
+_QUALIFIED_RUN_COLUMNS = ",\n".join(
+    f"r.{column.strip()}"
+    for column in _RUN_COLUMNS.strip().split(",")
+)
+
+_SELECT_ACTIVE_RUNS_FOR_USER = f"""
+SELECT {_QUALIFIED_RUN_COLUMNS}
+FROM runs AS r
+JOIN sessions AS s ON s.session_id = r.session_id
+WHERE s.user_id = %s
+AND r.status IN (
+    'queued',
+    'running',
+    'recovering',
+    'interrupted',
+    'cancel_requested'
+)
+ORDER BY r.created_at, r.run_id
+"""
+
 class RunPersistenceError(ApplicationError):
     """Run Schema 或持久化读写失败时返回的稳定应用错误。"""
 
@@ -245,8 +293,15 @@ class PostgresRunRepository:
     async def create_or_get(
         self,
         submission: RunSubmission,
+        *,
+        new_session: Session | None = None,
     ) -> RunCreateResult:
-        """幂等创建 queued Run；重复 request_id 返回数据库中的原 Run。"""
+        """
+        幂等创建 queued Run；新 Session 可与 Run 在同一事务提交。
+
+        重复 request_id 返回数据库中的原 Run，并回滚本次未使用的
+        新 Session，避免幂等重试留下孤儿数据。
+        """
 
         operation_started_at = perf_counter()
         log_business_event(
@@ -261,7 +316,10 @@ class PostgresRunRepository:
         )
         try:
             try:
-                result = await self._insert_or_resolve_request(submission)
+                result = await self._insert_or_resolve_request(
+                    submission,
+                    new_session=new_session,
+                )
             except UniqueViolation as error:
                 result = await self._resolve_unique_violation(
                     submission,
@@ -405,11 +463,126 @@ class PostgresRunRepository:
         self._log_read_completed(run, operation_started_at)
         return run
 
+    async def get_active_for_session(self, session_id: UUID) -> Run | None:
+        """读取 Session 当前唯一活动 Run；空闲时返回 None。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_ACTIVE_RUN_FOR_SESSION,
+                    (session_id,),
+                )
+                row = await cursor.fetchone()
+        except Exception as error:
+            log_business_event(
+                logger,
+                "Run持久化活动查询失败",
+                level=logging.ERROR,
+                session_id=session_id,
+                error_code="RUN_READ_FAILED",
+                error_type=type(error).__name__,
+            )
+            raise RunPersistenceError(
+                code="RUN_READ_FAILED",
+                message="Run 读取失败",
+                retryable=True,
+            ) from error
+        run = _run_from_row(row) if row is not None else None
+        log_business_event(
+            logger,
+            "Run持久化活动查询完成",
+            session_id=session_id,
+            run_id=run.run_id if run is not None else None,
+            status=run.status if run is not None else "idle",
+        )
+        return run
+
+    async def find_by_response_message_id(
+        self,
+        *,
+        session_id: UUID,
+        response_message_id: UUID,
+    ) -> Run | None:
+        """按 Session 与回复消息 UUID 查找来源 Run；历史消息返回 None。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_RUN_BY_RESPONSE_MESSAGE,
+                    (session_id, response_message_id),
+                )
+                row = await cursor.fetchone()
+        except Exception as error:
+            log_business_event(
+                logger,
+                "Run持久化来源查询失败",
+                level=logging.ERROR,
+                session_id=session_id,
+                message_id=response_message_id,
+                error_code="RUN_READ_FAILED",
+                error_type=type(error).__name__,
+            )
+            raise RunPersistenceError(
+                code="RUN_READ_FAILED",
+                message="Run 读取失败",
+                retryable=True,
+            ) from error
+        run = _run_from_row(row) if row is not None else None
+        log_business_event(
+            logger,
+            "Run持久化来源查询完成",
+            session_id=session_id,
+            message_id=response_message_id,
+            parent_run_id=run.run_id if run is not None else None,
+            status=run.status if run is not None else "not_found",
+        )
+        return run
+
+    async def list_active_for_user(self, *, user_id: str) -> list[Run]:
+        """按固定用户列出非终态 Run，供启动与周期扫描使用。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_ACTIVE_RUNS_FOR_USER,
+                    (user_id,),
+                )
+                rows = await cursor.fetchall()
+        except Exception as error:
+            log_business_event(
+                logger,
+                "Run持久化扫描读取失败",
+                level=logging.ERROR,
+                error_code="RUN_READ_FAILED",
+                error_type=type(error).__name__,
+            )
+            raise RunPersistenceError(
+                code="RUN_READ_FAILED",
+                message="Run 读取失败",
+                retryable=True,
+            ) from error
+        return [_run_from_row(row) for row in rows]
+
     async def _insert_or_resolve_request(
         self,
         submission: RunSubmission,
+        *,
+        new_session: Session | None,
     ) -> RunCreateResult:
         async with open_database_connection(self._settings) as connection:
+            if new_session is not None:
+                if new_session.session_id != submission.session_id:
+                    raise ValueError("Session 与 Run 的 session_id 必须一致")
+                await connection.execute(
+                    _INSERT_SESSION,
+                    (
+                        new_session.session_id,
+                        new_session.user_id,
+                        new_session.title,
+                        new_session.created_at,
+                        new_session.updated_at,
+                    ),
+                )
             cursor = await connection.execute(
                 _INSERT_RUN,
                 (
@@ -446,7 +619,10 @@ class PostgresRunRepository:
                 )
             existing = _run_from_row(existing_row)
             self._ensure_same_request(existing, submission)
-            await connection.commit()
+            if new_session is not None:
+                await connection.rollback()
+            else:
+                await connection.commit()
             return RunCreateResult(run=existing, created=False)
 
     async def _resolve_unique_violation(

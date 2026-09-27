@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
@@ -49,7 +50,25 @@ from agent_runtime.runs import (
 from agent_runtime.runtime.event_repository import (
     PostgresRuntimeEventRepository,
 )
-from agent_runtime.runtime.repository import PostgresRunRepository
+from agent_runtime.runtime.event_models import RuntimeEventDraft
+from agent_runtime.runtime.event_schemas import (
+    MessageDeltaPayload,
+    MessageFinalizedPayload,
+    MessageStartedPayload,
+    RunCompletedPayload,
+    RunFailedPayload,
+    RunStartedPayload,
+)
+from agent_runtime.runtime.fingerprints import build_request_fingerprint
+from agent_runtime.runtime.models import JsonValue, Run, RunSubmission
+from agent_runtime.runtime.redis_stream import RedisStreamPublisher
+from agent_runtime.runtime.repository import (
+    PostgresRunRepository,
+    RunNotFoundError,
+    RunRequestConflictError,
+)
+from agent_runtime.runtime.sequencer import RunSequencer
+from agent_runtime.runtime.coordinator import RunCoordinator
 from agent_runtime.session_deletion import (
     SessionDeletionError,
     SessionDeletionService,
@@ -101,9 +120,14 @@ class ChatService:
         deletion_service: SessionDeletionService | None = None,
         checkpoint_forker: CheckpointForker | None = None,
         run_registry: ActiveRunRegistry | None = None,
+        persistent_run_repository: PostgresRunRepository | None = None,
+        runtime_event_repository: PostgresRuntimeEventRepository | None = None,
+        runtime_event_publisher: RedisStreamPublisher | None = None,
+        run_coordinator: RunCoordinator | None = None,
         session_id_factory: Callable[[], UUID] = uuid4,
         human_message_id_factory: Callable[[], UUID] = uuid4,
         response_message_id_factory: Callable[[], UUID] = uuid4,
+        run_id_factory: Callable[[], UUID] = uuid4,
     ) -> None:
         """绑定 Session 持久化、Parent Graph 和服务端 UUID 生成器。"""
 
@@ -122,14 +146,489 @@ class ChatService:
             parent_graph=parent_graph,
         )
         self._run_registry = run_registry or ActiveRunRegistry()
+        self._persistent_run_repository = persistent_run_repository
+        self._runtime_event_repository = runtime_event_repository
+        self._runtime_event_publisher = runtime_event_publisher
+        self._run_coordinator = run_coordinator
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
         self._response_message_id_factory = response_message_id_factory
+        self._run_id_factory = run_id_factory
+        self._run_submission_lock = asyncio.Lock()
         self._prepared_turns: dict[UUID, PreparedChatTurn] = {}
         self._turn_preparation_barriers: dict[
             UUID,
             tuple[ActiveRun, asyncio.Future[None]],
         ] = {}
+
+    async def submit_chat_run(
+        self,
+        *,
+        request_id: UUID,
+        session_id: UUID | None,
+        content: str,
+    ) -> Run:
+        """持久化普通消息 Run，事务提交后再唤醒本地执行器。"""
+
+        repository, coordinator = self._persistent_runtime_dependencies()
+        request_payload: dict[str, JsonValue] = {
+            "message": {"content": content}
+        }
+        fingerprint = build_request_fingerprint(
+            run_type="normal",
+            session_id=session_id,
+            request_payload=request_payload,
+        )
+        started_at = perf_counter()
+        log_business_event(
+            logger,
+            "普通Run提交开始",
+            request_id=request_id,
+            session_id=session_id,
+            session_mode="existing" if session_id is not None else "new",
+        )
+        async with self._run_submission_lock:
+            existing = await self._resolve_existing_request(
+                repository=repository,
+                coordinator=coordinator,
+                request_id=request_id,
+                fingerprint=fingerprint,
+            )
+            if existing is not None:
+                return existing
+
+            created_at = datetime.now(UTC)
+            response_message_id = self._response_message_id_factory()
+            input_message_id = self._human_message_id_factory()
+            new_session: Session | None = None
+            start_checkpoint_id: str | None = None
+            if session_id is None:
+                resolved_session_id = self._session_id_factory()
+                new_session = Session(
+                    session_id=resolved_session_id,
+                    user_id=self._settings.local_user_id,
+                    title=content,
+                    created_at=created_at,
+                    updated_at=created_at,
+                )
+            else:
+                resolved_session_id = session_id
+                state = await self._get_owned_parent_state(session_id)
+                start_checkpoint_id = self._checkpoint_id(state.config)
+
+            result = await repository.create_or_get(
+                RunSubmission(
+                    run_id=self._run_id_factory(),
+                    request_id=request_id,
+                    session_id=resolved_session_id,
+                    thread_id=str(resolved_session_id),
+                    parent_run_id=None,
+                    run_type="normal",
+                    input_message_id=input_message_id,
+                    response_message_id=response_message_id,
+                    start_checkpoint_id=start_checkpoint_id,
+                    input_payload=request_payload,
+                    request_fingerprint=fingerprint,
+                    created_at=created_at,
+                ),
+                new_session=new_session,
+            )
+        await coordinator.wake(result.run.run_id)
+        log_business_event(
+            logger,
+            "普通Run提交完成",
+            run_id=result.run.run_id,
+            request_id=result.run.request_id,
+            session_id=result.run.session_id,
+            message_id=result.run.response_message_id,
+            status=result.run.status,
+            created=result.created,
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+        )
+        return result.run
+
+    async def submit_regeneration_run(
+        self,
+        *,
+        request_id: UUID,
+        session_id: UUID,
+        message_id: UUID,
+    ) -> Run:
+        """校验并持久化 Regenerate Run，不新增 HumanMessage。"""
+
+        repository, coordinator = self._persistent_runtime_dependencies()
+        request_payload: dict[str, JsonValue] = {
+            "source_message_id": str(message_id)
+        }
+        fingerprint = build_request_fingerprint(
+            run_type="regenerate",
+            session_id=session_id,
+            request_payload=request_payload,
+        )
+        started_at = perf_counter()
+        log_business_event(
+            logger,
+            "重新生成Run提交开始",
+            request_id=request_id,
+            session_id=session_id,
+            source_message_id=message_id,
+        )
+        async with self._run_submission_lock:
+            existing = await self._resolve_existing_request(
+                repository=repository,
+                coordinator=coordinator,
+                request_id=request_id,
+                fingerprint=fingerprint,
+            )
+            if existing is not None:
+                return existing
+
+            await self._require_owned_session(session_id)
+            messages = await self._history_adapter.get_active_messages(
+                session_id=session_id
+            )
+            if (
+                not messages
+                or messages[-1].message_id != message_id
+                or messages[-1].role != "assistant"
+                or messages[-1].runtime_status != "completed"
+            ):
+                raise ChatRuntimeError(
+                    code="MESSAGE_REGENERATE_NOT_ALLOWED",
+                    message="仅允许重新生成当前活动分支最新的 completed AIMessage",
+                    status_code=409,
+                )
+            source_human = next(
+                (
+                    message
+                    for message in reversed(messages[:-1])
+                    if message.role == "user"
+                ),
+                None,
+            )
+            if source_human is None:
+                raise ChatRuntimeError(
+                    code="MESSAGE_REGENERATE_NOT_ALLOWED",
+                    message="重新生成的原回答缺少对应用户消息",
+                    status_code=409,
+                )
+            start_config = await self._checkpoint_forker.find_start_checkpoint(
+                session_id=session_id,
+                message_id=message_id,
+            )
+            start_checkpoint_id = self._checkpoint_id(start_config)
+            if start_checkpoint_id is None:
+                raise ChatRuntimeError(
+                    code="MESSAGE_REGENERATE_FORK_FAILED",
+                    message="创建消息重新生成分支失败",
+                    retryable=True,
+                )
+            source_run = await repository.find_by_response_message_id(
+                session_id=session_id,
+                response_message_id=message_id,
+            )
+            response_message_id = self._response_message_id_factory()
+            created_at = datetime.now(UTC)
+            result = await repository.create_or_get(
+                RunSubmission(
+                    run_id=self._run_id_factory(),
+                    request_id=request_id,
+                    session_id=session_id,
+                    thread_id=str(session_id),
+                    parent_run_id=(
+                        source_run.run_id if source_run is not None else None
+                    ),
+                    run_type="regenerate",
+                    input_message_id=source_human.message_id,
+                    response_message_id=response_message_id,
+                    start_checkpoint_id=start_checkpoint_id,
+                    input_payload=request_payload,
+                    request_fingerprint=fingerprint,
+                    created_at=created_at,
+                )
+            )
+        await coordinator.wake(result.run.run_id)
+        log_business_event(
+            logger,
+            "重新生成Run提交完成",
+            run_id=result.run.run_id,
+            request_id=result.run.request_id,
+            session_id=result.run.session_id,
+            source_message_id=message_id,
+            message_id=result.run.response_message_id,
+            status=result.run.status,
+            created=result.created,
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+        )
+        return result.run
+
+    async def get_active_run(self, *, session_id: UUID) -> Run | None:
+        """验证固定用户所有权后返回 Session 当前活动 Run。"""
+
+        repository, _coordinator = self._persistent_runtime_dependencies()
+        await self._require_owned_session(session_id)
+        return await repository.get_active_for_session(session_id)
+
+    async def execute_persistent_run(self, run: Run) -> None:
+        """执行已提交的 queued Run，并按持久事件协议完成状态变化。"""
+
+        event_repository = self._runtime_event_repository
+        if event_repository is None:
+            raise ChatRuntimeError(
+                code="RUNTIME_EVENT_SERVICE_UNAVAILABLE",
+                message="RuntimeEvent 服务尚未完成初始化",
+                retryable=True,
+            )
+        if run.status != "queued":
+            return
+        sequencer = RunSequencer.for_run(
+            run_id=run.run_id,
+            response_message_id=run.response_message_id,
+            repository=event_repository,
+            publisher=self._runtime_event_publisher,
+        )
+        started_at = perf_counter()
+        capability_id: CapabilityId | None = None
+        log_business_event(
+            logger,
+            "持久Run执行开始",
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            run_type=run.run_type,
+        )
+        await sequencer.transition_run(
+            target_status="running",
+            event=self._runtime_event_draft(
+                "run.started",
+                RunStartedPayload(status="running"),
+            ),
+            updated_at=datetime.now(UTC),
+        )
+        try:
+            turn = await self._turn_from_run(run)
+            await sequencer.emit(
+                self._runtime_event_draft(
+                    "message.started",
+                    MessageStartedPayload(
+                        response_message_id=run.response_message_id,
+                        attempt=1,
+                    ),
+                )
+            )
+            async for message in self.stream_turn(turn):
+                capability_id = self._message_capability_id(
+                    message,
+                    fallback=capability_id,
+                )
+                delta = str(message.text)
+                if not delta:
+                    continue
+                await sequencer.emit(
+                    self._runtime_event_draft(
+                        "message.delta",
+                        MessageDeltaPayload(
+                            response_message_id=run.response_message_id,
+                            attempt=1,
+                            delta=delta,
+                        ),
+                    )
+                )
+            completion_status = await self.get_completion_status(turn)
+            await self._session_service.touch_session(session_id=run.session_id)
+            await sequencer.emit(
+                self._runtime_event_draft(
+                    "message.finalized",
+                    MessageFinalizedPayload(
+                        response_message_id=run.response_message_id,
+                        runtime_status=completion_status,
+                        capability_id=capability_id,
+                    ),
+                )
+            )
+            await sequencer.transition_run(
+                target_status="completed",
+                event=self._runtime_event_draft(
+                    "run.completed",
+                    RunCompletedPayload(status="completed"),
+                ),
+                updated_at=datetime.now(UTC),
+            )
+        except Exception as error:
+            public_error = (
+                error
+                if isinstance(error, ApplicationError)
+                else ChatRuntimeError(
+                    code="CHAT_RUNTIME_FAILED",
+                    message="聊天运行失败",
+                    retryable=False,
+                )
+            )
+            await sequencer.transition_run(
+                target_status="failed",
+                event=self._runtime_event_draft(
+                    "run.failed",
+                    RunFailedPayload(
+                        status="failed",
+                        code=public_error.code,
+                        message=public_error.message,
+                        retryable=public_error.retryable,
+                    ),
+                ),
+                updated_at=datetime.now(UTC),
+                error_code=public_error.code,
+                error_message=public_error.message,
+            )
+            log_business_event(
+                logger,
+                "持久Run执行失败",
+                level=logging.ERROR,
+                run_id=run.run_id,
+                request_id=run.request_id,
+                session_id=run.session_id,
+                message_id=run.response_message_id,
+                capability_id=capability_id,
+                error_code=public_error.code,
+                error_type=type(error).__name__,
+                duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            )
+            return
+        log_business_event(
+            logger,
+            "持久Run执行完成",
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            capability_id=capability_id,
+            status="completed",
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+        )
+
+    def _persistent_runtime_dependencies(
+        self,
+    ) -> tuple[PostgresRunRepository, RunCoordinator]:
+        repository = self._persistent_run_repository
+        coordinator = self._run_coordinator
+        if repository is None or coordinator is None:
+            raise ChatRuntimeError(
+                code="RUN_SERVICE_UNAVAILABLE",
+                message="Run 服务尚未完成初始化",
+                retryable=True,
+            )
+        return repository, coordinator
+
+    async def _resolve_existing_request(
+        self,
+        *,
+        repository: PostgresRunRepository,
+        coordinator: RunCoordinator,
+        request_id: UUID,
+        fingerprint: str,
+    ) -> Run | None:
+        try:
+            existing = await repository.get_by_request_id(request_id)
+        except RunNotFoundError:
+            return None
+        if existing.request_fingerprint != fingerprint:
+            raise RunRequestConflictError(
+                code="RUN_REQUEST_CONFLICT",
+                message="request_id 已用于不同请求",
+                status_code=409,
+            )
+        await self._require_owned_session(existing.session_id)
+        await coordinator.wake(existing.run_id)
+        return existing
+
+    async def _require_owned_session(self, session_id: UUID) -> Session:
+        session = await self._session_repository.get(session_id)
+        if session.user_id != self._settings.local_user_id:
+            raise ChatSessionError(
+                code="SESSION_NOT_FOUND",
+                message="Session 不存在",
+                status_code=404,
+            )
+        return session
+
+    async def _get_owned_parent_state(self, session_id: UUID):
+        await self._require_owned_session(session_id)
+        state = await self._parent_graph.aget_state(
+            parent_thread_config(session_id)
+        )
+        if not state.values:
+            raise ChatSessionError(
+                code="SESSION_STATE_NOT_FOUND",
+                message="Session 的 Parent 状态不存在",
+                status_code=409,
+            )
+        return state
+
+    async def _turn_from_run(self, run: Run) -> PreparedChatTurn:
+        configurable: dict[str, str] = {
+            "thread_id": str(run.session_id),
+            "message_id": str(run.response_message_id),
+        }
+        if run.start_checkpoint_id is not None:
+            configurable["checkpoint_id"] = run.start_checkpoint_id
+        if run.run_type == "regenerate":
+            human_message = None
+            if run.start_checkpoint_id is None:
+                raise ChatRuntimeError(
+                    code="RUN_INPUT_INVALID",
+                    message="Regenerate Run 缺少起始 checkpoint",
+                    retryable=False,
+                )
+            config = await self._checkpoint_forker.create_fork_from_checkpoint(
+                session_id=run.session_id,
+                start_checkpoint_id=run.start_checkpoint_id,
+                response_message_id=run.response_message_id,
+            )
+        else:
+            config: RunnableConfig = {"configurable": configurable}
+            try:
+                content = str(run.input_payload["message"]["content"])
+            except (KeyError, TypeError) as error:
+                raise ChatRuntimeError(
+                    code="RUN_INPUT_INVALID",
+                    message="Run 恢复输入不完整",
+                    retryable=False,
+                ) from error
+            human_message = HumanMessage(
+                content=content,
+                id=str(run.input_message_id),
+            )
+        return PreparedChatTurn(
+            session_id=run.session_id,
+            human_message=human_message,
+            response_message_id=run.response_message_id,
+            config=config,
+            active_run=ActiveRun(
+                session_id=run.session_id,
+                response_message_id=run.response_message_id,
+            ),
+            is_regeneration=run.run_type == "regenerate",
+        )
+
+    @staticmethod
+    def _checkpoint_id(config: RunnableConfig) -> str | None:
+        configurable = config.get("configurable", {})
+        checkpoint_id = configurable.get("checkpoint_id")
+        return str(checkpoint_id) if checkpoint_id is not None else None
+
+    @staticmethod
+    def _runtime_event_draft(event_type: str, payload) -> RuntimeEventDraft:
+        return RuntimeEventDraft(
+            event_type=event_type,
+            source="runtime.executor",
+            visibility="public",
+            payload=payload,
+            schema_version=1,
+            durability=(
+                "transient" if event_type == "message.delta" else "durable"
+            ),
+            created_at=datetime.now(UTC),
+        )
 
     async def prepare_turn(
         self,
@@ -1112,6 +1611,16 @@ async def open_chat_service(
     await run_repository.setup()
     runtime_event_repository = PostgresRuntimeEventRepository(settings)
     await runtime_event_repository.setup()
+    runtime_event_publisher = RedisStreamPublisher.from_url(
+        settings.redis_connection_string,
+        ttl_seconds=settings.redis_stream_ttl_seconds,
+        socket_timeout_seconds=settings.redis_socket_timeout_seconds,
+    )
+    run_coordinator = RunCoordinator(
+        repository=run_repository,
+        user_id=settings.local_user_id,
+        scan_interval_seconds=settings.run_coordinator_scan_interval_seconds,
+    )
     parent_state_store = PostgresParentStateStore(settings)
     runtime_model = model or build_chat_model(settings)
 
@@ -1189,11 +1698,18 @@ async def open_chat_service(
             deletion_service=deletion_service,
             checkpoint_forker=checkpoint_forker,
             run_registry=run_registry,
+            persistent_run_repository=run_repository,
+            runtime_event_repository=runtime_event_repository,
+            runtime_event_publisher=runtime_event_publisher,
+            run_coordinator=run_coordinator,
         )
         try:
+            await run_coordinator.start(service.execute_persistent_run)
             log_business_event(logger, "聊天服务初始化完成")
             yield service
         finally:
             log_business_event(logger, "聊天服务关闭开始")
+            await run_coordinator.close()
             await service.close()
+            await runtime_event_publisher.aclose()
             log_business_event(logger, "聊天服务关闭完成")

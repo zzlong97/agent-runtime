@@ -36,6 +36,7 @@ from agent_runtime.main import create_app
 from agent_runtime.sessions.models import Session
 from agent_runtime.sessions.repository import SessionNotFoundError
 from agent_runtime.sessions.service import SessionService
+from agent_runtime.streaming.sse import stream_chat_sse
 
 
 def _latest_user_content(messages: list[BaseMessage]) -> str:
@@ -411,15 +412,16 @@ async def _post_message(
     *,
     session_id: UUID | None = None,
 ) -> list[tuple[str, dict[str, object]]]:
-    """通过真实 FastAPI 入口提交一轮消息并返回产品事件。"""
+    """直接验证 Stage 1 图与旧产品事件适配，不绑定 S2.5 Run API。"""
 
-    payload: dict[str, object] = {"message": {"content": content}}
-    if session_id is not None:
-        payload["session_id"] = str(session_id)
-    response = await client.post("/api/v1/chat/completions", json=payload)
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/event-stream")
-    return _parse_sse(response)
+    transport = client._transport
+    app = transport.app
+    service = app.state.chat_service
+    turn = await service.prepare_turn(session_id=session_id, content=content)
+    response_text = "".join(
+        [frame async for frame in stream_chat_sse(service, turn)]
+    )
+    return _parse_sse(httpx.Response(200, text=response_text))
 
 
 def _checkpoint_messages(

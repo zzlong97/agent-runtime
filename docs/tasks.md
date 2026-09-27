@@ -1500,7 +1500,7 @@ stop and wait
 
 ## S2.5-04 异步 Run API 与单进程 Coordinator
 
-**Status:** IN_PROGRESS
+**Status:** DONE
 
 **Dependencies:** S2.5-01 ~ S2.5-03
 
@@ -1514,11 +1514,61 @@ stop and wait
 
 ### Acceptance
 
-- [ ] 202 响应包含 run_id、session_id、response_message_id 和 status
-- [ ] API 返回前 Run 与幂等数据已经持久化
-- [ ] 丢失进程内唤醒后 queued Run 会被补偿执行
-- [ ] 页面刷新能够查询活动 Run
-- [ ] 未引入多实例 Lease 或分布式队列
+- [x] 202 响应包含 run_id、session_id、response_message_id 和 status
+- [x] API 返回前 Run 与幂等数据已经持久化
+- [x] 丢失进程内唤醒后 queued Run 会被补偿执行
+- [x] 页面刷新能够查询活动 Run
+- [x] 未引入多实例 Lease 或分布式队列
+
+### Verification
+
+- 2026-09-27：普通消息与 Regenerate 已迁移为持久 Run 提交接口；成功时返回
+  HTTP 202 和公开 Run 摘要，`request_id` 必填且全局幂等，冲突内容复用同一
+  ID 返回 409；公开 Session Stop 路由已移除
+- 2026-09-27：新 Session、稳定消息 ID、请求指纹、最小恢复输入与 queued Run
+  在同一 PostgreSQL 事务提交；重复新 Session 请求复用原 Run 且不留下孤儿
+  Session；Regenerate 在 Run 落库后才创建 Parent fork
+- 2026-09-27：增加固定用户 Session 活动 Run 查询和单进程 `RunCoordinator`；
+  已验证提交后唤醒、同进程去重、启动扫描及 queued 周期补偿，running 等恢复
+  对账明确留给 S2.5-08，未引入 Lease、分布式队列或多实例语义
+- 2026-09-27：真实 PostgreSQL / Redis Compose 服务均为 `healthy`；
+  `RUN_POSTGRES_TESTS=1 RUN_REDIS_TESTS=1 uv run --locked pytest -q`
+  完整套件结果为 `357 passed, 1 skipped`，唯一跳过项为需显式启用的真实百炼 smoke
+- 2026-09-27：`docker compose config --quiet`、`uv lock --check`、Python
+  `compileall`、`uv pip check`、`uv build` 和 `git diff --check` 全部通过
+- 2026-09-27：独立代码审查未发现 Critical / Important 问题；专项复核结果为
+  `28 passed`，真实 PostgreSQL 异步 Run 端到端用例连续运行三次均通过
+- Result：S2.5-04 实现与真实外部依赖门禁完成，状态更新为 `DONE` 并等待负责人
+  复审；复审通过前不进入 S2.5-05，不自行标记 `VERIFIED`
+- 2026-09-27：Reviewer 提出阻塞项 `REV-S25-04-002`：Regenerate Run 未记录
+  可定位的来源 Run，`parent_run_id` 被固定保存为 `NULL`
+- 2026-09-27：增加按当前 Session 与来源 `response_message_id` 查询 Run 的可空
+  Repository 接口；S2.5 来源回复写入真实 `parent_run_id`，Stage 2 历史回复找不到
+  来源 Run 时继续保存 `NULL`，未补建历史 Run 或新增 Run 类型
+- 2026-09-27：真实 PostgreSQL 回归测试覆盖来源关联、Stage 2 历史兼容和相同
+  `request_id` 幂等重试；专项结果为 `2 passed`
+- 2026-09-27：默认 `uv run --locked pytest -q` 结果为
+  `340 passed, 19 skipped`；`RUN_POSTGRES_TESTS=1 uv run --locked pytest -q`
+  结果为 `356 passed, 3 skipped`
+- 2026-09-27：同时启用真实 PostgreSQL / Redis 的完整门禁结果为
+  `358 passed, 1 skipped`；`docker compose config --quiet`、`uv lock --check`、
+  Python `compileall`、`uv pip check`、`uv build` 和 `git diff --check` 通过
+- 2026-09-27：`REV-S25-04-002` 来源关联逻辑专项复核结果为 `2 passed`；该次
+  复核未确定性覆盖幂等重试时 `queued → running` 的状态推进，后续结论由
+  `REV-S25-04-004` 的竞态复核记录取代
+- Result：`REV-S25-04-002` 已修复，S2.5-04 保持 `DONE` 并等待 Reviewer
+  复核；不自行标记 `VERIFIED`，不开始 S2.5-05
+- 2026-09-27：Reviewer 提出阻塞项 `REV-S25-04-004`：普通 Run 的幂等集成测试
+  错误要求首次 `queued` 响应与重试时的可变权威状态全量相等，导致 Coordinator
+  已推进到 `running` 时产生时序竞态
+- 2026-09-27：测试改为确定性等待 Run 进入 `running` 后重试，只比较 `run_id`、
+  `session_id` 和 `response_message_id` 三个稳定字段，并验证 PostgreSQL 中只有一个
+  Run、一个 Session 且模型只执行一次；保留合法的当前 `status` 推进
+- 2026-09-27：真实 PostgreSQL 异步 Run 专项连续五轮均为 `2 passed`；原
+  Regenerate 回归为 `3 passed`；默认完整套件为 `340 passed, 19 skipped`，真实
+  PostgreSQL / Redis 完整套件为 `358 passed, 1 skipped`
+- Result：`REV-S25-04-004` 已修复，S2.5-04 保持 `DONE` 并等待 Reviewer
+  复核；不自行标记 `VERIFIED`，不开始 S2.5-05
 
 ---
 

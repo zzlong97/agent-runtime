@@ -5,7 +5,6 @@ from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request, Response
-from starlette.background import BackgroundTask
 
 from agent_runtime.api.schemas.chat import ChatCompletionRequest
 from agent_runtime.api.schemas.feedback import FeedbackRequest, FeedbackResponse
@@ -13,17 +12,19 @@ from agent_runtime.api.schemas.messages import (
     MessageHistoryQuery,
     MessageHistoryResponse,
 )
+from agent_runtime.api.schemas.runs import (
+    RegenerateRunRequest,
+    RunSummaryResponse,
+)
 from agent_runtime.api.schemas.sessions import (
     SessionListQuery,
     SessionListResponse,
     SessionRenameRequest,
     SessionRenameResponse,
-    SessionStopResponse,
 )
 from agent_runtime.chat import ChatService
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
-from agent_runtime.streaming.sse import RunStreamingResponse, stream_chat_sse
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -148,35 +149,6 @@ async def delete_session(
     return Response(status_code=204)
 
 
-@router.post(
-    "/sessions/{session_id}/stop",
-    response_model=SessionStopResponse,
-)
-async def stop_session(
-    session_id: Annotated[
-        UUID,
-        Path(
-            description=(
-                "要停止当前 Run 的 Session UUID；只允许操作固定本地用户拥有的 "
-                "Session，不存在或不属于该用户时统一返回 404。"
-            )
-        ),
-    ],
-    request: Request,
-) -> SessionStopResponse:
-    """停止当前 active Run；无运行时返回幂等 idle 结果。"""
-
-    chat_service = _get_chat_service(request)
-    try:
-        status = await chat_service.stop_session(session_id=session_id)
-    except ApplicationError as error:
-        raise HTTPException(
-            status_code=error.status_code,
-            detail=_application_error_detail(error),
-        ) from error
-    return SessionStopResponse(session_id=session_id, status=status)
-
-
 @router.get(
     "/sessions/{session_id}/messages",
     response_model=MessageHistoryResponse,
@@ -244,7 +216,42 @@ async def submit_feedback(
     return FeedbackResponse.model_validate(result, from_attributes=True)
 
 
-@router.post("/sessions/{session_id}/messages/{message_id}/regenerate")
+@router.get(
+    "/sessions/{session_id}/active-run",
+    response_model=RunSummaryResponse | None,
+)
+async def get_active_run(
+    session_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要恢复页面运行状态的 Session UUID；只允许查询固定"
+                "本地用户拥有的 Session，否则统一返回 404。"
+            )
+        ),
+    ],
+    request: Request,
+) -> RunSummaryResponse | None:
+    """返回 Session 当前活动 Run 的公开摘要，空闲时返回 null。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        run = await chat_service.get_active_run(session_id=session_id)
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    if run is None:
+        return None
+    return RunSummaryResponse.model_validate(run, from_attributes=True)
+
+
+@router.post(
+    "/sessions/{session_id}/messages/{message_id}/regenerate",
+    response_model=RunSummaryResponse,
+    status_code=202,
+)
 async def regenerate_message(
     session_id: Annotated[
         UUID,
@@ -264,13 +271,15 @@ async def regenerate_message(
             )
         ),
     ],
+    payload: RegenerateRunRequest,
     request: Request,
-) -> RunStreamingResponse:
-    """从回答前 Parent checkpoint fork，并复用产品 SSE 继续执行。"""
+) -> RunSummaryResponse:
+    """持久化 Regenerate Run 并返回 202，执行不再绑定 HTTP 连接。"""
 
     chat_service = _get_chat_service(request)
     try:
-        turn = await chat_service.prepare_regeneration(
+        run = await chat_service.submit_regeneration_run(
+            request_id=payload.request_id,
             session_id=session_id,
             message_id=message_id,
         )
@@ -280,31 +289,24 @@ async def regenerate_message(
             detail=_application_error_detail(error),
         ) from error
 
-    return RunStreamingResponse(
-        stream_chat_sse(chat_service, turn),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-        background=BackgroundTask(
-            chat_service.cancel_run,
-            turn.active_run,
-            reason="disconnected",
-        ),
-    )
+    return RunSummaryResponse.model_validate(run, from_attributes=True)
 
 
-@router.post("/completions")
+@router.post(
+    "/completions",
+    response_model=RunSummaryResponse,
+    status_code=202,
+)
 async def create_chat_completion(
     payload: ChatCompletionRequest,
     request: Request,
-) -> RunStreamingResponse:
-    """先完成请求与 Session 校验，再建立产品级 SSE 响应。"""
+) -> RunSummaryResponse:
+    """先持久化幂等 Run，再返回 202 公开摘要。"""
 
     chat_service = _get_chat_service(request)
     try:
-        turn = await chat_service.prepare_turn(
+        run = await chat_service.submit_chat_run(
+            request_id=payload.request_id,
             session_id=payload.session_id,
             content=payload.message.content,
         )
@@ -314,16 +316,4 @@ async def create_chat_completion(
             detail=_application_error_detail(error),
         ) from error
 
-    return RunStreamingResponse(
-        stream_chat_sse(chat_service, turn),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-        background=BackgroundTask(
-            chat_service.cancel_run,
-            turn.active_run,
-            reason="disconnected",
-        ),
-    )
+    return RunSummaryResponse.model_validate(run, from_attributes=True)

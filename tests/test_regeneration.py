@@ -67,6 +67,7 @@ def test_checkpoint_forker_forks_answer_predecessor_and_assigns_new_message_id()
     answer_checkpoint = {
         "configurable": {
             "thread_id": str(session_id),
+            "checkpoint_ns": "",
             "checkpoint_id": "before-answer",
         }
     }
@@ -116,6 +117,60 @@ def test_checkpoint_forker_forks_answer_predecessor_and_assigns_new_message_id()
         }
     }
     assert "message_id" not in graph.fork_config["configurable"]
+
+
+def test_checkpoint_forker_can_capture_start_before_materializing_branch() -> None:
+    """Run 落库前只捕获起点，不提前改变 Parent 活动分支。"""
+
+    from agent_runtime.regeneration import CheckpointForker
+
+    session_id = UUID("00000000-0000-0000-0000-000000001704")
+    old_message_id = UUID("00000000-0000-0000-0000-000000001705")
+    new_message_id = UUID("00000000-0000-0000-0000-000000001706")
+    answer_checkpoint = {
+        "configurable": {
+            "thread_id": str(session_id),
+            "checkpoint_ns": "",
+            "checkpoint_id": "captured-before-answer",
+        }
+    }
+    graph = FakeParentGraph(
+        [
+            SimpleNamespace(
+                next=("invoke_capability",),
+                config=answer_checkpoint,
+            )
+        ]
+    )
+    graph.fork_config = {
+        "configurable": {
+            "thread_id": str(session_id),
+            "checkpoint_ns": "",
+            "checkpoint_id": "materialized-fork",
+        }
+    }
+    forker = CheckpointForker(
+        history_adapter=FakeHistoryAdapter([_message(str(old_message_id))]),
+        parent_graph=graph,
+    )
+
+    async def exercise():
+        captured = await forker.find_start_checkpoint(
+            session_id=session_id,
+            message_id=old_message_id,
+        )
+        assert captured == answer_checkpoint
+        assert graph.update_calls == []
+        return await forker.create_fork_from_checkpoint(
+            session_id=session_id,
+            start_checkpoint_id="captured-before-answer",
+            response_message_id=new_message_id,
+        )
+
+    config = asyncio.run(exercise())
+
+    assert graph.update_calls == [(answer_checkpoint, {})]
+    assert config["configurable"]["message_id"] == str(new_message_id)
 
 
 @pytest.mark.parametrize(
@@ -255,6 +310,7 @@ def test_checkpoint_forker_converts_checkpoint_failures_to_stable_error(
     answer_checkpoint = {
         "configurable": {
             "thread_id": str(session_id),
+            "checkpoint_ns": "",
             "checkpoint_id": "before-answer",
         }
     }

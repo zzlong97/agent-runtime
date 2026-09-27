@@ -15,7 +15,7 @@ class ChatMessageRequest(BaseModel):
 
     content: str = Field(
         description=(
-            "当前用户提交的消息正文；Stage 2 必须是去除首尾空白后仍非空的"
+            "当前用户提交的消息正文；Stage 2.5 必须是去除首尾空白后仍非空的"
             "字符串，并作为本轮 HumanMessage 内容。"
         )
     )
@@ -31,19 +31,28 @@ class ChatMessageRequest(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    """最小聊天请求，用户身份始终由服务端控制。"""
+    """Stage 2.5 异步聊天提交请求。"""
 
     model_config = ConfigDict(extra="forbid")
 
+    request_id: UUID = Field(
+        description=(
+            "客户端为本次普通消息生成的全局唯一 UUID；相同请求"
+            "重试必须复用该值，同一值对应不同请求时返回 409。"
+        )
+    )
     session_id: UUID | None = Field(
         default=None,
         description=(
             "要继续对话的 Session UUID；省略或传 null 时由服务端创建新 "
-            "Session，Stage 2 不接受客户端指定 user_id。"
+            "Session，Stage 2.5 不接受客户端指定 user_id。"
         ),
     )
     message: ChatMessageRequest = Field(
-        description="本轮唯一的用户消息；Stage 2 只接受文本 content。"
+        description=(
+            "本 Run 唯一的用户消息；Stage 2.5 只接受文本 "
+            "content，正文只写入最小恢复输入与 Parent 公共消息。"
+        )
     )
 
 

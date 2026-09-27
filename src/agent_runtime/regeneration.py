@@ -35,6 +35,32 @@ class CheckpointForker:
     ) -> RunnableConfig:
         """校验最新完成回答，并返回携带新回复 UUID 的 fork 配置。"""
 
+        start_config = await self.find_start_checkpoint(
+            session_id=session_id,
+            message_id=message_id,
+        )
+        configurable = start_config.get("configurable", {})
+        start_checkpoint_id = configurable.get("checkpoint_id")
+        if start_checkpoint_id is None:
+            raise RegenerationError(
+                code="MESSAGE_REGENERATE_CHECKPOINT_NOT_FOUND",
+                message="未找到可用于重新生成的 Parent checkpoint",
+                status_code=409,
+            )
+        return await self.create_fork_from_checkpoint(
+            session_id=session_id,
+            start_checkpoint_id=str(start_checkpoint_id),
+            response_message_id=response_message_id,
+        )
+
+    async def find_start_checkpoint(
+        self,
+        *,
+        session_id: UUID,
+        message_id: UUID,
+    ) -> RunnableConfig:
+        """校验重新生成资格并只返回回答执行前的确定 checkpoint。"""
+
         messages = await self._history_adapter.get_active_messages(
             session_id=session_id
         )
@@ -74,6 +100,27 @@ class CheckpointForker:
                 message="未找到可用于重新生成的 Parent checkpoint",
                 status_code=409,
             )
+
+        return answer_checkpoint
+
+    async def create_fork_from_checkpoint(
+        self,
+        *,
+        session_id: UUID,
+        start_checkpoint_id: str,
+        response_message_id: UUID,
+    ) -> RunnableConfig:
+        """在 Run 落库后从已捕获起点创建 Parent 执行分支。"""
+
+        answer_checkpoint: RunnableConfig = {
+            "configurable": {
+                "thread_id": str(session_id),
+                # Parent Graph 使用顶层 checkpoint 命名空间；持久 Run 仅需保存
+                # checkpoint_id，执行时按固定 Parent 边界恢复空命名空间。
+                "checkpoint_ns": "",
+                "checkpoint_id": start_checkpoint_id,
+            }
+        }
 
         try:
             fork_config = await self._parent_graph.aupdate_state(

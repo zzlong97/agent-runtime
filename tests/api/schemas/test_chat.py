@@ -1,5 +1,10 @@
+from uuid import UUID
+
 import pytest
 from pydantic import ValidationError
+
+
+REQUEST_ID = UUID("00000000-0000-0000-0000-000000000010")
 
 
 def test_chat_request_rejects_client_supplied_user_id() -> None:
@@ -8,6 +13,7 @@ def test_chat_request_rejects_client_supplied_user_id() -> None:
     with pytest.raises(ValidationError):
         ChatCompletionRequest.model_validate(
             {
+                "request_id": str(REQUEST_ID),
                 "session_id": None,
                 "message": {"content": "Hello"},
                 "user_id": "client-selected-user",
@@ -21,6 +27,7 @@ def test_chat_request_rejects_blank_message_content() -> None:
     with pytest.raises(ValidationError):
         ChatCompletionRequest.model_validate(
             {
+                "request_id": str(REQUEST_ID),
                 "session_id": None,
                 "message": {"content": "   "},
             }
@@ -39,16 +46,23 @@ def test_chat_and_sse_schemas_describe_every_field() -> None:
     expected_descriptions = {
         ChatMessageRequest: {
             "content": (
-                "当前用户提交的消息正文；Stage 2 必须是去除首尾空白后仍非空的"
+                "当前用户提交的消息正文；Stage 2.5 必须是去除首尾空白后仍非空的"
                 "字符串，并作为本轮 HumanMessage 内容。"
             ),
         },
         ChatCompletionRequest: {
+            "request_id": (
+                "客户端为本次普通消息生成的全局唯一 UUID；相同请求"
+                "重试必须复用该值，同一值对应不同请求时返回 409。"
+            ),
             "session_id": (
                 "要继续对话的 Session UUID；省略或传 null 时由服务端创建新 "
-                "Session，Stage 2 不接受客户端指定 user_id。"
+                "Session，Stage 2.5 不接受客户端指定 user_id。"
             ),
-            "message": "本轮唯一的用户消息；Stage 2 只接受文本 content。",
+            "message": (
+                "本 Run 唯一的用户消息；Stage 2.5 只接受文本 "
+                "content，正文只写入最小恢复输入与 Parent 公共消息。"
+            ),
         },
         MessageEventData: {
             "session_id": "本轮对话所属的稳定 Session UUID。",

@@ -2224,6 +2224,26 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         async def setup(self) -> None:
             events.append("runtime_event_setup")
 
+    class FakeRuntimeEventPublisher:
+        @classmethod
+        def from_url(cls, *args, **kwargs):
+            events.append("publisher_created")
+            return cls()
+
+        async def aclose(self) -> None:
+            events.append("publisher_closed")
+
+    class FakeRunCoordinator:
+        def __init__(self, **kwargs):
+            captured["coordinator_repository"] = kwargs["repository"]
+
+        async def start(self, executor) -> None:
+            captured["coordinator_executor"] = executor
+            events.append("coordinator_started")
+
+        async def close(self) -> None:
+            events.append("coordinator_closed")
+
     class FakeHistoryAdapter:
         def __init__(self, **kwargs):
             captured["history_feedback_store"] = kwargs["feedback_store"]
@@ -2257,6 +2277,9 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
 
         async def close(self) -> None:
             events.append("runs_closed")
+
+        async def execute_persistent_run(self, run) -> None:
+            raise AssertionError("测试不应真正执行 Run")
 
     @asynccontextmanager
     async def fake_checkpointers(settings):
@@ -2295,6 +2318,16 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         chat_module,
         "PostgresRuntimeEventRepository",
         FakeRuntimeEventRepository,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "RedisStreamPublisher",
+        FakeRuntimeEventPublisher,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "RunCoordinator",
+        FakeRunCoordinator,
     )
     monkeypatch.setattr(
         chat_module,
@@ -2350,11 +2383,12 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
 
     asyncio.run(exercise())
 
-    assert events[:5] == [
+    assert events[:6] == [
         "session_setup",
         "feedback_setup",
         "run_setup",
         "runtime_event_setup",
+        "publisher_created",
         "service_created",
     ]
     assert captured["history_feedback_store"] is captured["feedback_store"]
@@ -2371,4 +2405,9 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     assert captured["delete_feedback_store"] is captured["feedback_store"]
     assert captured["delete_session_repository"] is not None
     assert captured["chat_deletion_service"] is not None
-    assert events[-2:] == ["runs_closed", "checkpointers_closed"]
+    assert events[-4:] == [
+        "coordinator_closed",
+        "runs_closed",
+        "publisher_closed",
+        "checkpointers_closed",
+    ]
