@@ -2462,3 +2462,207 @@ def test_open_run_event_stream_checks_owned_session_before_gateway() -> None:
 
     assert captured.value.code == "SESSION_NOT_FOUND"
     assert gateway.called is False
+
+
+def test_persistent_run_does_not_commit_failed_without_public_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """无法定位 Parent 写入位置时保留非终态，不能留下无消息的 failed Run。"""
+
+    from contextlib import asynccontextmanager
+    from dataclasses import replace
+    from datetime import UTC, datetime
+
+    from agent_runtime import chat as chat_module
+    from agent_runtime.chat import ChatRuntimeError, ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runtime.models import Run
+
+    now = datetime(2026, 9, 28, 18, 0, tzinfo=UTC)
+    run = Run(
+        run_id=uuid4(),
+        request_id=uuid4(),
+        session_id=uuid4(),
+        thread_id="invalid-input-run",
+        parent_run_id=None,
+        run_type="normal",
+        input_message_id=uuid4(),
+        response_message_id=uuid4(),
+        start_checkpoint_id=None,
+        input_payload={},
+        request_fingerprint="a" * 64,
+        status="queued",
+        recovery_attempts=0,
+        seq_high_watermark=0,
+        error_code=None,
+        error_message=None,
+        created_at=now,
+        started_at=None,
+        finished_at=None,
+        updated_at=now,
+    )
+
+    class FakeRunRepository:
+        def __init__(self) -> None:
+            self.current = run
+
+        async def get(self, run_id):
+            assert run_id == run.run_id
+            return self.current
+
+    class FakeCoordinator:
+        @asynccontextmanager
+        async def claim_guard(self, run_id):
+            assert run_id == run.run_id
+            yield
+
+        async def is_cancel_requested(self, run_id):
+            assert run_id == run.run_id
+            return False
+
+    repository = FakeRunRepository()
+    coordinator = FakeCoordinator()
+
+    class FakeSequencer:
+        def __init__(self) -> None:
+            self.transitions: list[str] = []
+
+        async def transition_run(self, *, target_status, **_kwargs):
+            self.transitions.append(target_status)
+            repository.current = replace(
+                repository.current,
+                status=target_status,
+            )
+
+    sequencer = FakeSequencer()
+    monkeypatch.setattr(
+        chat_module.RunSequencer,
+        "for_run",
+        lambda **_kwargs: sequencer,
+    )
+    service = ChatService(
+        settings=Settings(_env_file=None),
+        session_repository=object(),
+        session_service=object(),
+        parent_graph=object(),
+        persistent_run_repository=repository,
+        runtime_event_repository=object(),
+        run_coordinator=coordinator,
+    )
+
+    with pytest.raises(ChatRuntimeError) as captured:
+        asyncio.run(service.execute_persistent_run(run))
+
+    assert captured.value.code == "RUN_INPUT_INVALID"
+    assert sequencer.transitions == ["running"]
+    assert repository.current.status == "running"
+
+
+def test_direct_persistent_cancel_finishes_after_caller_is_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """queued Run 的直接取消收尾不应被 HTTP 调用方取消所中断。"""
+
+    from contextlib import asynccontextmanager
+    from dataclasses import replace
+    from datetime import UTC, datetime
+
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runtime.models import Run
+    from agent_runtime.sessions.models import Session
+
+    now = datetime(2026, 9, 28, 19, 0, tzinfo=UTC)
+    run = Run(
+        run_id=uuid4(),
+        request_id=uuid4(),
+        session_id=uuid4(),
+        thread_id="cancel-caller-run",
+        parent_run_id=None,
+        run_type="normal",
+        input_message_id=uuid4(),
+        response_message_id=uuid4(),
+        start_checkpoint_id=None,
+        input_payload={"message": {"content": "测试直接取消"}},
+        request_fingerprint="b" * 64,
+        status="queued",
+        recovery_attempts=0,
+        seq_high_watermark=0,
+        error_code=None,
+        error_message=None,
+        created_at=now,
+        started_at=None,
+        finished_at=None,
+        updated_at=now,
+    )
+    finalization_started = asyncio.Event()
+    release_finalization = asyncio.Event()
+    finalization_finished = asyncio.Event()
+    finalization_interrupted = asyncio.Event()
+
+    class FakeSessionRepository:
+        async def get(self, session_id):
+            assert session_id == run.session_id
+            return Session(
+                session_id=run.session_id,
+                user_id="local-user",
+                title="取消调用方测试",
+                created_at=now,
+                updated_at=now,
+            )
+
+    class FakeRunRepository:
+        async def get(self, run_id):
+            assert run_id == run.run_id
+            return run
+
+    class FakeCoordinator:
+        @asynccontextmanager
+        async def claim_guard(self, run_id):
+            assert run_id == run.run_id
+            yield
+
+    service = ChatService(
+        settings=Settings(local_user_id="local-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=object(),
+        persistent_run_repository=FakeRunRepository(),
+        runtime_event_repository=object(),
+        run_coordinator=FakeCoordinator(),
+    )
+
+    async def finalize(selected_run, **_kwargs):
+        assert selected_run == run
+        finalization_started.set()
+        try:
+            await release_finalization.wait()
+        except asyncio.CancelledError:
+            finalization_interrupted.set()
+            raise
+        finalization_finished.set()
+        return replace(run, status="cancelled")
+
+    monkeypatch.setattr(
+        service,
+        "_finalize_persistent_cancellation_locked",
+        finalize,
+    )
+
+    async def exercise() -> None:
+        cancel_task = asyncio.create_task(
+            service.cancel_persistent_run(run_id=run.run_id)
+        )
+        await asyncio.wait_for(finalization_started.wait(), timeout=1)
+        cancel_task.cancel()
+        await asyncio.sleep(0)
+        assert not cancel_task.done()
+        assert not finalization_interrupted.is_set()
+
+        release_finalization.set()
+        with pytest.raises(asyncio.CancelledError):
+            await cancel_task
+        assert finalization_finished.is_set()
+        assert not finalization_interrupted.is_set()
+
+    asyncio.run(exercise())

@@ -56,6 +56,8 @@ from agent_runtime.runtime.event_schemas import (
     MessageDeltaPayload,
     MessageFinalizedPayload,
     MessageStartedPayload,
+    RunCancelRequestedPayload,
+    RunCancelledPayload,
     RunCompletedPayload,
     RunFailedPayload,
     RunStartedPayload,
@@ -85,6 +87,9 @@ from agent_runtime.sessions.repository import (
 from agent_runtime.sessions.service import SessionService
 
 type CompletionStatus = Literal["completed", "unsupported"]
+
+_FAILED_MESSAGE_FALLBACK = "抱歉，本次回复未能完成。"
+_STOPPED_MESSAGE_FALLBACK = "已停止本次回复。"
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +181,28 @@ class ChatService:
     ) -> Run:
         """持久化普通消息 Run，事务提交后再唤醒本地执行器。"""
 
+        if session_id is None:
+            return await self._submit_chat_run_unlocked(
+                request_id=request_id,
+                session_id=None,
+                content=content,
+            )
+        async with self._run_registry.session_operation(session_id):
+            return await self._submit_chat_run_unlocked(
+                request_id=request_id,
+                session_id=session_id,
+                content=content,
+            )
+
+    async def _submit_chat_run_unlocked(
+        self,
+        *,
+        request_id: UUID,
+        session_id: UUID | None,
+        content: str,
+    ) -> Run:
+        """在 Session 删除屏障内执行普通持久 Run 的实际提交。"""
+
         repository, coordinator = self._persistent_runtime_dependencies()
         request_payload: dict[str, JsonValue] = {
             "message": {"content": content}
@@ -261,6 +288,22 @@ class ChatService:
         message_id: UUID,
     ) -> Run:
         """校验并持久化 Regenerate Run，不新增 HumanMessage。"""
+
+        async with self._run_registry.session_operation(session_id):
+            return await self._submit_regeneration_run_unlocked(
+                request_id=request_id,
+                session_id=session_id,
+                message_id=message_id,
+            )
+
+    async def _submit_regeneration_run_unlocked(
+        self,
+        *,
+        request_id: UUID,
+        session_id: UUID,
+        message_id: UUID,
+    ) -> Run:
+        """在 Session 删除屏障内执行 Regenerate Run 的实际提交。"""
 
         repository, coordinator = self._persistent_runtime_dependencies()
         request_payload: dict[str, JsonValue] = {
@@ -405,9 +448,98 @@ class ChatService:
         )
         return gateway.stream(run_id=run_id, after_seq=after_seq)
 
+    async def cancel_persistent_run(self, *, run_id: UUID) -> Run:
+        """幂等接受显式取消，并立即返回 PostgreSQL 中的当前权威状态。"""
+
+        repository, coordinator = self._persistent_runtime_dependencies()
+        run = await repository.get(run_id)
+        await self._require_owned_session(run.session_id)
+        log_business_event(
+            logger,
+            "持久Run取消开始",
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            status=run.status,
+        )
+        if run.status in {"completed", "failed", "cancelled"}:
+            log_business_event(
+                logger,
+                "持久Run取消幂等返回",
+                run_id=run.run_id,
+                request_id=run.request_id,
+                session_id=run.session_id,
+                message_id=run.response_message_id,
+                status=run.status,
+            )
+            return run
+
+        async with coordinator.claim_guard(run_id):
+            run = await repository.get(run_id)
+            if run.status in {"queued", "interrupted"}:
+                run = await self._finalize_persistent_cancellation_shielded(run)
+            elif run.status in {"running", "recovering"}:
+                event_repository = self._runtime_event_repository
+                if event_repository is None:
+                    raise ChatRuntimeError(
+                        code="RUNTIME_EVENT_SERVICE_UNAVAILABLE",
+                        message="RuntimeEvent 服务尚未完成初始化",
+                        retryable=True,
+                    )
+                sequencer = RunSequencer.for_run(
+                    run_id=run.run_id,
+                    response_message_id=run.response_message_id,
+                    repository=event_repository,
+                    publisher=self._runtime_event_publisher,
+                )
+                commit = await sequencer.transition_run(
+                    target_status="cancel_requested",
+                    event=self._internal_runtime_event_draft(
+                        "internal.run.cancel_requested",
+                        RunCancelRequestedPayload(status="cancel_requested"),
+                    ),
+                    updated_at=datetime.now(UTC),
+                )
+                run = commit.run
+            if run.status == "cancel_requested":
+                await coordinator.request_cancel(run.run_id)
+        if run.status == "cancel_requested":
+            await coordinator.wake(run.run_id)
+
+        log_business_event(
+            logger,
+            "持久Run取消已接受",
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            status=run.status,
+        )
+        return run
+
+    async def _finalize_persistent_cancellation_shielded(
+        self,
+        run: Run,
+    ) -> Run:
+        """延迟传播调用方取消，确保直接取消终态收尾先完整结束。"""
+
+        finalization = asyncio.create_task(
+            self._finalize_persistent_cancellation_locked(run),
+            name=f"run-direct-cancel:{run.run_id}",
+        )
+        try:
+            return await asyncio.shield(finalization)
+        except asyncio.CancelledError:
+            # shield 已隔离首次调用方取消；继续持有决胜锁直到收尾完成，
+            # 再把取消传播给 HTTP 或 Session 删除调用方。
+            await finalization
+            raise
+
     async def execute_persistent_run(self, run: Run) -> None:
         """执行已提交的 queued Run，并按持久事件协议完成状态变化。"""
 
+        repository, coordinator = self._persistent_runtime_dependencies()
         event_repository = self._runtime_event_repository
         if event_repository is None:
             raise ChatRuntimeError(
@@ -415,6 +547,13 @@ class ChatService:
                 message="RuntimeEvent 服务尚未完成初始化",
                 retryable=True,
             )
+        if run.status == "cancel_requested":
+            await coordinator.begin_cancel_finalization(run.run_id)
+            async with coordinator.claim_guard(run.run_id):
+                current = await repository.get(run.run_id)
+                if current.status == "cancel_requested":
+                    await self._finalize_persistent_cancellation_locked(current)
+            return
         if run.status != "queued":
             return
         sequencer = RunSequencer.for_run(
@@ -434,14 +573,26 @@ class ChatService:
             message_id=run.response_message_id,
             run_type=run.run_type,
         )
-        await sequencer.transition_run(
-            target_status="running",
-            event=self._runtime_event_draft(
-                "run.started",
-                RunStartedPayload(status="running"),
-            ),
-            updated_at=datetime.now(UTC),
-        )
+        async with coordinator.claim_guard(run.run_id):
+            current = await repository.get(run.run_id)
+            if current.status == "cancel_requested":
+                await coordinator.begin_cancel_finalization(run.run_id)
+                await self._finalize_persistent_cancellation_locked(current)
+                return
+            if current.status in {"completed", "failed", "cancelled"}:
+                return
+            if current.status != "queued":
+                return
+            await sequencer.transition_run(
+                target_status="running",
+                event=self._runtime_event_draft(
+                    "run.started",
+                    RunStartedPayload(status="running"),
+                ),
+                updated_at=datetime.now(UTC),
+            )
+        partial_text: list[str] = []
+        turn: PreparedChatTurn | None = None
         try:
             turn = await self._turn_from_run(run)
             await sequencer.emit(
@@ -454,6 +605,9 @@ class ChatService:
                 )
             )
             async for message in self.stream_turn(turn):
+                if await coordinator.is_cancel_requested(run.run_id):
+                    await coordinator.begin_cancel_finalization(run.run_id)
+                    raise asyncio.CancelledError
                 capability_id = self._message_capability_id(
                     message,
                     fallback=capability_id,
@@ -461,6 +615,7 @@ class ChatService:
                 delta = str(message.text)
                 if not delta:
                     continue
+                partial_text.append(delta)
                 await sequencer.emit(
                     self._runtime_event_draft(
                         "message.delta",
@@ -471,26 +626,62 @@ class ChatService:
                         ),
                     )
                 )
+            if await coordinator.is_cancel_requested(run.run_id):
+                await coordinator.begin_cancel_finalization(run.run_id)
+                raise asyncio.CancelledError
             completion_status = await self.get_completion_status(turn)
-            await self._session_service.touch_session(session_id=run.session_id)
-            await sequencer.emit(
-                self._runtime_event_draft(
-                    "message.finalized",
-                    MessageFinalizedPayload(
-                        response_message_id=run.response_message_id,
-                        runtime_status=completion_status,
+            await self._require_nonempty_persistent_message(
+                run=run,
+                expected_status=completion_status,
+            )
+            async with coordinator.claim_guard(run.run_id):
+                current = await repository.get(run.run_id)
+                if current.status == "cancel_requested":
+                    await coordinator.begin_cancel_finalization(run.run_id)
+                    await self._finalize_persistent_cancellation_locked(
+                        current,
+                        partial_content="".join(partial_text),
                         capability_id=capability_id,
-                    ),
+                        turn=turn,
+                    )
+                    return
+                if current.status != "running":
+                    return
+                await self._session_service.touch_session(
+                    session_id=run.session_id
                 )
-            )
-            await sequencer.transition_run(
-                target_status="completed",
-                event=self._runtime_event_draft(
-                    "run.completed",
-                    RunCompletedPayload(status="completed"),
-                ),
-                updated_at=datetime.now(UTC),
-            )
+                await sequencer.emit(
+                    self._runtime_event_draft(
+                        "message.finalized",
+                        MessageFinalizedPayload(
+                            response_message_id=run.response_message_id,
+                            runtime_status=completion_status,
+                            capability_id=capability_id,
+                        ),
+                    )
+                )
+                await sequencer.transition_run(
+                    target_status="completed",
+                    event=self._runtime_event_draft(
+                        "run.completed",
+                        RunCompletedPayload(status="completed"),
+                    ),
+                    updated_at=datetime.now(UTC),
+                )
+        except asyncio.CancelledError:
+            if not await coordinator.is_cancel_requested(run.run_id):
+                raise
+            await coordinator.begin_cancel_finalization(run.run_id)
+            async with coordinator.claim_guard(run.run_id):
+                current = await repository.get(run.run_id)
+                if current.status == "cancel_requested":
+                    await self._finalize_persistent_cancellation_locked(
+                        current,
+                        partial_content="".join(partial_text),
+                        capability_id=capability_id,
+                        turn=turn,
+                    )
+            return
         except Exception as error:
             public_error = (
                 error
@@ -501,21 +692,61 @@ class ChatService:
                     retryable=False,
                 )
             )
-            await sequencer.transition_run(
-                target_status="failed",
-                event=self._runtime_event_draft(
-                    "run.failed",
-                    RunFailedPayload(
-                        status="failed",
-                        code=public_error.code,
-                        message=public_error.message,
-                        retryable=public_error.retryable,
+            async with coordinator.claim_guard(run.run_id):
+                current = await repository.get(run.run_id)
+                if current.status == "cancel_requested":
+                    await coordinator.begin_cancel_finalization(run.run_id)
+                    await self._finalize_persistent_cancellation_locked(
+                        current,
+                        partial_content="".join(partial_text),
+                        capability_id=capability_id,
+                        turn=turn,
+                    )
+                    return
+                if current.status in {"completed", "failed", "cancelled"}:
+                    return
+                if turn is None:
+                    # 无法构造稳定 Parent 写入位置时不得先提交数据库终态；
+                    # 保留非终态供后续恢复对账重试。
+                    turn = await self._turn_from_run(run)
+                failure_content = "".join(partial_text)
+                if not failure_content.strip():
+                    failure_content = _FAILED_MESSAGE_FALLBACK
+                await self.persist_runtime_message(
+                    turn,
+                    failure_content,
+                    runtime_status="incomplete",
+                    capability_id=capability_id,
+                    include_human=(
+                        not turn.is_regeneration
+                        and turn.human_message is not None
                     ),
-                ),
-                updated_at=datetime.now(UTC),
-                error_code=public_error.code,
-                error_message=public_error.message,
-            )
+                )
+                await sequencer.emit(
+                    self._runtime_event_draft(
+                        "message.finalized",
+                        MessageFinalizedPayload(
+                            response_message_id=run.response_message_id,
+                            runtime_status="incomplete",
+                            capability_id=capability_id,
+                        ),
+                    )
+                )
+                await sequencer.transition_run(
+                    target_status="failed",
+                    event=self._runtime_event_draft(
+                        "run.failed",
+                        RunFailedPayload(
+                            status="failed",
+                            code=public_error.code,
+                            message=public_error.message,
+                            retryable=public_error.retryable,
+                        ),
+                    ),
+                    updated_at=datetime.now(UTC),
+                    error_code=public_error.code,
+                    error_message=public_error.message,
+                )
             log_business_event(
                 logger,
                 "持久Run执行失败",
@@ -541,6 +772,109 @@ class ChatService:
             status="completed",
             duration_ms=round((perf_counter() - started_at) * 1000, 2),
         )
+
+    async def _finalize_persistent_cancellation_locked(
+        self,
+        run: Run,
+        *,
+        partial_content: str = "",
+        capability_id: CapabilityId | None = None,
+        turn: PreparedChatTurn | None = None,
+    ) -> Run:
+        """先保存非空 stopped 公共消息，再原子提交唯一取消终态事件。"""
+
+        event_repository = self._runtime_event_repository
+        if event_repository is None:
+            raise ChatRuntimeError(
+                code="RUNTIME_EVENT_SERVICE_UNAVAILABLE",
+                message="RuntimeEvent 服务尚未完成初始化",
+                retryable=True,
+            )
+        if run.status == "cancelled":
+            return run
+        if turn is None:
+            turn = await self._turn_from_run(run)
+        content = partial_content
+        if not content.strip():
+            content = _STOPPED_MESSAGE_FALLBACK
+        await self.persist_runtime_message(
+            turn,
+            content,
+            runtime_status="stopped",
+            capability_id=capability_id,
+            include_human=not turn.is_regeneration,
+        )
+        sequencer = RunSequencer.for_run(
+            run_id=run.run_id,
+            response_message_id=run.response_message_id,
+            repository=event_repository,
+            publisher=self._runtime_event_publisher,
+        )
+        await sequencer.emit(
+            self._runtime_event_draft(
+                "message.finalized",
+                MessageFinalizedPayload(
+                    response_message_id=run.response_message_id,
+                    runtime_status="stopped",
+                    capability_id=capability_id,
+                ),
+            )
+        )
+        commit = await sequencer.transition_run(
+            target_status="cancelled",
+            event=self._runtime_event_draft(
+                "run.cancelled",
+                RunCancelledPayload(status="cancelled"),
+            ),
+            updated_at=datetime.now(UTC),
+        )
+        await self._session_service.touch_session(session_id=run.session_id)
+        log_business_event(
+            logger,
+            "持久Run取消完成",
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            capability_id=capability_id,
+            status="cancelled",
+            output_chars=len(content),
+        )
+        return commit.run
+
+    async def _require_nonempty_persistent_message(
+        self,
+        *,
+        run: Run,
+        expected_status: CompletionStatus,
+    ) -> None:
+        """确认 Graph 已用预分配消息 ID 保存非空完成或不支持回复。"""
+
+        parent_state = await self._parent_graph.aget_state(
+            parent_thread_config(run.session_id)
+        )
+        final_message = next(
+            (
+                message
+                for message in reversed(
+                    parent_state.values.get("messages", [])
+                )
+                if isinstance(message, AIMessage)
+                and str(message.id) == str(run.response_message_id)
+            ),
+            None,
+        )
+        if (
+            final_message is None
+            or final_message.additional_kwargs.get("runtime_status")
+            != expected_status
+            or not str(final_message.text).strip()
+        ):
+            raise ChatRuntimeError(
+                code="CHAT_EMPTY_TERMINAL_MESSAGE",
+                message="聊天运行未形成非空终态回复",
+                retryable=False,
+            )
 
     def _persistent_runtime_dependencies(
         self,
@@ -663,6 +997,23 @@ class ChatService:
             durability=(
                 "transient" if event_type == "message.delta" else "durable"
             ),
+            created_at=datetime.now(UTC),
+        )
+
+    @staticmethod
+    def _internal_runtime_event_draft(
+        event_type: str,
+        payload,
+    ) -> RuntimeEventDraft:
+        """构造不向 SSE 投影、但必须随 Run 状态原子落库的内部事件。"""
+
+        return RuntimeEventDraft(
+            event_type=event_type,
+            source="runtime.api",
+            visibility="internal",
+            payload=payload,
+            schema_version=1,
+            durability="durable",
             created_at=datetime.now(UTC),
         )
 
@@ -1017,6 +1368,39 @@ class ChatService:
                     status="not_owned",
                 )
                 return
+
+            persistent_run_repository = self._persistent_run_repository
+            run_coordinator = self._run_coordinator
+            if (
+                persistent_run_repository is not None
+                and run_coordinator is not None
+            ):
+                active_persistent_run = (
+                    await persistent_run_repository.get_active_for_session(
+                        session_id
+                    )
+                )
+                if active_persistent_run is not None:
+                    await self.cancel_persistent_run(
+                        run_id=active_persistent_run.run_id
+                    )
+                    await run_coordinator.wait_for_run(
+                        active_persistent_run.run_id
+                    )
+                    persisted_terminal = await persistent_run_repository.get(
+                        active_persistent_run.run_id
+                    )
+                    if persisted_terminal.status not in {
+                        "completed",
+                        "failed",
+                        "cancelled",
+                    }:
+                        raise SessionDeletionError(
+                            code="SESSION_DELETE_FAILED",
+                            message="Session 活动 Run 尚未完成取消，请重试",
+                            status_code=500,
+                            retryable=True,
+                        )
 
             run = await self._run_registry.get_active(session_id)
             try:
@@ -1665,6 +2049,7 @@ async def open_chat_service(
         repository=run_repository,
         user_id=settings.local_user_id,
         scan_interval_seconds=settings.run_coordinator_scan_interval_seconds,
+        cancel_grace_seconds=settings.run_cancel_grace_seconds,
     )
     parent_state_store = PostgresParentStateStore(settings)
     runtime_model = model or build_chat_model(settings)
@@ -1728,6 +2113,8 @@ async def open_chat_service(
             en_to_zh_checkpointer=checkpointers.en_to_zh,
             feedback_store=feedback_store,
             session_repository=session_repository,
+            runtime_store=run_repository,
+            redis_stream_cleaner=runtime_event_publisher,
         )
         checkpoint_forker = CheckpointForker(
             history_adapter=history_adapter,

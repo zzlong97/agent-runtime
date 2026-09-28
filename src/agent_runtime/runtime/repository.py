@@ -190,6 +190,23 @@ AND r.status IN (
 ORDER BY r.created_at, r.run_id
 """
 
+_SELECT_RUN_IDS_BY_SESSION = """
+SELECT run_id
+FROM runs
+WHERE session_id = %s
+ORDER BY created_at, run_id
+"""
+
+_DELETE_RUNTIME_EVENTS_BY_SESSION = """
+DELETE FROM runtime_events
+WHERE run_id IN (SELECT run_id FROM runs WHERE session_id = %s)
+"""
+
+_DELETE_RUNS_BY_SESSION = """
+DELETE FROM runs
+WHERE session_id = %s
+"""
+
 class RunPersistenceError(ApplicationError):
     """Run Schema 或持久化读写失败时返回的稳定应用错误。"""
 
@@ -562,6 +579,50 @@ class PostgresRunRepository:
                 retryable=True,
             ) from error
         return [_run_from_row(row) for row in rows]
+
+    async def list_run_ids_by_session(self, *, session_id: UUID) -> list[UUID]:
+        """按创建顺序返回 Session 的全部 Run UUID，供 Redis 清理使用。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_RUN_IDS_BY_SESSION,
+                    (session_id,),
+                )
+                rows = await cursor.fetchall()
+        except Exception as error:
+            raise RunPersistenceError(
+                code="RUN_READ_FAILED",
+                message="Run 读取失败",
+                retryable=True,
+            ) from error
+        return [UUID(str(row["run_id"])) for row in rows]
+
+    async def delete_by_session(self, *, session_id: UUID) -> None:
+        """在单个事务中先删 RuntimeEvent，再删 Session 的全部 Run。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                await connection.execute(
+                    _DELETE_RUNTIME_EVENTS_BY_SESSION,
+                    (session_id,),
+                )
+                await connection.execute(
+                    _DELETE_RUNS_BY_SESSION,
+                    (session_id,),
+                )
+                await connection.commit()
+        except Exception as error:
+            raise RunPersistenceError(
+                code="RUN_DELETE_FAILED",
+                message="Run 关联数据删除失败",
+                retryable=True,
+            ) from error
+        log_business_event(
+            logger,
+            "Run关联数据删除完成",
+            session_id=session_id,
+        )
 
     async def _insert_or_resolve_request(
         self,

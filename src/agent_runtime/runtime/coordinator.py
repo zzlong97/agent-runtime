@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from time import perf_counter
 from uuid import UUID
+from weakref import WeakValueDictionary
 
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.runtime.models import Run
@@ -24,14 +26,24 @@ class RunCoordinator:
         repository: PostgresRunRepository,
         user_id: str,
         scan_interval_seconds: float,
+        cancel_grace_seconds: float = 2.0,
     ) -> None:
         if scan_interval_seconds <= 0:
             raise ValueError("Coordinator 扫描间隔必须大于 0 秒")
+        if cancel_grace_seconds <= 0:
+            raise ValueError("Run 取消宽限时间必须大于 0 秒")
         self._repository = repository
         self._user_id = user_id
         self._scan_interval_seconds = scan_interval_seconds
+        self._cancel_grace_seconds = cancel_grace_seconds
         self._executor: RunExecutor | None = None
         self._tasks: dict[UUID, asyncio.Task[None]] = {}
+        self._cancel_signals: dict[UUID, asyncio.Event] = {}
+        self._force_cancel_tasks: dict[UUID, asyncio.Task[None]] = {}
+        self._claim_locks: WeakValueDictionary[UUID, asyncio.Lock] = (
+            WeakValueDictionary()
+        )
+        self._finalizing_runs: set[UUID] = set()
         self._scan_task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
         self._closed = False
@@ -73,10 +85,10 @@ class RunCoordinator:
                 error_type=type(error).__name__,
             )
             return
-        await self._dispatch_if_queued(run, reason="submit")
+        await self._dispatch_if_actionable(run, reason="submit")
 
     async def scan_once(self, *, reason: str = "compensation") -> None:
-        """扫描固定用户的非终态 Run，本阶段只分派 queued Run。"""
+        """扫描固定用户的非终态 Run，并分派 queued 或取消投影任务。"""
 
         started_at = perf_counter()
         try:
@@ -95,11 +107,15 @@ class RunCoordinator:
             )
             return
         queued_count = 0
+        cancel_requested_count = 0
         deferred_count = 0
         for run in runs:
             if run.status == "queued":
                 queued_count += 1
-                await self._dispatch_if_queued(run, reason=reason)
+                await self._dispatch_if_actionable(run, reason=reason)
+            elif run.status == "cancel_requested":
+                cancel_requested_count += 1
+                await self._dispatch_if_actionable(run, reason=reason)
             else:
                 # running/recovering 的对账恢复属于 S2.5-08。
                 deferred_count += 1
@@ -109,6 +125,7 @@ class RunCoordinator:
             scan_reason=reason,
             active_count=len(runs),
             queued_count=queued_count,
+            cancel_requested_count=cancel_requested_count,
             deferred_count=deferred_count,
             duration_ms=_elapsed_ms(started_at),
         )
@@ -121,7 +138,76 @@ class RunCoordinator:
                 tasks = tuple(self._tasks.values())
             if not tasks:
                 return
-            await asyncio.gather(*tasks, return_exceptions=True)
+            pending = asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.shield(pending)
+
+    async def wait_cancel_requested(self, run_id: UUID) -> None:
+        """等待指定 Run 的进程内协作式取消信号。"""
+
+        async with self._lock:
+            signal = self._cancel_signals.setdefault(run_id, asyncio.Event())
+        await signal.wait()
+
+    @asynccontextmanager
+    async def claim_guard(self, run_id: UUID) -> AsyncIterator[None]:
+        """串行化同进程内 queued 领取与直接取消的临界区。"""
+
+        async with self._lock:
+            guard = self._claim_locks.setdefault(run_id, asyncio.Lock())
+        async with guard:
+            yield
+
+    async def is_cancel_requested(self, run_id: UUID) -> bool:
+        """读取指定 Run 是否已收到进程内协作式取消信号。"""
+
+        async with self._lock:
+            signal = self._cancel_signals.get(run_id)
+            return signal is not None and signal.is_set()
+
+    async def request_cancel(self, run_id: UUID) -> None:
+        """先通知执行器协作退出，并安排宽限期后的本地任务强制取消。"""
+
+        async with self._lock:
+            signal = self._cancel_signals.setdefault(run_id, asyncio.Event())
+            signal.set()
+            current = self._tasks.get(run_id)
+            existing_force = self._force_cancel_tasks.get(run_id)
+            if (
+                run_id in self._finalizing_runs
+                or current is None
+                or current.done()
+                or (existing_force is not None and not existing_force.done())
+            ):
+                return
+            force_task = asyncio.create_task(
+                self._force_cancel_after_grace(run_id, current),
+                name=f"run-force-cancel:{run_id}",
+            )
+            self._force_cancel_tasks[run_id] = force_task
+        log_business_event(
+            logger,
+            "Run协调器取消信号已发送",
+            run_id=run_id,
+            cancel_grace_seconds=self._cancel_grace_seconds,
+        )
+
+    async def begin_cancel_finalization(self, run_id: UUID) -> None:
+        """标记执行器已响应取消，并停止可能打断终态落盘的宽限计时。"""
+
+        async with self._lock:
+            self._finalizing_runs.add(run_id)
+            force_task = self._force_cancel_tasks.pop(run_id, None)
+            if force_task is not None and force_task is not asyncio.current_task():
+                force_task.cancel()
+        log_business_event(logger, "Run协调器取消终结开始", run_id=run_id)
+
+    async def wait_for_run(self, run_id: UUID) -> None:
+        """等待指定 Run 当前进程内执行任务结束；不存在任务时立即返回。"""
+
+        async with self._lock:
+            task = self._tasks.get(run_id)
+        if task is not None:
+            await asyncio.shield(task)
 
     async def close(self) -> None:
         """停止扫描并取消本地任务，持久 Run 留给后续恢复。"""
@@ -133,15 +219,25 @@ class RunCoordinator:
             scan_task.cancel()
             await asyncio.gather(scan_task, return_exceptions=True)
         async with self._lock:
-            tasks = tuple(self._tasks.values())
-        for task in tasks:
+            task_entries = tuple(self._tasks.items())
+            force_cancel_tasks = tuple(self._force_cancel_tasks.values())
+        for run_id, task in task_entries:
+            if run_id not in self._finalizing_runs:
+                task.cancel()
+        if task_entries:
+            pending = asyncio.gather(
+                *(task for _run_id, task in task_entries),
+                return_exceptions=True,
+            )
+            await asyncio.shield(pending)
+        for task in force_cancel_tasks:
             task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+        if force_cancel_tasks:
+            await asyncio.gather(*force_cancel_tasks, return_exceptions=True)
         log_business_event(logger, "Run协调器已关闭")
 
-    async def _dispatch_if_queued(self, run: Run, *, reason: str) -> None:
-        if run.status != "queued" or self._closed:
+    async def _dispatch_if_actionable(self, run: Run, *, reason: str) -> None:
+        if run.status not in {"queued", "cancel_requested"} or self._closed:
             return
         executor = self._executor
         if executor is None:
@@ -155,6 +251,29 @@ class RunCoordinator:
                 name=f"run-executor:{run.run_id}",
             )
             self._tasks[run.run_id] = task
+
+    async def _force_cancel_after_grace(
+        self,
+        run_id: UUID,
+        expected_task: asyncio.Task[None],
+    ) -> None:
+        """宽限期后只取消仍与 Run 绑定的同一进程内任务。"""
+
+        try:
+            await asyncio.sleep(self._cancel_grace_seconds)
+            async with self._lock:
+                current = self._tasks.get(run_id)
+                if current is expected_task and not current.done():
+                    current.cancel()
+                    log_business_event(
+                        logger,
+                        "Run协调器执行强制取消",
+                        run_id=run_id,
+                    )
+        finally:
+            async with self._lock:
+                if self._force_cancel_tasks.get(run_id) is asyncio.current_task():
+                    del self._force_cancel_tasks[run_id]
 
     async def _execute(
         self,
@@ -213,6 +332,11 @@ class RunCoordinator:
                 current = self._tasks.get(run.run_id)
                 if current is asyncio.current_task():
                     del self._tasks[run.run_id]
+                self._cancel_signals.pop(run.run_id, None)
+                self._finalizing_runs.discard(run.run_id)
+                force_task = self._force_cancel_tasks.pop(run.run_id, None)
+                if force_task is not None and force_task is not asyncio.current_task():
+                    force_task.cancel()
 
     async def _scan_loop(self) -> None:
         while True:

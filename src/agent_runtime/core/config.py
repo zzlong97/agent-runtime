@@ -74,6 +74,14 @@ class Settings(BaseSettings):
             "Stage 2.5 默认 1 秒，只补偿进程内唤醒丢失，不提供多实例 Lease。"
         ),
     )
+    run_cancel_grace_seconds: float = Field(
+        default=2.0,
+        gt=0,
+        description=(
+            "持久 Run 接受显式取消后等待执行器协作退出的最长秒数；超过该宽限期"
+            "仅强制取消当前进程内对应任务，不承诺回滚已经发生的外部副作用。"
+        ),
+    )
 
     @field_validator("database_url")
     @classmethod

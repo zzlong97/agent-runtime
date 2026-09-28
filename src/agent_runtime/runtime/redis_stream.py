@@ -119,6 +119,31 @@ class RedisStreamPublisher:
             )
         return True
 
+    async def delete_streams(self, run_ids: list[UUID]) -> bool:
+        """尽力删除一组 Run Stream；Redis 故障不得阻塞 Session 硬删除。"""
+
+        if not run_ids:
+            return True
+        stream_keys = [f"{_STREAM_KEY_PREFIX}{run_id}" for run_id in run_ids]
+        try:
+            await self._client.delete(*stream_keys)
+        except Exception as error:
+            log_business_event(
+                logger,
+                "Redis实时事件清理降级",
+                level=logging.WARNING,
+                run_count=len(run_ids),
+                error_code="REDIS_EVENT_DELETE_FAILED",
+                error_type=type(error).__name__,
+            )
+            return False
+        log_business_event(
+            logger,
+            "Redis实时事件清理完成",
+            run_count=len(run_ids),
+        )
+        return True
+
     async def aclose(self) -> None:
         """关闭 Redis 连接池；关闭失败按旁路故障静默降级。"""
 

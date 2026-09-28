@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2.5
-Current Task: S2.5-05
-Last Verified Task: S2.5-04
-Last Verified Commit: 8515051（S2.5-04 异步 Run API 与 Coordinator）
+Current Task: S2.5-06
+Last Verified Task: S2.5-05
+Last Verified Commit: a4d1b98（S2.5-05 SSE Gateway、合并与背压）
 Blockers: None
 ```
 
@@ -1576,7 +1576,7 @@ stop and wait
 
 ## S2.5-05 SSE Gateway、合并与背压
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-03, S2.5-04
 
@@ -1651,12 +1651,14 @@ stop and wait
   `git diff --check` 全部通过
 - Result：S2.5-05 实现与真实外部依赖门禁完成，状态更新为 `DONE` 并等待负责人
   复审；不自行标记 `VERIFIED`，不开始 S2.5-06
+- 2026-09-28：负责人确认 S2.5-05 验收通过；实现已提交为 `a4d1b98`，并确认
+  GitHub 与 Gitee 的 `master` 均指向同一提交，允许开始 S2.5-06
 
 ---
 
 ## S2.5-06 Cancel、非空终态与 Session 删除
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-04, S2.5-05
 
@@ -1670,12 +1672,52 @@ stop and wait
 
 ### Acceptance
 
-- [ ] Cancel 持久化后返回 202 且重复调用幂等
-- [ ] Cancel 不回滚已有外部副作用
-- [ ] 失败或取消在零 delta 时仍形成非空可解释消息
-- [ ] 只有 completed 完整轮次进入模型上下文
-- [ ] Session 最后删除且中途失败可重试
-- [ ] Redis 删除失败不阻塞 PostgreSQL 硬删除
+- [x] Cancel 持久化后返回 202 且重复调用幂等
+- [x] Cancel 不回滚已有外部副作用
+- [x] 失败或取消在零 delta 时仍形成非空可解释消息
+- [x] 只有 completed 完整轮次进入模型上下文
+- [x] Session 最后删除且中途失败可重试
+- [x] Redis 删除失败不阻塞 PostgreSQL 硬删除
+
+### Verification
+
+- 2026-09-28：新增 `POST /api/v1/chat/runs/{run_id}/cancel`；运行中 Run 在行锁事务
+  内幂等写入 `cancel_requested` 后返回 202，queued / interrupted Run 直接形成
+  `stopped` 公共消息并提交 `run.cancelled`
+- 2026-09-28：Coordinator 增加进程内协作取消信号和可配置宽限期；执行器响应信号
+  后完成公共消息与事件投影，未响应时仅强制取消同一进程内任务；连接断开语义不变
+- 2026-09-28：完成与取消竞争继续在 PostgreSQL Run 行锁下决胜；取消先写入时
+  `run.completed` 被拒绝，完成或其他终态先提交时 Cancel 只返回不可变权威终态
+- 2026-09-28：失败与取消统一使用预分配 `response_message_id` 保存非空
+  `incomplete` / `stopped` 公共消息，`message.finalized` 先于 `run.failed` /
+  `run.cancelled`；既有上下文测试继续证明仅 completed 完整轮次进入模型输入
+- 2026-09-28：Session 删除屏障已覆盖持久 Run；等待活动 Run 终止后收集 run_id，
+  尽力删除 Redis Stream，再删除 RuntimeEvent / Run、Checkpoint、Feedback，最后
+  删除 Session；Redis 失败只记录降级且不阻塞 PostgreSQL
+- 2026-09-28：针对独立复审发现的取消宽限期与终态竞争问题，Coordinator 在进入
+  取消终态持久化后停止强制取消计时器，并等待终态收尾完成；完成、失败与取消使用
+  同一 Run 进程内决胜锁，防止较晚 Cancel 插入 `message.finalized` 与 Run 终态之间
+- 2026-09-28：失败与取消兜底消息在持久化前统一去除空白并保证非空；无法从
+  `input_payload` 重建稳定 Parent 写入位置时不提交无公共消息的数据库终态，留待后续
+  恢复；Run 决胜锁使用弱引用释放空闲条目
+- 2026-09-28：新增确定性回归测试，覆盖慢取消收尾超过宽限期仍被等待、完成事件与
+  Cancel 交错只产生一个 `message.finalized`、空白取消/失败消息兜底，以及无法重建
+  Parent 写入位置时不错误提交终态
+- 2026-09-28：独立复审发现等待者取消可反向中断共享 Executor、queued / interrupted
+  直接取消会被调用方取消中断；Coordinator 等待改为 shield 共享任务，直接取消延迟
+  传播调用方取消，并新增等待者取消与关闭期间终态收尾的确定性回归测试
+- 2026-09-28：`running / recovering → cancel_requested` 改由
+  `internal.run.cancel_requested` durable Event 与 Run 状态在同一 PostgreSQL 事务
+  提交；内部事件不进入公开 SSE，重复 Cancel 继续返回当前权威状态
+- 2026-09-28：补齐 Cancel 终态幂等出口及 Session 持久化关联数据删除开始、完成、
+  失败中文业务日志，日志不记录请求正文、输出正文或连接凭据
+- 2026-09-28：S2.5-06 默认完整套件为 `376 passed, 26 skipped`；启用真实
+  PostgreSQL / Redis 的完整套件为 `401 passed, 1 skipped`，唯一跳过项为需显式
+  启用的真实百炼 smoke
+- 2026-09-29：负责人确认 S2.5-06 验收通过；允许按工程流程提交并同步 GitHub、
+  Gitee，两个远程确认一致后进入 S2.5-07
+- Result：S2.5-06 已通过实现、真实依赖门禁、独立复审和负责人验收，状态更新为
+  `VERIFIED`
 
 ---
 

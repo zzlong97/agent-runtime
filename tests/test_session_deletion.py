@@ -48,6 +48,38 @@ class RecordingSessionRepository:
         self.deleted = True
 
 
+class RecordingRuntimeStore:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.run_ids = [
+            UUID("00000000-0000-0000-0000-000000002802"),
+            UUID("00000000-0000-0000-0000-000000002803"),
+        ]
+        self.fail_once = False
+
+    async def list_run_ids_by_session(self, *, session_id: UUID):
+        self.events.append(f"runtime-list:{session_id}")
+        return self.run_ids
+
+    async def delete_by_session(self, *, session_id: UUID) -> None:
+        self.events.append(f"runtime-delete:{session_id}")
+        if self.fail_once:
+            self.fail_once = False
+            raise RuntimeError("Runtime 存储暂不可用")
+
+
+class RecordingRedisCleaner:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.fail = False
+
+    async def delete_streams(self, run_ids) -> bool:
+        self.events.append(
+            "redis:" + ",".join(str(run_id) for run_id in run_ids)
+        )
+        return not self.fail
+
+
 def _deletion_service(events: list[str]):
     from agent_runtime.core.config import Settings
     from agent_runtime.session_deletion import SessionDeletionService
@@ -57,6 +89,8 @@ def _deletion_service(events: list[str]):
     en_to_zh = RecordingCheckpointer("en_to_zh", events)
     feedback = RecordingFeedbackStore(events)
     sessions = RecordingSessionRepository(events)
+    runtime = RecordingRuntimeStore(events)
+    redis = RecordingRedisCleaner(events)
     service = SessionDeletionService(
         settings=Settings(
             _env_file=None,
@@ -67,19 +101,42 @@ def _deletion_service(events: list[str]):
         en_to_zh_checkpointer=en_to_zh,
         feedback_store=feedback,
         session_repository=sessions,
+        runtime_store=runtime,
+        redis_stream_cleaner=redis,
     )
-    return service, parent, general_chat, en_to_zh, feedback, sessions
+    return (
+        service,
+        parent,
+        general_chat,
+        en_to_zh,
+        feedback,
+        sessions,
+        runtime,
+        redis,
+    )
 
 
 def test_session_deletion_service_deletes_in_fixed_retry_safe_order() -> None:
     events: list[str] = []
-    service, _parent, _general, _translation, _feedback, sessions = (
+    (
+        service,
+        _parent,
+        _general,
+        _translation,
+        _feedback,
+        sessions,
+        runtime,
+        _redis,
+    ) = (
         _deletion_service(events)
     )
 
     asyncio.run(service.delete_persisted_data(session_id=SESSION_ID))
 
     assert events == [
+        f"runtime-list:{SESSION_ID}",
+        "redis:" + ",".join(str(run_id) for run_id in runtime.run_ids),
+        f"runtime-delete:{SESSION_ID}",
         f"general_chat:{SESSION_ID}:general_chat",
         f"en_to_zh:{SESSION_ID}:en_to_zh",
         f"parent:{SESSION_ID}",
@@ -91,7 +148,14 @@ def test_session_deletion_service_deletes_in_fixed_retry_safe_order() -> None:
 
 @pytest.mark.parametrize(
     "failing_dependency",
-    ["general_chat", "en_to_zh", "parent", "feedback", "session"],
+    [
+        "runtime",
+        "general_chat",
+        "en_to_zh",
+        "parent",
+        "feedback",
+        "session",
+    ],
 )
 def test_session_deletion_service_keeps_retry_anchor_and_retries_from_start(
     failing_dependency: str,
@@ -99,7 +163,16 @@ def test_session_deletion_service_keeps_retry_anchor_and_retries_from_start(
     from agent_runtime.session_deletion import SessionDeletionError
 
     events: list[str] = []
-    service, parent, general_chat, en_to_zh, feedback, sessions = (
+    (
+        service,
+        parent,
+        general_chat,
+        en_to_zh,
+        feedback,
+        sessions,
+        runtime,
+        _redis,
+    ) = (
         _deletion_service(events)
     )
     dependencies = {
@@ -108,6 +181,7 @@ def test_session_deletion_service_keeps_retry_anchor_and_retries_from_start(
         "parent": parent,
         "feedback": feedback,
         "session": sessions,
+        "runtime": runtime,
     }
     dependencies[failing_dependency].fail_once = True
 
@@ -124,10 +198,33 @@ def test_session_deletion_service_keeps_retry_anchor_and_retries_from_start(
     asyncio.run(service.delete_persisted_data(session_id=SESSION_ID))
 
     assert events == [
+        f"runtime-list:{SESSION_ID}",
+        "redis:" + ",".join(str(run_id) for run_id in runtime.run_ids),
+        f"runtime-delete:{SESSION_ID}",
         f"general_chat:{SESSION_ID}:general_chat",
         f"en_to_zh:{SESSION_ID}:en_to_zh",
         f"parent:{SESSION_ID}",
         f"feedback:configured-user:{SESSION_ID}",
         f"session:configured-user:{SESSION_ID}",
     ]
+    assert sessions.deleted is True
+
+
+def test_session_deletion_ignores_redis_cleanup_failure() -> None:
+    events: list[str] = []
+    (
+        service,
+        _parent,
+        _general,
+        _translation,
+        _feedback,
+        sessions,
+        runtime,
+        redis,
+    ) = _deletion_service(events)
+    redis.fail = True
+
+    asyncio.run(service.delete_persisted_data(session_id=SESSION_ID))
+
+    assert f"runtime-delete:{SESSION_ID}" in events
     assert sessions.deleted is True

@@ -51,6 +51,7 @@ class FakeAsyncRunService:
         self.regenerate_calls: list[tuple[UUID, UUID, UUID]] = []
         self.active_calls: list[UUID] = []
         self.event_stream_calls: list[tuple[UUID, int]] = []
+        self.cancel_calls: list[UUID] = []
         self.error: Exception | None = None
 
     async def submit_chat_run(self, *, request_id, session_id, content):
@@ -108,6 +109,13 @@ class FakeAsyncRunService:
                 )
 
         return stream()
+
+    async def cancel_persistent_run(self, *, run_id):
+        self.cancel_calls.append(run_id)
+        if self.error is not None:
+            raise self.error
+        self.run = _run(status="cancel_requested")
+        return self.run
 
 
 def _request(
@@ -284,12 +292,51 @@ def test_public_session_stop_route_is_removed() -> None:
         "POST",
         f"/api/v1/chat/sessions/{SESSION_ID}/stop",
     )
-
     assert response.status_code == 404
     assert (
         f"/api/v1/chat/sessions/{{session_id}}/stop"
         not in app.openapi()["paths"]
     )
+
+
+def test_run_cancel_persists_request_and_returns_accepted_summary() -> None:
+    from agent_runtime.main import create_app
+
+    service = FakeAsyncRunService()
+    app = create_app(chat_service=service)
+
+    first = _request(
+        app,
+        "POST",
+        f"/api/v1/chat/runs/{RUN_ID}/cancel",
+    )
+    repeated = _request(
+        app,
+        "POST",
+        f"/api/v1/chat/runs/{RUN_ID}/cancel",
+    )
+
+    assert first.status_code == 202
+    assert repeated.status_code == 202
+    assert first.json() == repeated.json() == {
+        "run_id": str(RUN_ID),
+        "session_id": str(SESSION_ID),
+        "response_message_id": str(RESPONSE_MESSAGE_ID),
+        "status": "cancel_requested",
+    }
+    assert service.cancel_calls == [RUN_ID, RUN_ID]
+
+
+def test_run_cancel_openapi_describes_run_identifier() -> None:
+    from agent_runtime.main import create_app
+
+    operation = create_app(chat_service=FakeAsyncRunService()).openapi()[
+        "paths"
+    ]["/api/v1/chat/runs/{run_id}/cancel"]["post"]
+    parameters = {item["name"]: item for item in operation["parameters"]}
+
+    assert set(parameters) == {"run_id"}
+    assert parameters["run_id"].get("description")
 
 
 def test_run_api_schema_describes_every_request_and_response_field() -> None:

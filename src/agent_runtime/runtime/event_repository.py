@@ -21,6 +21,7 @@ from agent_runtime.runtime.event_models import (
     SequenceBlock,
 )
 from agent_runtime.runtime.event_schemas import (
+    STATEFUL_INTERNAL_EVENT_TYPES,
     STATEFUL_PUBLIC_EVENT_TYPES,
     project_public_event,
 )
@@ -42,8 +43,21 @@ logger = logging.getLogger(__name__)
 _ALLOWED_STATE_EVENT_TRANSITIONS = frozenset(
     {
         ("queued", "run.started", "running"),
+        ("queued", "run.cancelled", "cancelled"),
+        (
+            "running",
+            "internal.run.cancel_requested",
+            "cancel_requested",
+        ),
         ("running", "run.completed", "completed"),
         ("running", "run.failed", "failed"),
+        (
+            "recovering",
+            "internal.run.cancel_requested",
+            "cancel_requested",
+        ),
+        ("interrupted", "run.cancelled", "cancelled"),
+        ("cancel_requested", "run.cancelled", "cancelled"),
     }
 )
 
@@ -661,7 +675,8 @@ class PostgresRuntimeEventRepository:
         self._validate_durable_event(event, allow_stateful=True)
         if (
             event.run_id != run_id
-            or event.event_type not in STATEFUL_PUBLIC_EVENT_TYPES
+            or event.event_type
+            not in STATEFUL_PUBLIC_EVENT_TYPES | STATEFUL_INTERNAL_EVENT_TYPES
         ):
             raise RuntimeEventPersistenceError(
                 code="RUNTIME_EVENT_STATE_MISMATCH",

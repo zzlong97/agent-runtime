@@ -336,6 +336,36 @@ async def stream_run_events(
 
 
 @router.post(
+    "/runs/{run_id}/cancel",
+    response_model=RunSummaryResponse,
+    status_code=202,
+)
+async def cancel_run(
+    run_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要显式取消的持久 Run UUID；只允许操作固定本地用户拥有的 Run，"
+                "重复请求返回当前权威状态且不重复触发取消副作用。"
+            )
+        ),
+    ],
+    request: Request,
+) -> RunSummaryResponse:
+    """持久化取消请求后立即返回 Run 当前公开摘要。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        run = await chat_service.cancel_persistent_run(run_id=run_id)
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    return RunSummaryResponse.model_validate(run, from_attributes=True)
+
+
+@router.post(
     "/sessions/{session_id}/messages/{message_id}/regenerate",
     response_model=RunSummaryResponse,
     status_code=202,

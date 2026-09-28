@@ -58,6 +58,51 @@ class BlockingRuntimeFakeModel(StageTwoBrowserFakeModel):
         return self._blocking_execution_count
 
 
+class ZeroDeltaFailureFakeModel(StageTwoBrowserFakeModel):
+    """仅在最终普通回复阶段于输出任何 delta 前失败。"""
+
+    async def _astream(
+        self,
+        messages,
+        stop=None,
+        run_manager=None,
+        **kwargs,
+    ):
+        system_content = str(messages[0].content)
+        latest_human = next(
+            message
+            for message in reversed(messages)
+            if isinstance(message, HumanMessage)
+        )
+        if (
+            "普通聊天助手" in system_content
+            and "零输出失败" in str(latest_human.content)
+        ):
+            raise RuntimeError("确定性零输出失败")
+        async for chunk in super()._astream(
+            messages,
+            stop=stop,
+            run_manager=run_manager,
+            **kwargs,
+        ):
+            yield chunk
+
+
+class WhitespaceReplyFakeModel(StageTwoBrowserFakeModel):
+    """返回纯空白文本，用于验证终态正文 fallback。"""
+
+    @staticmethod
+    def _visible_reply(messages):
+        latest_human = next(
+            message
+            for message in reversed(messages)
+            if isinstance(message, HumanMessage)
+        )
+        if "空白回复" in str(latest_human.content):
+            return "   "
+        return StageTwoBrowserFakeModel._visible_reply(messages)
+
+
 def _run_on_psycopg_compatible_loop(coroutine) -> None:
     """在 Windows 上使用 psycopg 支持的 Selector 事件循环。"""
 
@@ -303,6 +348,280 @@ def test_async_run_api_persists_before_202_and_executes_after_disconnect() -> No
                     assert follow_up_items[-1]["message_id"] == (
                         follow_up.json()["response_message_id"]
                     )
+        finally:
+            if session_id is not None:
+                async with AsyncPostgresSaver.from_conn_string(
+                    settings.database_connection_string
+                ) as checkpointer:
+                    for thread_id in (
+                        f"{session_id}:general_chat",
+                        f"{session_id}:en_to_zh",
+                        str(session_id),
+                    ):
+                        await checkpointer.adelete_thread(thread_id)
+                async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM runtime_events WHERE run_id IN "
+                        "(SELECT run_id FROM runs WHERE session_id = %s)",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM runs WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.commit()
+
+    _run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="设置 RUN_POSTGRES_TESTS=1 后运行 PostgreSQL 集成测试",
+)
+@pytest.mark.parametrize(
+    ("content", "model_factory", "terminal_status", "message_status"),
+    [
+        ("执行长任务", StageTwoBrowserFakeModel, "cancelled", "stopped"),
+        ("零输出失败", ZeroDeltaFailureFakeModel, "failed", "incomplete"),
+        ("空白回复", WhitespaceReplyFakeModel, "failed", "incomplete"),
+    ],
+)
+def test_cancel_and_failure_persist_nonempty_terminal_message(
+    content,
+    model_factory,
+    terminal_status,
+    message_status,
+) -> None:
+    """显式取消与零 delta 失败都先保存非空公共消息，再提交 Run 终态。"""
+
+    from agent_runtime.chat import open_chat_service
+    from agent_runtime.core.config import Settings
+    from agent_runtime.main import create_app
+    from agent_runtime.persistence.database import open_database_connection
+    from agent_runtime.runtime.event_repository import (
+        PostgresRuntimeEventRepository,
+    )
+    from agent_runtime.runtime.repository import PostgresRunRepository
+
+    base_settings = Settings()
+    settings = Settings(
+        database_url=base_settings.database_url,
+        local_user_id=f"s25-terminal-{uuid4()}",
+        redis_url="redis://127.0.0.1:1/0",
+        redis_socket_timeout_seconds=0.05,
+        run_coordinator_scan_interval_seconds=0.02,
+        run_cancel_grace_seconds=0.05,
+        _env_file=None,
+    )
+    session_id: UUID | None = None
+
+    async def exercise() -> None:
+        nonlocal session_id
+        try:
+            async with open_chat_service(
+                settings,
+                model=model_factory(),
+            ) as service:
+                app = create_app(settings, chat_service=service)
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url="http://runtime.test",
+                ) as client:
+                    submitted = await client.post(
+                        "/api/v1/chat/completions",
+                        json={
+                            "request_id": str(uuid4()),
+                            "message": {"content": content},
+                        },
+                    )
+                    assert submitted.status_code == 202
+                    summary = submitted.json()
+                    session_id = UUID(summary["session_id"])
+                    run_id = UUID(summary["run_id"])
+                    repository = PostgresRunRepository(settings)
+
+                    if terminal_status == "cancelled":
+                        for _ in range(200):
+                            running = await repository.get(run_id)
+                            if running.status == "running":
+                                break
+                            await asyncio.sleep(0.01)
+                        else:
+                            raise AssertionError("待取消 Run 未进入 running")
+                        cancelled = await client.post(
+                            f"/api/v1/chat/runs/{run_id}/cancel"
+                        )
+                        assert cancelled.status_code == 202
+                        assert cancelled.json()["status"] in {
+                            "cancel_requested",
+                            "cancelled",
+                        }
+
+                    for _ in range(300):
+                        terminal = await repository.get(run_id)
+                        if terminal.status == terminal_status:
+                            break
+                        await asyncio.sleep(0.01)
+                    else:
+                        raise AssertionError("Run 未在限定时间内形成预期终态")
+
+                    history = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+                    assert history.status_code == 200
+                    assistant = history.json()["items"][-1]
+                    assert assistant["role"] == "assistant"
+                    assert assistant["runtime_status"] == message_status
+                    assert assistant["message_id"] == summary[
+                        "response_message_id"
+                    ]
+                    assert assistant["content"].strip()
+
+                    events = await PostgresRuntimeEventRepository(
+                        settings
+                    ).list_public(run_id=run_id, after_seq=0, limit=100)
+                    event_types = [event.event_type for event in events]
+                    terminal_event = (
+                        "run.cancelled"
+                        if terminal_status == "cancelled"
+                        else "run.failed"
+                    )
+                    assert event_types.index("message.finalized") < (
+                        event_types.index(terminal_event)
+                    )
+        finally:
+            if session_id is not None:
+                async with AsyncPostgresSaver.from_conn_string(
+                    settings.database_connection_string
+                ) as checkpointer:
+                    for thread_id in (
+                        f"{session_id}:general_chat",
+                        f"{session_id}:en_to_zh",
+                        str(session_id),
+                    ):
+                        await checkpointer.adelete_thread(thread_id)
+                async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM runtime_events WHERE run_id IN "
+                        "(SELECT run_id FROM runs WHERE session_id = %s)",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM runs WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.commit()
+
+    _run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="设置 RUN_POSTGRES_TESTS=1 后运行 PostgreSQL 集成测试",
+)
+def test_completion_and_cancel_publish_only_one_message_finalized() -> None:
+    """Cancel 插入完成投影窗口时，公开消息终态与获胜 Run 终态保持唯一一致。"""
+
+    from agent_runtime.chat import open_chat_service
+    from agent_runtime.core.config import Settings
+    from agent_runtime.main import create_app
+    from agent_runtime.persistence.database import open_database_connection
+    from agent_runtime.runtime.event_repository import (
+        PostgresRuntimeEventRepository,
+    )
+    from agent_runtime.runtime.repository import PostgresRunRepository
+
+    base_settings = Settings()
+    settings = Settings(
+        database_url=base_settings.database_url,
+        local_user_id=f"s25-terminal-race-{uuid4()}",
+        redis_url="redis://127.0.0.1:1/0",
+        redis_socket_timeout_seconds=0.05,
+        run_coordinator_scan_interval_seconds=0.02,
+        _env_file=None,
+    )
+    session_id: UUID | None = None
+
+    async def exercise() -> None:
+        nonlocal session_id
+        try:
+            async with open_chat_service(
+                settings,
+                model=StageTwoBrowserFakeModel(),
+            ) as service:
+                finalized_ready = asyncio.Event()
+                release_finalized = asyncio.Event()
+                event_repository = service._runtime_event_repository
+                assert event_repository is not None
+                original_append = event_repository.append_durable
+
+                async def append_with_barrier(event):
+                    if event.event_type == "message.finalized":
+                        finalized_ready.set()
+                        await release_finalized.wait()
+                    return await original_append(event)
+
+                event_repository.append_durable = append_with_barrier
+                app = create_app(settings, chat_service=service)
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url="http://runtime.test",
+                ) as client:
+                    submitted = await client.post(
+                        "/api/v1/chat/completions",
+                        json={
+                            "request_id": str(uuid4()),
+                            "message": {"content": "完成取消竞争"},
+                        },
+                    )
+                    assert submitted.status_code == 202
+                    summary = submitted.json()
+                    session_id = UUID(summary["session_id"])
+                    run_id = UUID(summary["run_id"])
+                    await asyncio.wait_for(finalized_ready.wait(), timeout=2)
+
+                    cancel_task = asyncio.create_task(
+                        client.post(f"/api/v1/chat/runs/{run_id}/cancel")
+                    )
+                    await asyncio.sleep(0.03)
+                    assert not cancel_task.done()
+                    assert (
+                        await PostgresRunRepository(settings).get(run_id)
+                    ).status == "running"
+
+                    release_finalized.set()
+                    cancel_response = await asyncio.wait_for(
+                        cancel_task,
+                        timeout=2,
+                    )
+                    assert cancel_response.status_code == 202
+                    assert cancel_response.json()["status"] == "completed"
+
+                    events = await PostgresRuntimeEventRepository(
+                        settings
+                    ).list_public(run_id=run_id, after_seq=0, limit=100)
+                    finalized_events = [
+                        event
+                        for event in events
+                        if event.event_type == "message.finalized"
+                    ]
+                    assert len(finalized_events) == 1
+                    assert finalized_events[0].payload["runtime_status"] == (
+                        "completed"
+                    )
+                    assert events[-1].event_type == "run.completed"
         finally:
             if session_id is not None:
                 async with AsyncPostgresSaver.from_conn_string(

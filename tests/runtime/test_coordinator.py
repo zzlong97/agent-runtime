@@ -202,6 +202,204 @@ def test_coordinator_close_cancels_local_tasks_for_later_recovery() -> None:
     asyncio.run(exercise())
 
 
+def test_coordinator_cancel_first_notifies_cooperative_executor() -> None:
+    from agent_runtime.runtime.coordinator import RunCoordinator
+
+    run = _queued_run(6)
+    repository = FakeRunRepository([run])
+    started = asyncio.Event()
+    cooperatively_stopped = asyncio.Event()
+
+    async def exercise() -> None:
+        coordinator = RunCoordinator(
+            repository=repository,
+            user_id="local-user",
+            scan_interval_seconds=60,
+            cancel_grace_seconds=1,
+        )
+
+        async def execute(selected_run):
+            started.set()
+            await coordinator.wait_cancel_requested(selected_run.run_id)
+            cooperatively_stopped.set()
+
+        await coordinator.start(execute, scan_on_startup=False)
+        try:
+            await coordinator.wake(run.run_id)
+            await asyncio.wait_for(started.wait(), timeout=1)
+            await coordinator.request_cancel(run.run_id)
+            await asyncio.wait_for(cooperatively_stopped.wait(), timeout=1)
+            await coordinator.wait_until_idle()
+        finally:
+            await coordinator.close()
+
+    asyncio.run(exercise())
+
+
+def test_coordinator_force_cancels_executor_after_grace_timeout() -> None:
+    from agent_runtime.runtime.coordinator import RunCoordinator
+
+    run = _queued_run(7)
+    repository = FakeRunRepository([run])
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def execute(_selected_run):
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    async def exercise() -> None:
+        coordinator = RunCoordinator(
+            repository=repository,
+            user_id="local-user",
+            scan_interval_seconds=60,
+            cancel_grace_seconds=0.01,
+        )
+        await coordinator.start(execute, scan_on_startup=False)
+        try:
+            await coordinator.wake(run.run_id)
+            await asyncio.wait_for(started.wait(), timeout=1)
+            await coordinator.request_cancel(run.run_id)
+            await asyncio.wait_for(cancelled.wait(), timeout=1)
+            await coordinator.wait_until_idle()
+        finally:
+            await coordinator.close()
+
+    asyncio.run(exercise())
+
+
+def test_coordinator_does_not_interrupt_slow_cancel_finalization() -> None:
+    from agent_runtime.runtime.coordinator import RunCoordinator
+
+    run = _queued_run(9)
+    repository = FakeRunRepository([run])
+    started = asyncio.Event()
+    finalization_started = asyncio.Event()
+    release_finalization = asyncio.Event()
+    finished = asyncio.Event()
+
+    async def exercise() -> None:
+        coordinator = RunCoordinator(
+            repository=repository,
+            user_id="local-user",
+            scan_interval_seconds=60,
+            cancel_grace_seconds=0.01,
+        )
+
+        async def execute(selected_run):
+            started.set()
+            await coordinator.wait_cancel_requested(selected_run.run_id)
+            await coordinator.begin_cancel_finalization(selected_run.run_id)
+            finalization_started.set()
+            await release_finalization.wait()
+            finished.set()
+
+        await coordinator.start(execute, scan_on_startup=False)
+        try:
+            await coordinator.wake(run.run_id)
+            await asyncio.wait_for(started.wait(), timeout=1)
+            await coordinator.request_cancel(run.run_id)
+            await asyncio.wait_for(finalization_started.wait(), timeout=1)
+            await asyncio.sleep(0.03)
+            assert not finished.is_set()
+
+            waiter = asyncio.create_task(coordinator.wait_for_run(run.run_id))
+            await asyncio.sleep(0)
+            assert not waiter.done()
+            release_finalization.set()
+            await asyncio.wait_for(waiter, timeout=1)
+            assert finished.is_set()
+        finally:
+            await coordinator.close()
+
+    asyncio.run(exercise())
+
+
+def test_cancelled_waiter_does_not_interrupt_cancel_finalization() -> None:
+    """取消等待者或关闭协调器都不能取得取消终态收尾任务的所有权。"""
+
+    from agent_runtime.runtime.coordinator import RunCoordinator
+
+    run = _queued_run(10)
+    repository = FakeRunRepository([run])
+    finalization_started = asyncio.Event()
+    release_finalization = asyncio.Event()
+    finalization_finished = asyncio.Event()
+    executor_cancelled = asyncio.Event()
+
+    async def exercise() -> None:
+        coordinator = RunCoordinator(
+            repository=repository,
+            user_id="local-user",
+            scan_interval_seconds=60,
+            cancel_grace_seconds=0.01,
+        )
+
+        async def execute(selected_run):
+            try:
+                await coordinator.wait_cancel_requested(selected_run.run_id)
+                await coordinator.begin_cancel_finalization(selected_run.run_id)
+                finalization_started.set()
+                await release_finalization.wait()
+                finalization_finished.set()
+            except asyncio.CancelledError:
+                executor_cancelled.set()
+                raise
+
+        await coordinator.start(execute, scan_on_startup=False)
+        await coordinator.wake(run.run_id)
+        await coordinator.request_cancel(run.run_id)
+        await asyncio.wait_for(finalization_started.wait(), timeout=1)
+
+        waiter = asyncio.create_task(coordinator.wait_for_run(run.run_id))
+        await asyncio.sleep(0)
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+        assert not executor_cancelled.is_set()
+
+        close_task = asyncio.create_task(coordinator.close())
+        await asyncio.sleep(0)
+        assert not close_task.done()
+        release_finalization.set()
+        await asyncio.wait_for(close_task, timeout=1)
+        assert finalization_finished.is_set()
+        assert not executor_cancelled.is_set()
+
+    asyncio.run(exercise())
+
+
+def test_coordinator_startup_dispatches_cancel_requested_for_projection() -> None:
+    from agent_runtime.runtime.coordinator import RunCoordinator
+
+    run = replace(_queued_run(8), status="cancel_requested")
+    repository = FakeRunRepository([run])
+    executed: list[UUID] = []
+
+    async def execute(selected_run):
+        executed.append(selected_run.run_id)
+
+    async def exercise() -> None:
+        coordinator = RunCoordinator(
+            repository=repository,
+            user_id="local-user",
+            scan_interval_seconds=60,
+            cancel_grace_seconds=1,
+        )
+        await coordinator.start(execute)
+        try:
+            await coordinator.wait_until_idle()
+        finally:
+            await coordinator.close()
+
+    asyncio.run(exercise())
+    assert executed == [run.run_id]
+
+
 @pytest.mark.postgres
 @pytest.mark.skipif(
     os.getenv("RUN_POSTGRES_TESTS") != "1",

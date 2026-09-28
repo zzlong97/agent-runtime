@@ -52,6 +52,10 @@ STATEFUL_PUBLIC_EVENT_TYPES = frozenset(
     }
 )
 
+STATEFUL_INTERNAL_EVENT_TYPES = frozenset(
+    {"internal.run.cancel_requested"}
+)
+
 
 class RuntimeEventSchemaError(ApplicationError):
     """事件草稿不符合公开白名单或内部事件边界。"""
@@ -72,6 +76,17 @@ class RunStartedPayload(_ClosedPayload):
 
     status: Literal["running"] = Field(
         description="Run 已进入执行态；Stage 2.5 该字段固定为 running。"
+    )
+
+
+class RunCancelRequestedPayload(_ClosedPayload):
+    """Run 已持久化显式取消意图的内部数据。"""
+
+    status: Literal["cancel_requested"] = Field(
+        description=(
+            "Run 已进入等待执行器完成取消投影的活动状态；该内部字段在 Stage 2.5 "
+            "固定为 cancel_requested，不允许投影到公开 SSE。"
+        )
     )
 
 
