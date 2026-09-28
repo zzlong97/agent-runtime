@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 
@@ -50,6 +50,7 @@ class FakeAsyncRunService:
         self.normal_calls: list[tuple[UUID, UUID | None, str]] = []
         self.regenerate_calls: list[tuple[UUID, UUID, UUID]] = []
         self.active_calls: list[UUID] = []
+        self.event_stream_calls: list[tuple[UUID, int]] = []
         self.error: Exception | None = None
 
     async def submit_chat_run(self, *, request_id, session_id, content):
@@ -76,15 +77,59 @@ class FakeAsyncRunService:
             raise self.error
         return self.active_run
 
+    async def open_run_event_stream(self, *, run_id, after_seq):
+        from agent_runtime.runtime.event_models import RuntimeEvent
+        from agent_runtime.runtime.event_schemas import project_public_event
 
-def _request(app, method: str, path: str, *, json=None) -> httpx.Response:
+        self.event_stream_calls.append((run_id, after_seq))
+        if self.error is not None:
+            raise self.error
+
+        async def stream():
+            for seq, event_type, payload in (
+                (4, "run.started", {"status": "running"}),
+                (7, "run.completed", {"status": "completed"}),
+            ):
+                if seq <= after_seq:
+                    continue
+                yield project_public_event(
+                    RuntimeEvent(
+                        event_id=uuid4(),
+                        run_id=run_id,
+                        seq=seq,
+                        event_type=event_type,
+                        source="executor",
+                        visibility="public",
+                        payload=payload,
+                        schema_version=1,
+                        durability="durable",
+                        created_at=datetime(2026, 9, 27, 12, 0, tzinfo=UTC),
+                    )
+                )
+
+        return stream()
+
+
+def _request(
+    app,
+    method: str,
+    path: str,
+    *,
+    json=None,
+    headers=None,
+) -> httpx.Response:
     async def exercise() -> httpx.Response:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://testserver",
         ) as client:
-            return await client.request(method, path, json=json)
+            return await client.request(
+                method,
+                path,
+                json=json,
+                headers=headers,
+            )
 
     return asyncio.run(exercise())
 
@@ -262,3 +307,53 @@ def test_run_api_schema_describes_every_request_and_response_field() -> None:
         ]
         assert properties
         assert all(property_schema.get("description") for property_schema in properties.values())
+
+
+def test_run_events_get_uses_last_event_id_before_after_seq() -> None:
+    from agent_runtime.main import create_app
+
+    service = FakeAsyncRunService()
+    app = create_app(chat_service=service)
+    response = _request(
+        app,
+        "GET",
+        f"/api/v1/chat/runs/{RUN_ID}/events?after_seq=1",
+        headers={"Last-Event-ID": "4"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["cache-control"] == "no-cache"
+    assert service.event_stream_calls == [(RUN_ID, 4)]
+    assert "id: 4\n" not in response.text
+    assert "id: 7\n" in response.text
+    assert "event: run.completed\n" in response.text
+
+
+def test_run_events_rejects_invalid_last_event_id_before_streaming() -> None:
+    from agent_runtime.main import create_app
+
+    service = FakeAsyncRunService()
+    app = create_app(chat_service=service)
+    response = _request(
+        app,
+        "GET",
+        f"/api/v1/chat/runs/{RUN_ID}/events?after_seq=1",
+        headers={"Last-Event-ID": "invalid"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "RUN_EVENT_CURSOR_INVALID"
+    assert service.event_stream_calls == []
+
+
+def test_run_events_openapi_describes_path_query_and_header_parameters() -> None:
+    from agent_runtime.main import create_app
+
+    operation = create_app(chat_service=FakeAsyncRunService()).openapi()[
+        "paths"
+    ]["/api/v1/chat/runs/{run_id}/events"]["get"]
+    parameters = {item["name"]: item for item in operation["parameters"]}
+
+    assert set(parameters) == {"run_id", "after_seq", "Last-Event-ID"}
+    assert all(item.get("description") for item in parameters.values())

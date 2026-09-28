@@ -379,6 +379,19 @@ def project_public_event(event: RuntimeEvent) -> PublicRuntimeEvent:
         ) from error
 
 
+def parse_public_event_json(payload: str | bytes) -> PublicRuntimeEvent:
+    """从 Redis 字段解析并重新校验固定公开事件 Schema。"""
+
+    try:
+        return _PUBLIC_EVENT_ADAPTER.validate_json(payload)
+    except ValidationError as error:
+        raise PublicEventProjectionError(
+            code="RUNTIME_EVENT_PUBLIC_SCHEMA_INVALID",
+            message="RuntimeEvent 不符合公开事件 Schema",
+            status_code=409,
+        ) from error
+
+
 def _schema_error(message: str) -> RuntimeEventSchemaError:
     """构造不暴露 payload 内容的稳定事件校验错误。"""
 

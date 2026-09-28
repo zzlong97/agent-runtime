@@ -50,6 +50,7 @@ from agent_runtime.runs import (
 from agent_runtime.runtime.event_repository import (
     PostgresRuntimeEventRepository,
 )
+from agent_runtime.runtime.event_gateway import GatewayItem, RuntimeEventGateway
 from agent_runtime.runtime.event_models import RuntimeEventDraft
 from agent_runtime.runtime.event_schemas import (
     MessageDeltaPayload,
@@ -61,7 +62,10 @@ from agent_runtime.runtime.event_schemas import (
 )
 from agent_runtime.runtime.fingerprints import build_request_fingerprint
 from agent_runtime.runtime.models import JsonValue, Run, RunSubmission
-from agent_runtime.runtime.redis_stream import RedisStreamPublisher
+from agent_runtime.runtime.redis_stream import (
+    RedisStreamPublisher,
+    RedisStreamReader,
+)
 from agent_runtime.runtime.repository import (
     PostgresRunRepository,
     RunNotFoundError,
@@ -123,6 +127,7 @@ class ChatService:
         persistent_run_repository: PostgresRunRepository | None = None,
         runtime_event_repository: PostgresRuntimeEventRepository | None = None,
         runtime_event_publisher: RedisStreamPublisher | None = None,
+        runtime_event_gateway: RuntimeEventGateway | None = None,
         run_coordinator: RunCoordinator | None = None,
         session_id_factory: Callable[[], UUID] = uuid4,
         human_message_id_factory: Callable[[], UUID] = uuid4,
@@ -149,6 +154,7 @@ class ChatService:
         self._persistent_run_repository = persistent_run_repository
         self._runtime_event_repository = runtime_event_repository
         self._runtime_event_publisher = runtime_event_publisher
+        self._runtime_event_gateway = runtime_event_gateway
         self._run_coordinator = run_coordinator
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
@@ -368,6 +374,36 @@ class ChatService:
         repository, _coordinator = self._persistent_runtime_dependencies()
         await self._require_owned_session(session_id)
         return await repository.get_active_for_session(session_id)
+
+    async def open_run_event_stream(
+        self,
+        *,
+        run_id: UUID,
+        after_seq: int,
+    ) -> AsyncIterator[GatewayItem]:
+        """在建立 SSE 前校验 Run 所属 Session，并返回独立 Gateway 流。"""
+
+        repository = self._persistent_run_repository
+        gateway = self._runtime_event_gateway
+        if repository is None or gateway is None:
+            raise ChatRuntimeError(
+                code="RUN_EVENT_SERVICE_UNAVAILABLE",
+                message="Run 事件服务尚未完成初始化",
+                retryable=True,
+            )
+        run = await repository.get(run_id)
+        await self._require_owned_session(run.session_id)
+        log_business_event(
+            logger,
+            "Run事件流访问通过",
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            status=run.status,
+            after_seq=after_seq,
+        )
+        return gateway.stream(run_id=run_id, after_seq=after_seq)
 
     async def execute_persistent_run(self, run: Run) -> None:
         """执行已提交的 queued Run，并按持久事件协议完成状态变化。"""
@@ -1616,6 +1652,15 @@ async def open_chat_service(
         ttl_seconds=settings.redis_stream_ttl_seconds,
         socket_timeout_seconds=settings.redis_socket_timeout_seconds,
     )
+    runtime_event_reader = RedisStreamReader.from_url(
+        settings.redis_connection_string,
+        socket_timeout_seconds=settings.redis_socket_timeout_seconds,
+    )
+    runtime_event_gateway = RuntimeEventGateway(
+        run_repository=run_repository,
+        event_repository=runtime_event_repository,
+        redis_reader=runtime_event_reader,
+    )
     run_coordinator = RunCoordinator(
         repository=run_repository,
         user_id=settings.local_user_id,
@@ -1701,6 +1746,7 @@ async def open_chat_service(
             persistent_run_repository=run_repository,
             runtime_event_repository=runtime_event_repository,
             runtime_event_publisher=runtime_event_publisher,
+            runtime_event_gateway=runtime_event_gateway,
             run_coordinator=run_coordinator,
         )
         try:
@@ -1712,4 +1758,5 @@ async def open_chat_service(
             await run_coordinator.close()
             await service.close()
             await runtime_event_publisher.aclose()
+            await runtime_event_reader.aclose()
             log_business_event(logger, "聊天服务关闭完成")

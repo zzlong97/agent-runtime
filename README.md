@@ -42,7 +42,7 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-当前后端已完成到 S2.5-04，Run 已从 POST SSE 和进程内 Registry 中解耦：
+当前后端已实现到 S2.5-05，Run 已从 POST SSE 和进程内 Registry 中解耦：
 
 ```text
 POST 创建持久 Run → HTTP 202
@@ -53,12 +53,13 @@ Parent Graph → PostgreSQL Checkpoint
              ↓
 PostgreSQL RuntimeEvent + Redis Stream
              ↓
-GET SSE Gateway → /chat（S2.5-05 及后续任务）
+GET SSE Gateway → API 客户端（/chat 页面迁移属于 S2.5-10）
 ```
 
 当前代码已具备 PostgreSQL 持久 Run、RuntimeEvent、Redis Stream 尽力发布、
-HTTP 202 Run API、活动 Run 查询和单进程 Coordinator。独立 GET SSE、Cancel、
-Interrupt/Resume、崩溃恢复及页面迁移仍须按 `docs/tasks.md` 后续任务逐项实现。
+HTTP 202 Run API、活动 Run 查询、单进程 Coordinator，以及合并 PostgreSQL 与
+Redis 的独立 GET SSE。Cancel、Interrupt/Resume、崩溃恢复及页面迁移仍须按
+`docs/tasks.md` 后续任务逐项实现。
 
 ---
 
@@ -216,16 +217,16 @@ ChildResult
 
 ### Stage 2.5：持久化 Run 与可恢复 Runtime
 
-当前已实现到 S2.5-04：
+当前已实现到 S2.5-05：
 
 - PostgreSQL 持久 Run、幂等请求和数据库活动 Run 唯一约束
 - 类型化 RuntimeEvent、每 Run Sequencer 和公开/内部事件隔离
 - Redis Streams 短期公开实时事件与故障降级
 - HTTP 202 Run API、活动 Run 查询和单进程 Coordinator
+- 独立 GET SSE、PostgreSQL/Redis 事件合并、背压和断点续传
 
 后续计划：
 
-- 独立 GET SSE、事件合并、背压和断点续传
 - 异步 Cancel、断线继续执行和 Session 完整清理
 - 同 Run Interrupt / Resume
 - Checkpoint-first 对账与最多三次崩溃恢复
@@ -256,7 +257,7 @@ ChildResult
 
 ## 5. 运行当前 Runtime
 
-以下说明运行 S2.5-04 后端及其 PostgreSQL / Redis 开发依赖。当前
+以下说明运行 S2.5-05 后端及其 PostgreSQL / Redis 开发依赖。当前
 `/chat` 仍是已验收的 Stage 2 构建产物，尚未迁移到 HTTP 202 Run API；完整
 页面迁移属于 S2.5-10。在该任务完成前，请使用下方 API 验证当前后端。
 
@@ -308,7 +309,25 @@ Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/api/v1/chat/sessions/{session_id}/active-run"
 ```
 
-独立 Run SSE Gateway 属于 S2.5-05，当前阶段不对外提供事件连接。
+使用创建 Run 时返回的 `run_id` 连接独立 SSE；`id` 等于 Run 内事件 `seq`，
+序号允许因租约产生合法缺号：
+
+```powershell
+curl.exe -N `
+  "http://127.0.0.1:8000/api/v1/chat/runs/{run_id}/events?after_seq=0"
+```
+
+浏览器自动重连可发送 `Last-Event-ID`；它与 `after_seq` 同时存在时优先：
+
+```powershell
+curl.exe -N `
+  -H "Last-Event-ID: 7" `
+  "http://127.0.0.1:8000/api/v1/chat/runs/{run_id}/events?after_seq=2"
+```
+
+Gateway 以有限批次合并 PostgreSQL durable event 与 Redis 实时事件，并按 `seq`
+排序去重。20 秒心跳使用无 `id` 的 SSE 注释帧；客户端断开或写入超时只关闭该
+SSE 连接，不会取消仍在执行的 Run。
 
 应用会把生命周期、HTTP、Session、Run、Parent、Router 和 Capability 的关键
 入口、出口及失败事件写入当天日志。默认文件是

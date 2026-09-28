@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2.5
-Current Task: S2.5-04
-Last Verified Task: S2.5-03
-Last Verified Commit: 1f8a132（S2.5-00～03 累计实现基线）
+Current Task: S2.5-05
+Last Verified Task: S2.5-04
+Last Verified Commit: 8515051（S2.5-04 异步 Run API 与 Coordinator）
 Blockers: None
 ```
 
@@ -1500,7 +1500,7 @@ stop and wait
 
 ## S2.5-04 异步 Run API 与单进程 Coordinator
 
-**Status:** DONE
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-01 ~ S2.5-03
 
@@ -1569,12 +1569,14 @@ stop and wait
   PostgreSQL / Redis 完整套件为 `358 passed, 1 skipped`
 - Result：`REV-S25-04-004` 已修复，S2.5-04 保持 `DONE` 并等待 Reviewer
   复核；不自行标记 `VERIFIED`，不开始 S2.5-05
+- 2026-09-27：负责人确认 S2.5-04 验收通过；累计实现已提交为 `8515051`，
+  并同步到 GitHub 与 Gitee，允许开始 S2.5-05
 
 ---
 
 ## S2.5-05 SSE Gateway、合并与背压
 
-**Status:** TODO
+**Status:** DONE
 
 **Dependencies:** S2.5-03, S2.5-04
 
@@ -1588,12 +1590,67 @@ stop and wait
 
 ### Acceptance
 
-- [ ] 重连不会重复或倒序发送事件
-- [ ] Last-Event-ID 优先于 after_seq
-- [ ] 合法缺号不会阻塞事件流
-- [ ] Redis delta 过期后仍能得到持久终态
-- [ ] 慢客户端不会建立无界内存队列
-- [ ] SSE 断开后 Run 继续完成
+- [x] 重连不会重复或倒序发送事件
+- [x] Last-Event-ID 优先于 after_seq
+- [x] 合法缺号不会阻塞事件流
+- [x] Redis delta 过期后仍能得到持久终态
+- [x] 慢客户端不会建立无界内存队列
+- [x] SSE 断开后 Run 继续完成
+
+### Verification Notes
+
+- 2026-09-27：新增 `GET /api/v1/chat/runs/{run_id}/events`；服务层先校验
+  Run 所属 Session 的固定本地用户归属，再建立独立 SSE Gateway
+- 2026-09-27：Gateway 以有限批次同时读取 PostgreSQL durable public event 与
+  Redis Stream，按 `seq` 排序去重；`Last-Event-ID` 优先于 `after_seq`，SSE
+  `id` 固定等于事件 `seq`，合法缺号不会阻塞后续事件
+- 2026-09-27：增加终态提交交错测试；Gateway 观察到终态后会在关闭前重查
+  PostgreSQL，避免首次事件查询早于终态事务提交时漏发终态事件
+- 2026-09-27：20 秒心跳使用无 `id` 的注释帧；事件按需迭代且不建立额外队列，
+  响应头、事件帧和结束帧写入均受超时保护；断开或慢连接只关闭 SSE，不传播取消
+  到独立 Executor
+- 2026-09-27：真实 PostgreSQL + Redis 组合测试验证初次合并为 seq
+  `1,2,3,4,5`、从 seq 2 重连为 `3,4,5`；删除 Redis Stream 模拟 delta 过期后，
+  仍从 PostgreSQL 得到 seq `1,2,4,5` 和 `run.completed`
+- 2026-09-27：默认 `uv run --locked pytest -q` 结果为
+  `364 passed, 20 skipped`；同时启用真实 PostgreSQL / Redis 的完整套件结果为
+  `383 passed, 1 skipped`，唯一跳过项为需显式启用的真实百炼 smoke
+- 2026-09-27：`uv lock --check`、Python `compileall`、`uv pip check`、`uv build`
+  和 `git diff --check` 全部通过
+- 2026-09-27：独立审查发现 `REV-S25-05-001`：函数式 HTTP middleware 会把
+  自定义 SSE Response 包装到内存通道后再写网络，使原超时未覆盖真实 ASGI send；
+  已改为无缓冲的纯 ASGI 日志 middleware，并增加完整 `create_app` 慢网络写入测试，
+  确认超时关闭真实连接且不取消 Executor
+- 2026-09-27：`REV-S25-05-001` 专项复审通过；该次复审范围只覆盖真实 ASGI
+  写入超时，后续跨存储合并结论由 `REV-S25-05-002` 记录取代
+- 2026-09-27：Reviewer 提出阻塞项 `REV-S25-05-002`：先查询 PostgreSQL、再读取
+  较高序号 Redis event 会使用高序号推进游标，从而永久越过两次读取之间刚提交的
+  较低序号 durable event
+- 2026-09-27：增加确定性跨存储交错测试，修复前稳定输出 seq `3,4` 并漏掉
+  durable seq `2`；Gateway 改为先读取 Redis，再以 PostgreSQL 查询收口本轮快照，
+  修复后严格输出 seq `2,3,4`；该单向读取顺序修复随后被
+  `REV-S25-05-004` 的反向竞态结论取代，不作为最终方案
+- 2026-09-27：修复 `REV-S25-05-003`，README 两处过期的 S2.5-04 进度和
+  “独立 GET SSE 尚未实现”描述均已更新为 S2.5-05 实际状态
+- 2026-09-27：修复后 S2.5-05 专项结果为 `82 passed, 1 skipped`，真实
+  PostgreSQL + Redis Gateway/Stream 专项为 `10 passed`
+- 2026-09-27：Reviewer 提出阻塞项 `REV-S25-05-004`：固定 Redis → PostgreSQL
+  顺序仍可能先读空 Redis，随后从 PostgreSQL 看到较高 durable 前沿，进而反向
+  越过两次读取之间已发布的较低 transient event
+- 2026-09-27：最终合并采用有界 Redis → PostgreSQL → 条件性 Redis 收口；仅当
+  durable 前沿高于首次 Redis 前沿时再读取一次 Redis，且只接纳不高于 durable
+  前沿的事件，更高事件留待下一有限批次，不引入无限稳定化或无界预取
+- 2026-09-28：两个确定性竞态测试均保留并单独复跑通过：较高 Redis seq 不会越过
+  较低 durable event，较高 PostgreSQL 前沿也不会反向越过尚未读取的 Redis
+  transient event；结果为 `2 passed`
+- 2026-09-28：S2.5-05 专项结果为 `83 passed, 1 skipped`；默认完整套件结果为
+  `365 passed, 20 skipped`；启用真实 PostgreSQL / Redis 的完整套件结果为
+  `384 passed, 1 skipped`，唯一跳过项为需显式启用的真实百炼 smoke
+- 2026-09-28：真实 PostgreSQL + Redis Gateway/Stream 专项结果为 `11 passed`；
+  `uv lock --check`、`uv pip check`、Python `compileall`、`uv build` 和
+  `git diff --check` 全部通过
+- Result：S2.5-05 实现与真实外部依赖门禁完成，状态更新为 `DONE` 并等待负责人
+  复审；不自行标记 `VERIFIED`，不开始 S2.5-06
 
 ---
 

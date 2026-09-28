@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from agent_runtime import __version__
 from agent_runtime.api.routes.chat import router as chat_router
@@ -21,6 +22,62 @@ from agent_runtime.core.logging import configure_logging, log_business_event
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 logger = logging.getLogger(__name__)
+
+
+class _HttpBusinessLoggingMiddleware:
+    """直接透传 ASGI send，避免隔离 SSE 对真实网络写入的超时。"""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        started_at = perf_counter()
+        method = str(scope.get("method", ""))
+        path = str(scope.get("path", ""))
+        log_business_event(
+            logger,
+            "HTTP请求进入",
+            method=method,
+            path=path,
+        )
+
+        async def send_with_response_log(message: Message) -> None:
+            await send(message)
+            if message["type"] == "http.response.start":
+                log_business_event(
+                    logger,
+                    "HTTP响应已建立",
+                    method=method,
+                    path=path,
+                    status_code=message["status"],
+                    duration_ms=round(
+                        (perf_counter() - started_at) * 1000,
+                        2,
+                    ),
+                )
+
+        try:
+            await self._app(scope, receive, send_with_response_log)
+        except Exception as error:
+            log_business_event(
+                logger,
+                "HTTP请求异常",
+                level=logging.ERROR,
+                method=method,
+                path=path,
+                error_type=type(error).__name__,
+                duration_ms=round((perf_counter() - started_at) * 1000, 2),
+            )
+            raise
 
 
 def create_app(
@@ -137,40 +194,7 @@ def create_app(
     )
     if chat_service is not None:
         application.state.chat_service = chat_service
-
-    @application.middleware("http")
-    async def log_http_request(request, call_next):
-        """记录 HTTP 请求入口、响应建立和未处理异常。"""
-
-        started_at = perf_counter()
-        log_business_event(
-            logger,
-            "HTTP请求进入",
-            method=request.method,
-            path=request.url.path,
-        )
-        try:
-            response = await call_next(request)
-        except Exception as error:
-            log_business_event(
-                logger,
-                "HTTP请求异常",
-                level=logging.ERROR,
-                method=request.method,
-                path=request.url.path,
-                error_type=type(error).__name__,
-                duration_ms=round((perf_counter() - started_at) * 1000, 2),
-            )
-            raise
-        log_business_event(
-            logger,
-            "HTTP响应已建立",
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration_ms=round((perf_counter() - started_at) * 1000, 2),
-        )
-        return response
+    application.add_middleware(_HttpBusinessLoggingMiddleware)
 
     application.include_router(health_router)
     application.include_router(chat_router)

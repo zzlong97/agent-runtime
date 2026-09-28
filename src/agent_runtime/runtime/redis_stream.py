@@ -3,13 +3,16 @@
 import logging
 from time import perf_counter
 from typing import Any
+from uuid import UUID
 
 from redis.asyncio import Redis
 
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.runtime.event_models import RuntimeEvent
 from agent_runtime.runtime.event_schemas import (
+    PublicRuntimeEvent,
     PublicEventProjectionError,
+    parse_public_event_json,
     project_public_event,
 )
 
@@ -127,6 +130,109 @@ class RedisStreamPublisher:
                 "Redis实时事件连接关闭降级",
                 level=logging.WARNING,
                 error_code="REDIS_EVENT_CLOSE_FAILED",
+                error_type=type(error).__name__,
+            )
+
+
+class RedisStreamReader:
+    """按 Run 序号有限读取 Redis 中的短期公开实时事件。"""
+
+    def __init__(self, *, client: Any) -> None:
+        self._client = client
+
+    @classmethod
+    def from_url(
+        cls,
+        redis_url: str,
+        *,
+        socket_timeout_seconds: float = 0.5,
+    ) -> "RedisStreamReader":
+        """创建延迟建连读取客户端，Redis 不可用时由读取方法降级。"""
+
+        if socket_timeout_seconds <= 0:
+            raise ValueError("Redis 超时时间必须大于 0 秒")
+        client = Redis.from_url(
+            redis_url,
+            encoding="utf-8",
+            decode_responses=True,
+            socket_connect_timeout=socket_timeout_seconds,
+            socket_timeout=socket_timeout_seconds,
+            retry_on_timeout=False,
+        )
+        return cls(client=client)
+
+    async def read_public(
+        self,
+        *,
+        run_id: UUID,
+        after_seq: int,
+        limit: int,
+    ) -> list[PublicRuntimeEvent]:
+        """读取 seq 大于游标的公开事件；故障或坏数据只降级丢弃。"""
+
+        if after_seq < 0:
+            raise ValueError("Redis RuntimeEvent after_seq 不得小于 0")
+        if limit < 1 or limit > 1000:
+            raise ValueError("Redis RuntimeEvent 查询条数只允许 1 到 1000")
+        stream_key = f"{_STREAM_KEY_PREFIX}{run_id}"
+        try:
+            streams = await self._client.xread(
+                {stream_key: f"{after_seq}-0"},
+                count=limit,
+            )
+        except Exception as error:
+            log_business_event(
+                logger,
+                "Redis实时事件读取降级",
+                level=logging.WARNING,
+                run_id=run_id,
+                error_code="REDIS_EVENT_READ_FAILED",
+                error_type=type(error).__name__,
+            )
+            return []
+
+        events: list[PublicRuntimeEvent] = []
+        for _stream_name, entries in streams:
+            for stream_id, fields in entries:
+                try:
+                    seq_text, separator, suffix = stream_id.partition("-")
+                    if separator != "-" or suffix != "0":
+                        raise ValueError("Redis Stream ID 必须使用固定 {seq}-0 格式")
+                    seq = int(seq_text)
+                    raw_event = fields.get("event")
+                    if not isinstance(raw_event, (str, bytes)):
+                        raise ValueError("Redis Stream 缺少公开事件字段")
+                    event = parse_public_event_json(raw_event)
+                    if (
+                        event.run_id != run_id
+                        or event.seq != seq
+                        or event.seq <= after_seq
+                    ):
+                        raise ValueError("Redis Stream 事件关联或序号不一致")
+                except (ValueError, PublicEventProjectionError) as error:
+                    log_business_event(
+                        logger,
+                        "Redis实时事件读取拒绝",
+                        level=logging.WARNING,
+                        run_id=run_id,
+                        error_code="REDIS_EVENT_SCHEMA_INVALID",
+                        error_type=type(error).__name__,
+                    )
+                    continue
+                events.append(event)
+        return events
+
+    async def aclose(self) -> None:
+        """关闭 Redis 读取连接池；失败只记录旁路降级日志。"""
+
+        try:
+            await self._client.aclose()
+        except Exception as error:
+            log_business_event(
+                logger,
+                "Redis实时事件读取连接关闭降级",
+                level=logging.WARNING,
+                error_code="REDIS_EVENT_READ_CLOSE_FAILED",
                 error_type=type(error).__name__,
             )
 

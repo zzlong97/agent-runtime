@@ -4,7 +4,16 @@ import logging
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, Request, Response
+from fastapi import (
+    APIRouter,
+    Header,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+)
+from fastapi.responses import StreamingResponse
 
 from agent_runtime.api.schemas.chat import ChatCompletionRequest
 from agent_runtime.api.schemas.feedback import FeedbackRequest, FeedbackResponse
@@ -25,6 +34,11 @@ from agent_runtime.api.schemas.sessions import (
 from agent_runtime.chat import ChatService
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
+from agent_runtime.streaming.run_events import (
+    RunEventStreamingResponse,
+    encode_run_event_stream,
+    resolve_run_event_cursor,
+)
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -245,6 +259,80 @@ async def get_active_run(
     if run is None:
         return None
     return RunSummaryResponse.model_validate(run, from_attributes=True)
+
+
+@router.get(
+    "/runs/{run_id}/events",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "按 Run 内 seq 递增输出的公开 SSE 事件流",
+            "content": {"text/event-stream": {}},
+        }
+    },
+)
+async def stream_run_events(
+    run_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要订阅公开事件的持久 Run UUID；只允许访问固定本地用户所拥有"
+                "Session 下的 Run，不存在或不属于该用户时统一返回 404。"
+            )
+        ),
+    ],
+    request: Request,
+    after_seq: Annotated[
+        int,
+        Query(
+            ge=0,
+            description=(
+                "页面刷新或主动重连时使用的非负事件序号游标；只发送 seq 大于该值"
+                "的事件，同时提供 Last-Event-ID 时以 Header 为准。"
+            ),
+        ),
+    ] = 0,
+    last_event_id: Annotated[
+        str | None,
+        Header(
+            alias="Last-Event-ID",
+            description=(
+                "浏览器自动重连携带的最后已接收 SSE 事件序号；必须是非负整数，"
+                "并优先于 after_seq。"
+            ),
+        ),
+    ] = None,
+) -> StreamingResponse:
+    """校验游标与所有权后建立独立 Run 公开事件 SSE。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        cursor = resolve_run_event_cursor(
+            last_event_id=last_event_id,
+            after_seq=after_seq,
+        )
+        events = await chat_service.open_run_event_stream(
+            run_id=run_id,
+            after_seq=cursor,
+        )
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    log_business_event(
+        logger,
+        "Run事件SSE建立",
+        run_id=run_id,
+        after_seq=cursor,
+        cursor_source=(
+            "last_event_id" if last_event_id is not None else "after_seq"
+        ),
+    )
+    return RunEventStreamingResponse(
+        encode_run_event_stream(events),
+        run_id=run_id,
+    )
 
 
 @router.post(

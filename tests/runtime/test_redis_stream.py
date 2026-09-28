@@ -48,6 +48,23 @@ class _FakeRedis:
         self.closed = True
 
 
+class _FakeRedisReaderClient:
+    def __init__(self, result=None, error: Exception | None = None) -> None:
+        self.result = result or []
+        self.error = error
+        self.calls: list[tuple[dict[str, str], int]] = []
+        self.closed = False
+
+    async def xread(self, streams, *, count):
+        self.calls.append((streams, count))
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
 def _public_event(
     *,
     seq: int = 1,
@@ -198,3 +215,69 @@ def test_redis_publisher_closes_injected_client() -> None:
     asyncio.run(publisher.aclose())
 
     assert client.closed is True
+
+
+def test_redis_reader_reads_valid_public_events_after_cursor() -> None:
+    from agent_runtime.runtime.event_schemas import project_public_event
+    from agent_runtime.runtime.redis_stream import RedisStreamReader
+
+    event = _public_event(seq=3)
+    body = project_public_event(event).model_dump_json()
+    stream_key = f"runtime:events:{event.run_id}"
+    client = _FakeRedisReaderClient(
+        [(stream_key, [("3-0", {"event": body})])]
+    )
+    reader = RedisStreamReader(client=client)
+
+    events = asyncio.run(
+        reader.read_public(run_id=event.run_id, after_seq=2, limit=10)
+    )
+
+    assert [item.seq for item in events] == [3]
+    assert client.calls == [({stream_key: "2-0"}, 10)]
+
+
+def test_redis_reader_rejects_stream_id_with_nonzero_suffix(caplog) -> None:
+    from agent_runtime.runtime.event_schemas import project_public_event
+    from agent_runtime.runtime.redis_stream import RedisStreamReader
+
+    event = _public_event(seq=3)
+    body = project_public_event(event).model_dump_json()
+    stream_key = f"runtime:events:{event.run_id}"
+    client = _FakeRedisReaderClient(
+        [(stream_key, [("3-1", {"event": body})])]
+    )
+    reader = RedisStreamReader(client=client)
+
+    with caplog.at_level(
+        logging.WARNING,
+        logger="agent_runtime.runtime.redis_stream",
+    ):
+        events = asyncio.run(
+            reader.read_public(run_id=event.run_id, after_seq=2, limit=10)
+        )
+
+    assert events == []
+    assert "Redis实时事件读取拒绝" in caplog.text
+
+
+def test_redis_reader_failure_degrades_without_leaking_connection(caplog) -> None:
+    from agent_runtime.runtime.redis_stream import RedisStreamReader
+
+    run_id = uuid4()
+    client = _FakeRedisReaderClient(
+        error=ConnectionError("redis://user:secret@localhost")
+    )
+    reader = RedisStreamReader(client=client)
+
+    with caplog.at_level(
+        logging.WARNING,
+        logger="agent_runtime.runtime.redis_stream",
+    ):
+        events = asyncio.run(
+            reader.read_public(run_id=run_id, after_seq=0, limit=10)
+        )
+
+    assert events == []
+    assert "REDIS_EVENT_READ_FAILED" in caplog.text
+    assert "user:secret" not in caplog.text

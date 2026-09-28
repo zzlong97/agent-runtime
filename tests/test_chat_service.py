@@ -2411,3 +2411,54 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         "publisher_closed",
         "checkpointers_closed",
     ]
+
+
+def test_open_run_event_stream_checks_owned_session_before_gateway() -> None:
+    from agent_runtime.chat import ChatService, ChatSessionError
+    from agent_runtime.core.config import Settings
+
+    run_id = UUID("00000000-0000-0000-0000-000000002570")
+    session_id = UUID("00000000-0000-0000-0000-000000002571")
+    run = SimpleNamespace(
+        run_id=run_id,
+        request_id=uuid4(),
+        session_id=session_id,
+        response_message_id=uuid4(),
+        status="running",
+    )
+
+    class FakeRunRepository:
+        async def get(self, requested_run_id):
+            assert requested_run_id == run_id
+            return run
+
+    class FakeSessionRepository:
+        async def get(self, requested_session_id):
+            assert requested_session_id == session_id
+            return _session(requested_session_id, user_id="other-user")
+
+    class FakeGateway:
+        def __init__(self) -> None:
+            self.called = False
+
+        def stream(self, *, run_id, after_seq):
+            self.called = True
+            raise AssertionError("归属校验失败后不应建立 Gateway")
+
+    gateway = FakeGateway()
+    service = ChatService(
+        settings=Settings(local_user_id="configured-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=FakeParentGraph(),
+        persistent_run_repository=FakeRunRepository(),
+        runtime_event_gateway=gateway,
+    )
+
+    with pytest.raises(ChatSessionError) as captured:
+        asyncio.run(
+            service.open_run_event_stream(run_id=run_id, after_seq=0)
+        )
+
+    assert captured.value.code == "SESSION_NOT_FOUND"
+    assert gateway.called is False
