@@ -21,8 +21,8 @@ VERIFIED
 ```text
 Current Stage: Stage 2.5
 Current Task: S2.5-06
-Last Verified Task: S2.5-05
-Last Verified Commit: a4d1b98（S2.5-05 SSE Gateway、合并与背压）
+Last Verified Task: S2.5-06
+Last Verified Commit: 5d70a95（S2.5-06 Cancel、非空终态与 Session 删除）
 Blockers: None
 ```
 
@@ -1716,6 +1716,7 @@ stop and wait
   启用的真实百炼 smoke
 - 2026-09-29：负责人确认 S2.5-06 验收通过；允许按工程流程提交并同步 GitHub、
   Gitee，两个远程确认一致后进入 S2.5-07
+- 2026-09-29：S2.5-06 实现、测试与验收记录已提交为 `5d70a95`
 - Result：S2.5-06 已通过实现、真实依赖门禁、独立复审和负责人验收，状态更新为
   `VERIFIED`
 
