@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2.5
-Current Task: S2.5-07
-Last Verified Task: S2.5-06
-Last Verified Commit: 5d70a95（S2.5-06 Cancel、非空终态与 Session 删除）
+Current Task: S2.5-08
+Last Verified Task: S2.5-07
+Last Verified Commit: 5b5e5af（S2.5-07 Interrupt / Resume）
 Blockers: None
 ```
 
@@ -1762,6 +1762,7 @@ stop and wait
   `git diff --check` 全部通过。
 - 2026-09-29：Reviewer 复审通过，负责人确认验收通过，允许按工程流程提交并同步
   GitHub、Gitee，两个远程确认一致后进入 S2.5-08。
+- 2026-09-29：S2.5-07 实现、测试与验收记录已提交为 `5b5e5af`。
 - Result：S2.5-07 已通过实现、真实依赖门禁、独立复审和负责人验收，状态更新为
   `VERIFIED`。
 
@@ -1769,7 +1770,7 @@ stop and wait
 
 ## S2.5-08 Checkpoint 对账与崩溃恢复
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 
 **Dependencies:** S2.5-01, S2.5-02, S2.5-04, S2.5-07
 
