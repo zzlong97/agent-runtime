@@ -87,6 +87,29 @@ class RunCoordinator:
             return
         await self._dispatch_if_actionable(run, reason="submit")
 
+    async def wake_resumed(self, run_id: UUID) -> None:
+        """只为当前进程刚提交成功的 Resume 分派 running Run。"""
+
+        if self._closed:
+            return
+        try:
+            run = await self._repository.get(run_id)
+        except Exception as error:
+            log_business_event(
+                logger,
+                "Run协调器恢复唤醒失败",
+                level=logging.ERROR,
+                run_id=run_id,
+                error_code="RUN_COORDINATOR_RESUME_WAKE_FAILED",
+                error_type=type(error).__name__,
+            )
+            raise
+        await self._dispatch_if_actionable(
+            run,
+            reason="resume",
+            allowed_statuses=frozenset({"running"}),
+        )
+
     async def scan_once(self, *, reason: str = "compensation") -> None:
         """扫描固定用户的非终态 Run，并分派 queued 或取消投影任务。"""
 
@@ -236,8 +259,16 @@ class RunCoordinator:
             await asyncio.gather(*force_cancel_tasks, return_exceptions=True)
         log_business_event(logger, "Run协调器已关闭")
 
-    async def _dispatch_if_actionable(self, run: Run, *, reason: str) -> None:
-        if run.status not in {"queued", "cancel_requested"} or self._closed:
+    async def _dispatch_if_actionable(
+        self,
+        run: Run,
+        *,
+        reason: str,
+        allowed_statuses: frozenset[str] = frozenset(
+            {"queued", "cancel_requested"}
+        ),
+    ) -> None:
+        if run.status not in allowed_statuses or self._closed:
             return
         executor = self._executor
         if executor is None:

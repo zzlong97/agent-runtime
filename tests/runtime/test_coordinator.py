@@ -171,6 +171,37 @@ def test_coordinator_startup_scan_dispatches_queued_runs_only() -> None:
     assert executed == [queued.run_id]
 
 
+def test_coordinator_dispatches_running_run_only_for_live_resume_signal() -> None:
+    """显式 Resume 可继续 running Run，普通扫描仍不得提前承担崩溃恢复。"""
+
+    from agent_runtime.runtime.coordinator import RunCoordinator
+
+    resumed = replace(_queued_run(41), status="running")
+    repository = FakeRunRepository([resumed])
+    executed: list[UUID] = []
+
+    async def execute(selected_run):
+        executed.append(selected_run.run_id)
+
+    async def exercise() -> None:
+        coordinator = RunCoordinator(
+            repository=repository,
+            user_id="local-user",
+            scan_interval_seconds=60,
+        )
+        await coordinator.start(execute)
+        try:
+            await coordinator.wait_until_idle()
+            assert executed == []
+            await coordinator.wake_resumed(resumed.run_id)
+            await coordinator.wait_until_idle()
+        finally:
+            await coordinator.close()
+
+    asyncio.run(exercise())
+    assert executed == [resumed.run_id]
+
+
 def test_coordinator_close_cancels_local_tasks_for_later_recovery() -> None:
     from agent_runtime.runtime.coordinator import RunCoordinator
 

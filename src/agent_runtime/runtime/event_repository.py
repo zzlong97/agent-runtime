@@ -8,6 +8,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from psycopg.types.json import Jsonb
+from psycopg.errors import UniqueViolation
 
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
@@ -32,6 +33,13 @@ from agent_runtime.runtime.models import (
     RunStatus,
     can_transition_run,
 )
+from agent_runtime.runtime.interrupts import (
+    InterruptRequestConflictError,
+    InterruptRunCommit,
+    InterruptStateConflictError,
+    RunInterrupt,
+    _interrupt_from_row,
+)
 from agent_runtime.runtime.repository import (
     RunNotFoundError,
     RunStateConflictError,
@@ -51,12 +59,14 @@ _ALLOWED_STATE_EVENT_TRANSITIONS = frozenset(
         ),
         ("running", "run.completed", "completed"),
         ("running", "run.failed", "failed"),
+        ("running", "interrupt.required", "interrupted"),
         (
             "recovering",
             "internal.run.cancel_requested",
             "cancel_requested",
         ),
         ("interrupted", "run.cancelled", "cancelled"),
+        ("interrupted", "interrupt.resumed", "running"),
         ("cancel_requested", "run.cancelled", "cancelled"),
     }
 )
@@ -209,6 +219,64 @@ RETURNING
     started_at,
     finished_at,
     updated_at
+"""
+
+_INTERRUPT_COLUMNS = """
+run_id,
+interrupt_id,
+status,
+interrupt_payload,
+resume_payload,
+resume_request_id,
+resume_request_fingerprint,
+created_at,
+resumed_at,
+cancelled_at
+"""
+
+_INSERT_PENDING_INTERRUPT = f"""
+INSERT INTO run_interrupts (
+    run_id,
+    interrupt_id,
+    status,
+    interrupt_payload,
+    created_at
+)
+VALUES (%s, %s, 'pending', %s, %s)
+RETURNING {_INTERRUPT_COLUMNS}
+"""
+
+_SELECT_INTERRUPT_FOR_UPDATE = f"""
+SELECT {_INTERRUPT_COLUMNS}
+FROM run_interrupts
+WHERE run_id = %s AND interrupt_id = %s
+FOR UPDATE
+"""
+
+_SELECT_INTERRUPT_BY_RESUME_REQUEST = f"""
+SELECT {_INTERRUPT_COLUMNS}
+FROM run_interrupts
+WHERE resume_request_id = %s
+"""
+
+_RESUME_INTERRUPT = f"""
+UPDATE run_interrupts
+SET status = 'resumed',
+    resume_payload = %s,
+    resume_request_id = %s,
+    resume_request_fingerprint = %s,
+    resumed_at = %s
+WHERE run_id = %s
+  AND interrupt_id = %s
+  AND status = 'pending'
+RETURNING {_INTERRUPT_COLUMNS}
+"""
+
+_CANCEL_PENDING_INTERRUPTS = """
+UPDATE run_interrupts
+SET status = 'cancelled',
+    cancelled_at = %s
+WHERE run_id = %s AND status = 'pending'
 """
 
 
@@ -427,6 +495,21 @@ class PostgresRuntimeEventRepository:
                         status_code=409,
                     )
 
+                if target_status == "cancelled":
+                    cancelled_cursor = await connection.execute(
+                        _CANCEL_PENDING_INTERRUPTS,
+                        (updated_at, run_id),
+                    )
+                    if (
+                        current.status == "interrupted"
+                        and cancelled_cursor.rowcount != 1
+                    ):
+                        raise InterruptStateConflictError(
+                            code="INTERRUPT_STATE_CONFLICT",
+                            message="Run 缺少可取消的待处理 Interrupt",
+                            status_code=409,
+                        )
+
                 updated = await self._update_run_state(
                     connection=connection,
                     current=current,
@@ -485,6 +568,351 @@ class PostgresRuntimeEventRepository:
             changed=True,
         )
 
+    async def require_interrupt(
+        self,
+        *,
+        run_id: UUID,
+        interrupt_id: UUID,
+        interrupt_payload: dict[str, JsonValue],
+        event: RuntimeEvent,
+        updated_at: datetime,
+    ) -> InterruptRunCommit:
+        """原子新增 pending Interrupt、置 Run 为 interrupted 并写事件。"""
+
+        self._validate_interrupt_event(
+            run_id=run_id,
+            interrupt_id=interrupt_id,
+            event=event,
+            expected_type="interrupt.required",
+        )
+        started_at = perf_counter()
+        log_business_event(
+            logger,
+            "Interrupt请求原子提交开始",
+            run_id=run_id,
+            interrupt_id=interrupt_id,
+            event_id=event.event_id,
+            seq=event.seq,
+        )
+        try:
+            async with open_database_connection(self._settings) as connection:
+                current = await self._select_run_for_update(
+                    connection=connection,
+                    run_id=run_id,
+                )
+                self._validate_locked_state_event_transition(
+                    current_status=current.status,
+                    event_type=event.event_type,
+                    target_status="interrupted",
+                )
+                cursor = await connection.execute(
+                    _INSERT_PENDING_INTERRUPT,
+                    (
+                        run_id,
+                        interrupt_id,
+                        Jsonb(interrupt_payload),
+                        updated_at,
+                    ),
+                )
+                interrupt_row = await cursor.fetchone()
+                if interrupt_row is None:
+                    raise RuntimeEventPersistenceError(
+                        code="INTERRUPT_PERSIST_FAILED",
+                        message="Interrupt 保存失败",
+                        retryable=True,
+                    )
+                updated = await self._update_run_state(
+                    connection=connection,
+                    current=current,
+                    target_status="interrupted",
+                    updated_at=updated_at,
+                    error_code=None,
+                    error_message=None,
+                )
+                stored_event = await self._insert_event(connection, event)
+                await connection.commit()
+        except ApplicationError as error:
+            log_business_event(
+                logger,
+                "Interrupt请求原子提交拒绝",
+                run_id=run_id,
+                interrupt_id=interrupt_id,
+                error_code=error.code,
+                duration_ms=_elapsed_ms(started_at),
+            )
+            raise
+        except Exception as error:
+            self._log_persistence_failure(
+                event_name="Interrupt请求原子提交失败",
+                error_code="INTERRUPT_PERSIST_FAILED",
+                error=error,
+                started_at=started_at,
+                run_id=run_id,
+                interrupt_id=interrupt_id,
+            )
+            raise RuntimeEventPersistenceError(
+                code="INTERRUPT_PERSIST_FAILED",
+                message="Interrupt、Run 与事件原子保存失败",
+                retryable=True,
+            ) from error
+        interrupt = _interrupt_from_row(interrupt_row)
+        log_business_event(
+            logger,
+            "Interrupt请求原子提交完成",
+            run_id=run_id,
+            session_id=updated.session_id,
+            interrupt_id=interrupt_id,
+            status=updated.status,
+            seq=stored_event.seq,
+            duration_ms=_elapsed_ms(started_at),
+        )
+        return InterruptRunCommit(
+            run=updated,
+            interrupt=interrupt,
+            event=stored_event,
+            changed=True,
+        )
+
+    async def resume_interrupt(
+        self,
+        *,
+        run_id: UUID,
+        interrupt_id: UUID,
+        request_id: UUID,
+        request_fingerprint: str,
+        resume_payload: dict[str, JsonValue],
+        event: RuntimeEvent,
+        updated_at: datetime,
+    ) -> InterruptRunCommit:
+        """行锁内幂等消费 pending Interrupt，并原子恢复同一 Run。"""
+
+        self._validate_interrupt_event(
+            run_id=run_id,
+            interrupt_id=interrupt_id,
+            event=event,
+            expected_type="interrupt.resumed",
+        )
+        started_at = perf_counter()
+        log_business_event(
+            logger,
+            "Interrupt恢复原子提交开始",
+            run_id=run_id,
+            interrupt_id=interrupt_id,
+            request_id=request_id,
+            event_id=event.event_id,
+            seq=event.seq,
+        )
+        try:
+            async with open_database_connection(self._settings) as connection:
+                current = await self._select_run_for_update(
+                    connection=connection,
+                    run_id=run_id,
+                )
+                cursor = await connection.execute(
+                    _SELECT_INTERRUPT_FOR_UPDATE,
+                    (run_id, interrupt_id),
+                )
+                interrupt_row = await cursor.fetchone()
+                if interrupt_row is None:
+                    raise InterruptStateConflictError(
+                        code="INTERRUPT_STATE_CONFLICT",
+                        message="Interrupt 不属于该 Run 或不存在",
+                        status_code=409,
+                    )
+                interrupt = _interrupt_from_row(interrupt_row)
+                if interrupt.status == "resumed":
+                    self._validate_repeated_resume(
+                        interrupt=interrupt,
+                        request_id=request_id,
+                        request_fingerprint=request_fingerprint,
+                    )
+                    await connection.commit()
+                    return InterruptRunCommit(
+                        run=current,
+                        interrupt=interrupt,
+                        event=None,
+                        changed=False,
+                    )
+                if interrupt.status != "pending":
+                    raise InterruptStateConflictError(
+                        code="INTERRUPT_STATE_CONFLICT",
+                        message="Interrupt 已取消，不能恢复",
+                        status_code=409,
+                    )
+                self._validate_locked_state_event_transition(
+                    current_status=current.status,
+                    event_type=event.event_type,
+                    target_status="running",
+                )
+                await self._ensure_resume_request_available(
+                    connection=connection,
+                    run_id=run_id,
+                    interrupt_id=interrupt_id,
+                    request_id=request_id,
+                )
+                cursor = await connection.execute(
+                    _RESUME_INTERRUPT,
+                    (
+                        Jsonb(resume_payload),
+                        request_id,
+                        request_fingerprint,
+                        updated_at,
+                        run_id,
+                        interrupt_id,
+                    ),
+                )
+                resumed_row = await cursor.fetchone()
+                if resumed_row is None:
+                    raise InterruptStateConflictError(
+                        code="INTERRUPT_STATE_CONFLICT",
+                        message="Interrupt 已被其他请求处理",
+                        status_code=409,
+                    )
+                updated = await self._update_run_state(
+                    connection=connection,
+                    current=current,
+                    target_status="running",
+                    updated_at=updated_at,
+                    error_code=None,
+                    error_message=None,
+                )
+                stored_event = await self._insert_event(connection, event)
+                await connection.commit()
+        except UniqueViolation as error:
+            raise InterruptRequestConflictError(
+                code="INTERRUPT_REQUEST_CONFLICT",
+                message="恢复 request_id 已用于其他请求",
+                status_code=409,
+            ) from error
+        except ApplicationError as error:
+            log_business_event(
+                logger,
+                "Interrupt恢复原子提交拒绝",
+                run_id=run_id,
+                interrupt_id=interrupt_id,
+                request_id=request_id,
+                error_code=error.code,
+                duration_ms=_elapsed_ms(started_at),
+            )
+            raise
+        except Exception as error:
+            self._log_persistence_failure(
+                event_name="Interrupt恢复原子提交失败",
+                error_code="INTERRUPT_RESUME_FAILED",
+                error=error,
+                started_at=started_at,
+                run_id=run_id,
+                interrupt_id=interrupt_id,
+                request_id=request_id,
+            )
+            raise RuntimeEventPersistenceError(
+                code="INTERRUPT_RESUME_FAILED",
+                message="Interrupt 恢复原子保存失败",
+                retryable=True,
+            ) from error
+        resumed = _interrupt_from_row(resumed_row)
+        log_business_event(
+            logger,
+            "Interrupt恢复原子提交完成",
+            run_id=run_id,
+            session_id=updated.session_id,
+            interrupt_id=interrupt_id,
+            request_id=request_id,
+            status=updated.status,
+            seq=stored_event.seq,
+            duration_ms=_elapsed_ms(started_at),
+        )
+        return InterruptRunCommit(
+            run=updated,
+            interrupt=resumed,
+            event=stored_event,
+            changed=True,
+        )
+
+    @staticmethod
+    async def _select_run_for_update(*, connection, run_id: UUID) -> Run:
+        cursor = await connection.execute(_SELECT_RUN_FOR_UPDATE, (run_id,))
+        row = await cursor.fetchone()
+        if row is None:
+            raise RunNotFoundError(
+                code="RUN_NOT_FOUND",
+                message="Run 不存在",
+                status_code=404,
+            )
+        return _run_from_row(row)
+
+    def _validate_interrupt_event(
+        self,
+        *,
+        run_id: UUID,
+        interrupt_id: UUID,
+        event: RuntimeEvent,
+        expected_type: str,
+    ) -> None:
+        """校验 Interrupt 状态事件的 Run、类型和公开标识一致。"""
+
+        self._validate_state_transition_event(run_id=run_id, event=event)
+        if (
+            event.event_type != expected_type
+            or str(event.payload.get("interrupt_id")) != str(interrupt_id)
+        ):
+            raise RuntimeEventPersistenceError(
+                code="RUNTIME_EVENT_SCHEMA_INVALID",
+                message="Interrupt 事件与目标标识不一致",
+                status_code=409,
+            )
+
+    @staticmethod
+    def _validate_repeated_resume(
+        *,
+        interrupt: RunInterrupt,
+        request_id: UUID,
+        request_fingerprint: str,
+    ) -> None:
+        if (
+            interrupt.resume_request_id == request_id
+            and interrupt.resume_request_fingerprint == request_fingerprint
+        ):
+            return
+        if interrupt.resume_request_id == request_id:
+            raise InterruptRequestConflictError(
+                code="INTERRUPT_REQUEST_CONFLICT",
+                message="恢复 request_id 已用于不同内容",
+                status_code=409,
+            )
+        raise InterruptStateConflictError(
+            code="INTERRUPT_STATE_CONFLICT",
+            message="Interrupt 已恢复，不能再次恢复",
+            status_code=409,
+        )
+
+    @staticmethod
+    async def _ensure_resume_request_available(
+        *,
+        connection,
+        run_id: UUID,
+        interrupt_id: UUID,
+        request_id: UUID,
+    ) -> None:
+        cursor = await connection.execute(
+            _SELECT_INTERRUPT_BY_RESUME_REQUEST,
+            (request_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return
+        existing = _interrupt_from_row(row)
+        if (
+            existing.run_id == run_id
+            and existing.interrupt_id == interrupt_id
+        ):
+            return
+        raise InterruptRequestConflictError(
+            code="INTERRUPT_REQUEST_CONFLICT",
+            message="恢复 request_id 已用于其他请求",
+            status_code=409,
+        )
+
     async def list_public(
         self,
         *,
@@ -523,6 +951,36 @@ class PostgresRuntimeEventRepository:
         for event in events:
             project_public_event(event)
         return events
+
+    async def next_message_attempt(self, *, run_id: UUID) -> int:
+        """读取 durable message.started 后返回下一次严格递增尝试编号。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_LATEST_MESSAGE_ATTEMPT,
+                    (run_id,),
+                )
+                row = await cursor.fetchone()
+        except Exception as error:
+            self._log_persistence_failure(
+                event_name="RuntimeEvent生成尝试读取失败",
+                error_code="RUNTIME_EVENT_READ_FAILED",
+                error=error,
+                started_at=perf_counter(),
+                run_id=run_id,
+            )
+            raise RuntimeEventPersistenceError(
+                code="RUNTIME_EVENT_READ_FAILED",
+                message="RuntimeEvent 生成尝试读取失败",
+                retryable=True,
+            ) from error
+        latest = (
+            int(row["latest_attempt"])
+            if row is not None and row["latest_attempt"] is not None
+            else 0
+        )
+        return latest + 1
 
     @staticmethod
     async def _insert_event(connection, event: RuntimeEvent) -> RuntimeEvent:

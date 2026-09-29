@@ -8,11 +8,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any, Literal, cast
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import Command
 
 from agent_runtime.api.schemas.chat import (
     CapabilityId,
@@ -53,6 +54,8 @@ from agent_runtime.runtime.event_repository import (
 from agent_runtime.runtime.event_gateway import GatewayItem, RuntimeEventGateway
 from agent_runtime.runtime.event_models import RuntimeEventDraft
 from agent_runtime.runtime.event_schemas import (
+    InterruptRequiredPayload,
+    InterruptResumedPayload,
     MessageDeltaPayload,
     MessageFinalizedPayload,
     MessageStartedPayload,
@@ -64,6 +67,12 @@ from agent_runtime.runtime.event_schemas import (
 )
 from agent_runtime.runtime.fingerprints import build_request_fingerprint
 from agent_runtime.runtime.models import JsonValue, Run, RunSubmission
+from agent_runtime.runtime.interrupts import (
+    InterruptStateConflictError,
+    PostgresRunInterruptRepository,
+    RunInterrupt,
+    build_resume_request_fingerprint,
+)
 from agent_runtime.runtime.redis_stream import (
     RedisStreamPublisher,
     RedisStreamReader,
@@ -112,6 +121,8 @@ class PreparedChatTurn:
     config: RunnableConfig
     active_run: ActiveRun
     is_regeneration: bool = False
+    is_resume: bool = False
+    resume_payload: dict[str, JsonValue] | None = None
 
 
 class ChatService:
@@ -133,6 +144,7 @@ class ChatService:
         runtime_event_repository: PostgresRuntimeEventRepository | None = None,
         runtime_event_publisher: RedisStreamPublisher | None = None,
         runtime_event_gateway: RuntimeEventGateway | None = None,
+        run_interrupt_repository: PostgresRunInterruptRepository | None = None,
         run_coordinator: RunCoordinator | None = None,
         session_id_factory: Callable[[], UUID] = uuid4,
         human_message_id_factory: Callable[[], UUID] = uuid4,
@@ -160,6 +172,7 @@ class ChatService:
         self._runtime_event_repository = runtime_event_repository
         self._runtime_event_publisher = runtime_event_publisher
         self._runtime_event_gateway = runtime_event_gateway
+        self._run_interrupt_repository = run_interrupt_repository
         self._run_coordinator = run_coordinator
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
@@ -418,6 +431,95 @@ class ChatService:
         await self._require_owned_session(session_id)
         return await repository.get_active_for_session(session_id)
 
+    async def get_pending_interrupt(
+        self,
+        *,
+        run_id: UUID,
+    ) -> RunInterrupt:
+        """验证 Run 所有权并返回刷新页面所需的唯一待处理中断。"""
+
+        repository, _coordinator = self._persistent_runtime_dependencies()
+        interrupt_repository = self._require_interrupt_repository()
+        run = await repository.get(run_id)
+        await self._require_owned_session(run.session_id)
+        pending = await interrupt_repository.get_pending(run_id=run_id)
+        if pending is None:
+            raise InterruptStateConflictError(
+                code="INTERRUPT_STATE_CONFLICT",
+                message="Run 当前没有待处理 Interrupt",
+                status_code=409,
+            )
+        return pending
+
+    async def resume_persistent_run(
+        self,
+        *,
+        run_id: UUID,
+        interrupt_id: UUID,
+        request_id: UUID,
+        resume_payload: dict[str, JsonValue],
+    ) -> Run:
+        """原子消费 Interrupt，沿用同一 Run 提交恢复并唤醒本地执行器。"""
+
+        repository, coordinator = self._persistent_runtime_dependencies()
+        event_repository = self._runtime_event_repository
+        if event_repository is None:
+            raise ChatRuntimeError(
+                code="RUNTIME_EVENT_SERVICE_UNAVAILABLE",
+                message="RuntimeEvent 服务尚未完成初始化",
+                retryable=True,
+            )
+        run = await repository.get(run_id)
+        await self._require_owned_session(run.session_id)
+        fingerprint = build_resume_request_fingerprint(
+            run_id=run_id,
+            interrupt_id=interrupt_id,
+            resume_payload=resume_payload,
+        )
+        started_at = perf_counter()
+        log_business_event(
+            logger,
+            "持久Run恢复开始",
+            run_id=run_id,
+            request_id=request_id,
+            session_id=run.session_id,
+            interrupt_id=interrupt_id,
+            status=run.status,
+        )
+        sequencer = RunSequencer.for_run(
+            run_id=run.run_id,
+            response_message_id=run.response_message_id,
+            repository=event_repository,
+            publisher=self._runtime_event_publisher,
+        )
+        async with coordinator.claim_guard(run_id):
+            commit = await sequencer.resume_interrupt(
+                interrupt_id=interrupt_id,
+                request_id=request_id,
+                request_fingerprint=fingerprint,
+                resume_payload=resume_payload,
+                event=self._runtime_event_draft(
+                    "interrupt.resumed",
+                    InterruptResumedPayload(interrupt_id=interrupt_id),
+                ),
+                updated_at=datetime.now(UTC),
+            )
+        # 幂等重试也重复发送进程内唤醒；Coordinator 会按 run_id 去重，
+        # 从而补偿“事务已提交但首次唤醒未完成”的窗口。
+        await coordinator.wake_resumed(run_id)
+        log_business_event(
+            logger,
+            "持久Run恢复已接受",
+            run_id=run_id,
+            request_id=request_id,
+            session_id=commit.run.session_id,
+            interrupt_id=interrupt_id,
+            status=commit.run.status,
+            idempotent=not commit.changed,
+            duration_ms=round((perf_counter() - started_at) * 1000, 2),
+        )
+        return commit.run
+
     async def open_run_event_stream(
         self,
         *,
@@ -537,7 +639,7 @@ class ChatService:
             raise
 
     async def execute_persistent_run(self, run: Run) -> None:
-        """执行已提交的 queued Run，并按持久事件协议完成状态变化。"""
+        """执行 queued 或本进程刚恢复的 Run，并按持久事件协议推进。"""
 
         repository, coordinator = self._persistent_runtime_dependencies()
         event_repository = self._runtime_event_repository
@@ -554,7 +656,18 @@ class ChatService:
                 if current.status == "cancel_requested":
                     await self._finalize_persistent_cancellation_locked(current)
             return
-        if run.status != "queued":
+        is_resume = run.status == "running"
+        resumed_interrupt = None
+        if is_resume:
+            resumed_interrupt = await self._require_interrupt_repository().get_latest_resumed(
+                run_id=run.run_id
+            )
+            if (
+                resumed_interrupt is None
+                or resumed_interrupt.resume_payload is None
+            ):
+                return
+        elif run.status != "queued":
             return
         sequencer = RunSequencer.for_run(
             run_id=run.run_id,
@@ -581,26 +694,41 @@ class ChatService:
                 return
             if current.status in {"completed", "failed", "cancelled"}:
                 return
-            if current.status != "queued":
-                return
-            await sequencer.transition_run(
-                target_status="running",
-                event=self._runtime_event_draft(
-                    "run.started",
-                    RunStartedPayload(status="running"),
-                ),
-                updated_at=datetime.now(UTC),
-            )
+            if is_resume:
+                if current.status != "running":
+                    return
+            else:
+                if current.status != "queued":
+                    return
+                await sequencer.transition_run(
+                    target_status="running",
+                    event=self._runtime_event_draft(
+                        "run.started",
+                        RunStartedPayload(status="running"),
+                    ),
+                    updated_at=datetime.now(UTC),
+                )
         partial_text: list[str] = []
         turn: PreparedChatTurn | None = None
         try:
-            turn = await self._turn_from_run(run)
+            turn = await self._turn_from_run(
+                run,
+                is_resume=is_resume,
+                resume_payload=(
+                    resumed_interrupt.resume_payload
+                    if resumed_interrupt is not None
+                    else None
+                ),
+            )
+            attempt = await event_repository.next_message_attempt(
+                run_id=run.run_id
+            )
             await sequencer.emit(
                 self._runtime_event_draft(
                     "message.started",
                     MessageStartedPayload(
                         response_message_id=run.response_message_id,
-                        attempt=1,
+                        attempt=attempt,
                     ),
                 )
             )
@@ -621,7 +749,7 @@ class ChatService:
                         "message.delta",
                         MessageDeltaPayload(
                             response_message_id=run.response_message_id,
-                            attempt=1,
+                            attempt=attempt,
                             delta=delta,
                         ),
                     )
@@ -629,6 +757,54 @@ class ChatService:
             if await coordinator.is_cancel_requested(run.run_id):
                 await coordinator.begin_cancel_finalization(run.run_id)
                 raise asyncio.CancelledError
+            graph_interrupt = await self._pending_graph_interrupt(
+                run=run,
+                turn=turn,
+            )
+            if graph_interrupt is not None:
+                interrupt_id, interrupt_payload = graph_interrupt
+                async with coordinator.claim_guard(run.run_id):
+                    current = await repository.get(run.run_id)
+                    if current.status == "cancel_requested":
+                        await coordinator.begin_cancel_finalization(run.run_id)
+                        await self._finalize_persistent_cancellation_locked(
+                            current,
+                            partial_content="".join(partial_text),
+                            capability_id=capability_id,
+                            turn=turn,
+                        )
+                        return
+                    if current.status != "running":
+                        return
+                    await sequencer.require_interrupt(
+                        interrupt_id=interrupt_id,
+                        interrupt_payload=interrupt_payload,
+                        event=self._runtime_event_draft(
+                            "interrupt.required",
+                            InterruptRequiredPayload(
+                                interrupt_id=interrupt_id
+                            ),
+                        ),
+                        updated_at=datetime.now(UTC),
+                    )
+                    await self._session_service.touch_session(
+                        session_id=run.session_id
+                    )
+                log_business_event(
+                    logger,
+                    "持久Run等待人工输入",
+                    run_id=run.run_id,
+                    request_id=run.request_id,
+                    session_id=run.session_id,
+                    message_id=run.response_message_id,
+                    interrupt_id=interrupt_id,
+                    status="interrupted",
+                    duration_ms=round(
+                        (perf_counter() - started_at) * 1000,
+                        2,
+                    ),
+                )
+                return
             completion_status = await self.get_completion_status(turn)
             await self._require_nonempty_persistent_message(
                 run=run,
@@ -719,6 +895,7 @@ class ChatService:
                     capability_id=capability_id,
                     include_human=(
                         not turn.is_regeneration
+                        and not turn.is_resume
                         and turn.human_message is not None
                     ),
                 )
@@ -802,7 +979,11 @@ class ChatService:
             content,
             runtime_status="stopped",
             capability_id=capability_id,
-            include_human=not turn.is_regeneration,
+            include_human=(
+                not turn.is_regeneration
+                and not turn.is_resume
+                and run.status != "interrupted"
+            ),
         )
         sequencer = RunSequencer.for_run(
             run_id=run.run_id,
@@ -889,6 +1070,18 @@ class ChatService:
             )
         return repository, coordinator
 
+    def _require_interrupt_repository(
+        self,
+    ) -> PostgresRunInterruptRepository:
+        repository = self._run_interrupt_repository
+        if repository is None:
+            raise ChatRuntimeError(
+                code="INTERRUPT_SERVICE_UNAVAILABLE",
+                message="Interrupt 服务尚未完成初始化",
+                retryable=True,
+            )
+        return repository
+
     async def _resolve_existing_request(
         self,
         *,
@@ -934,14 +1127,27 @@ class ChatService:
             )
         return state
 
-    async def _turn_from_run(self, run: Run) -> PreparedChatTurn:
+    async def _turn_from_run(
+        self,
+        run: Run,
+        *,
+        is_resume: bool = False,
+        resume_payload: dict[str, JsonValue] | None = None,
+    ) -> PreparedChatTurn:
         configurable: dict[str, str] = {
             "thread_id": str(run.session_id),
             "message_id": str(run.response_message_id),
         }
         if run.start_checkpoint_id is not None:
+            configurable["checkpoint_ns"] = ""
             configurable["checkpoint_id"] = run.start_checkpoint_id
-        if run.run_type == "regenerate":
+        if is_resume:
+            human_message = None
+            config = parent_thread_config(
+                run.session_id,
+                message_id=run.response_message_id,
+            )
+        elif run.run_type == "regenerate":
             human_message = None
             if run.start_checkpoint_id is None:
                 raise ChatRuntimeError(
@@ -978,7 +1184,67 @@ class ChatService:
                 response_message_id=run.response_message_id,
             ),
             is_regeneration=run.run_type == "regenerate",
+            is_resume=is_resume,
+            resume_payload=resume_payload,
         )
+
+    async def _pending_graph_interrupt(
+        self,
+        *,
+        run: Run,
+        turn: PreparedChatTurn,
+    ) -> tuple[UUID, dict[str, JsonValue]] | None:
+        """从已落盘的最新 Graph 快照投影唯一公开中断提示。"""
+
+        snapshot = await self._parent_graph.aget_state(
+            parent_thread_config(
+                run.session_id,
+                message_id=run.response_message_id,
+            )
+        )
+        raw_interrupts = tuple(snapshot.interrupts)
+        if not raw_interrupts:
+            return None
+        if len(raw_interrupts) != 1:
+            raise ChatRuntimeError(
+                code="INTERRUPT_PARALLEL_UNSUPPORTED",
+                message="Stage 2.5 不支持并行 Interrupt",
+                status_code=409,
+            )
+        checkpoint_id = self._checkpoint_id(snapshot.config)
+        if checkpoint_id is None:
+            raise ChatRuntimeError(
+                code="INTERRUPT_CHECKPOINT_INVALID",
+                message="Interrupt 缺少已持久化 checkpoint 标识",
+                retryable=True,
+            )
+        raw_interrupt = raw_interrupts[0]
+        value = raw_interrupt.value
+        if isinstance(value, str):
+            prompt = value.strip()
+        elif (
+            isinstance(value, dict)
+            and set(value) == {"prompt"}
+            and isinstance(value.get("prompt"), str)
+        ):
+            prompt = value["prompt"].strip()
+        else:
+            raise ChatRuntimeError(
+                code="INTERRUPT_PAYLOAD_INVALID",
+                message="Interrupt 只允许公开单个中文提示文本",
+                status_code=409,
+            )
+        if not prompt or len(prompt) > 4000:
+            raise ChatRuntimeError(
+                code="INTERRUPT_PAYLOAD_INVALID",
+                message="Interrupt 提示长度必须在 1 到 4000 个字符之间",
+                status_code=409,
+            )
+        interrupt_id = uuid5(
+            run.run_id,
+            f"{checkpoint_id}:{raw_interrupt.id}",
+        )
+        return interrupt_id, {"prompt": prompt}
 
     @staticmethod
     def _checkpoint_id(config: RunnableConfig) -> str | None:
@@ -1449,11 +1715,20 @@ class ChatService:
     ) -> AsyncIterator[BaseMessage]:
         """只转发 Parent custom stream 中的公共消息事件。"""
 
-        graph_input = (
-            None
-            if turn.is_regeneration
-            else {"messages": [turn.human_message]}
-        )
+        if turn.is_resume:
+            if turn.resume_payload is None:
+                raise ChatRuntimeError(
+                    code="INTERRUPT_RESUME_INPUT_INVALID",
+                    message="Interrupt 恢复输入不能为空",
+                    status_code=409,
+                )
+            graph_input = Command(resume=turn.resume_payload)
+        else:
+            graph_input = (
+                None
+                if turn.is_regeneration
+                else {"messages": [turn.human_message]}
+            )
         async for event in self._parent_graph.astream(
             graph_input,
             turn.config,
@@ -2031,6 +2306,7 @@ async def open_chat_service(
     await run_repository.setup()
     runtime_event_repository = PostgresRuntimeEventRepository(settings)
     await runtime_event_repository.setup()
+    run_interrupt_repository = PostgresRunInterruptRepository(settings)
     runtime_event_publisher = RedisStreamPublisher.from_url(
         settings.redis_connection_string,
         ttl_seconds=settings.redis_stream_ttl_seconds,
@@ -2134,6 +2410,7 @@ async def open_chat_service(
             runtime_event_repository=runtime_event_repository,
             runtime_event_publisher=runtime_event_publisher,
             runtime_event_gateway=runtime_event_gateway,
+            run_interrupt_repository=run_interrupt_repository,
             run_coordinator=run_coordinator,
         )
         try:

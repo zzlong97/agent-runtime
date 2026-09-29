@@ -271,6 +271,44 @@ def test_gateway_delivers_postgres_terminal_when_redis_stream_is_empty() -> None
     assert asyncio.run(collect()) == ["run.completed"]
 
 
+def test_gateway_closes_after_delivering_interrupt_required() -> None:
+    """中断投影送达后应结束当前 SSE，而不是等待 Run 进入终态。"""
+
+    from agent_runtime.runtime.event_gateway import RuntimeEventGateway
+    from agent_runtime.runtime.event_models import RuntimeEvent
+
+    interrupt_event = RuntimeEvent(
+        event_id=uuid4(),
+        run_id=RUN_ID,
+        seq=7,
+        event_type="interrupt.required",
+        source="executor",
+        visibility="public",
+        payload={"interrupt_id": str(uuid4())},
+        schema_version=1,
+        durability="durable",
+        created_at=NOW,
+    )
+    gateway = RuntimeEventGateway(
+        run_repository=_FakeRunRepository("interrupted"),
+        event_repository=_FakeEventRepository([interrupt_event]),
+        redis_reader=_FakeRedisReader([]),
+        batch_size=10,
+        poll_interval_seconds=0.001,
+        heartbeat_interval_seconds=1,
+    )
+
+    async def collect() -> list[str]:
+        return [
+            item.event_type
+            async for item in gateway.stream(run_id=RUN_ID, after_seq=0)
+        ]
+
+    assert asyncio.run(asyncio.wait_for(collect(), timeout=0.2)) == [
+        "interrupt.required"
+    ]
+
+
 def test_gateway_rechecks_durable_events_before_closing_terminal_run() -> None:
     """终态事务在首次查询后提交时，关闭前仍须发送终态事件。"""
 

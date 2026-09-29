@@ -22,7 +22,10 @@ from agent_runtime.api.schemas.messages import (
     MessageHistoryResponse,
 )
 from agent_runtime.api.schemas.runs import (
+    ActiveRunResponse,
+    PendingInterruptResponse,
     RegenerateRunRequest,
+    ResumeRunRequest,
     RunSummaryResponse,
 )
 from agent_runtime.api.schemas.sessions import (
@@ -232,7 +235,8 @@ async def submit_feedback(
 
 @router.get(
     "/sessions/{session_id}/active-run",
-    response_model=RunSummaryResponse | None,
+    response_model=ActiveRunResponse | None,
+    response_model_exclude_none=True,
 )
 async def get_active_run(
     session_id: Annotated[
@@ -245,7 +249,7 @@ async def get_active_run(
         ),
     ],
     request: Request,
-) -> RunSummaryResponse | None:
+) -> ActiveRunResponse | None:
     """返回 Session 当前活动 Run 的公开摘要，空闲时返回 null。"""
 
     chat_service = _get_chat_service(request)
@@ -258,7 +262,18 @@ async def get_active_run(
         ) from error
     if run is None:
         return None
-    return RunSummaryResponse.model_validate(run, from_attributes=True)
+    pending_interrupt = None
+    if run.status == "interrupted":
+        pending = await chat_service.get_pending_interrupt(run_id=run.run_id)
+        pending_interrupt = PendingInterruptResponse.model_validate(
+            pending,
+            from_attributes=True,
+        )
+    summary = RunSummaryResponse.model_validate(run, from_attributes=True)
+    return ActiveRunResponse(
+        **summary.model_dump(),
+        pending_interrupt=pending_interrupt,
+    )
 
 
 @router.get(
@@ -357,6 +372,42 @@ async def cancel_run(
     chat_service = _get_chat_service(request)
     try:
         run = await chat_service.cancel_persistent_run(run_id=run_id)
+    except ApplicationError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=_application_error_detail(error),
+        ) from error
+    return RunSummaryResponse.model_validate(run, from_attributes=True)
+
+
+@router.post(
+    "/runs/{run_id}/resume",
+    response_model=RunSummaryResponse,
+    status_code=202,
+)
+async def resume_run(
+    run_id: Annotated[
+        UUID,
+        Path(
+            description=(
+                "要从人工中断继续执行的持久 Run UUID；只允许操作固定本地用户"
+                "拥有且正处于 interrupted 的 Run。"
+            )
+        ),
+    ],
+    payload: ResumeRunRequest,
+    request: Request,
+) -> RunSummaryResponse:
+    """原子消费待处理 Interrupt 并沿用同一 Run 返回 202。"""
+
+    chat_service = _get_chat_service(request)
+    try:
+        run = await chat_service.resume_persistent_run(
+            run_id=run_id,
+            interrupt_id=payload.interrupt_id,
+            request_id=payload.request_id,
+            resume_payload=payload.resume_payload,
+        )
     except ApplicationError as error:
         raise HTTPException(
             status_code=error.status_code,

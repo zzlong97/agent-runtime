@@ -13,6 +13,8 @@ SESSION_ID = UUID("00000000-0000-0000-0000-000000002542")
 INPUT_MESSAGE_ID = UUID("00000000-0000-0000-0000-000000002543")
 RESPONSE_MESSAGE_ID = UUID("00000000-0000-0000-0000-000000002544")
 SOURCE_MESSAGE_ID = UUID("00000000-0000-0000-0000-000000002545")
+INTERRUPT_ID = UUID("00000000-0000-0000-0000-000000002546")
+RESUME_REQUEST_ID = UUID("00000000-0000-0000-0000-000000002547")
 
 
 def _run(*, status: str = "queued"):
@@ -52,6 +54,8 @@ class FakeAsyncRunService:
         self.active_calls: list[UUID] = []
         self.event_stream_calls: list[tuple[UUID, int]] = []
         self.cancel_calls: list[UUID] = []
+        self.resume_calls: list[tuple[UUID, UUID, UUID, dict]] = []
+        self.pending_interrupt = None
         self.error: Exception | None = None
 
     async def submit_chat_run(self, *, request_id, session_id, content):
@@ -115,6 +119,28 @@ class FakeAsyncRunService:
         if self.error is not None:
             raise self.error
         self.run = _run(status="cancel_requested")
+        return self.run
+
+    async def get_pending_interrupt(self, *, run_id):
+        assert run_id == RUN_ID
+        if self.error is not None:
+            raise self.error
+        return self.pending_interrupt
+
+    async def resume_persistent_run(
+        self,
+        *,
+        run_id,
+        interrupt_id,
+        request_id,
+        resume_payload,
+    ):
+        self.resume_calls.append(
+            (run_id, interrupt_id, request_id, resume_payload)
+        )
+        if self.error is not None:
+            raise self.error
+        self.run = _run(status="running")
         return self.run
 
 
@@ -252,6 +278,75 @@ def test_active_run_query_returns_null_when_session_is_idle() -> None:
     assert response.json() is None
 
 
+def test_active_run_query_restores_pending_interrupt_prompt() -> None:
+    from agent_runtime.main import create_app
+    from agent_runtime.runtime.interrupts import RunInterrupt
+
+    service = FakeAsyncRunService()
+    service.active_run = _run(status="interrupted")
+    service.pending_interrupt = RunInterrupt(
+        run_id=RUN_ID,
+        interrupt_id=INTERRUPT_ID,
+        status="pending",
+        interrupt_payload={"prompt": "是否允许继续执行？"},
+        resume_payload=None,
+        resume_request_id=None,
+        resume_request_fingerprint=None,
+        created_at=datetime(2026, 9, 29, 10, 0, tzinfo=UTC),
+        resumed_at=None,
+        cancelled_at=None,
+    )
+    app = create_app(chat_service=service)
+
+    response = _request(
+        app,
+        "GET",
+        f"/api/v1/chat/sessions/{SESSION_ID}/active-run",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["pending_interrupt"] == {
+        "interrupt_id": str(INTERRUPT_ID),
+        "interrupt_payload": {"prompt": "是否允许继续执行？"},
+        "created_at": "2026-09-29T10:00:00Z",
+    }
+
+
+def test_resume_uses_same_run_and_returns_accepted_summary() -> None:
+    from agent_runtime.main import create_app
+
+    service = FakeAsyncRunService()
+    app = create_app(chat_service=service)
+    payload = {
+        "interrupt_id": str(INTERRUPT_ID),
+        "request_id": str(RESUME_REQUEST_ID),
+        "resume_payload": {"approved": True},
+    }
+
+    response = _request(
+        app,
+        "POST",
+        f"/api/v1/chat/runs/{RUN_ID}/resume",
+        json=payload,
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "run_id": str(RUN_ID),
+        "session_id": str(SESSION_ID),
+        "response_message_id": str(RESPONSE_MESSAGE_ID),
+        "status": "running",
+    }
+    assert service.resume_calls == [
+        (
+            RUN_ID,
+            INTERRUPT_ID,
+            RESUME_REQUEST_ID,
+            {"approved": True},
+        )
+    ]
+
+
 def test_run_api_maps_application_error_without_leaking_private_details() -> None:
     from agent_runtime.core.errors import ApplicationError
     from agent_runtime.main import create_app
@@ -346,6 +441,8 @@ def test_run_api_schema_describes_every_request_and_response_field() -> None:
     component_names = (
         "ChatCompletionRequest",
         "RegenerateRunRequest",
+        "ResumeRunRequest",
+        "PendingInterruptResponse",
         "RunSummaryResponse",
     )
     for component_name in component_names:

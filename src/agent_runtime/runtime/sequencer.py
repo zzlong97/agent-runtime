@@ -23,6 +23,7 @@ from agent_runtime.runtime.event_schemas import (
     serialize_event_draft_payload,
 )
 from agent_runtime.runtime.models import JsonValue, RunStatus
+from agent_runtime.runtime.interrupts import InterruptRunCommit
 
 _SEQUENCER_CREATION_TOKEN = object()
 logger = logging.getLogger(__name__)
@@ -135,6 +136,56 @@ class RunSequencer:
                 updated_at=updated_at,
                 error_code=error_code,
                 error_message=error_message,
+            )
+            if commit.event is not None:
+                await self._publish_best_effort(commit.event)
+            return commit
+
+    async def require_interrupt(
+        self,
+        *,
+        interrupt_id: UUID,
+        interrupt_payload: dict[str, JsonValue],
+        event: RuntimeEventDraft,
+        updated_at: datetime,
+    ) -> InterruptRunCommit:
+        """分配序号并原子提交 pending Interrupt、Run 状态和公开事件。"""
+
+        async with self._lock:
+            runtime_event = await self._build_event(event)
+            commit = await self._repository.require_interrupt(
+                run_id=self._run_id,
+                interrupt_id=interrupt_id,
+                interrupt_payload=interrupt_payload,
+                event=runtime_event,
+                updated_at=updated_at,
+            )
+            if commit.event is not None:
+                await self._publish_best_effort(commit.event)
+            return commit
+
+    async def resume_interrupt(
+        self,
+        *,
+        interrupt_id: UUID,
+        request_id: UUID,
+        request_fingerprint: str,
+        resume_payload: dict[str, JsonValue],
+        event: RuntimeEventDraft,
+        updated_at: datetime,
+    ) -> InterruptRunCommit:
+        """分配序号并行锁幂等恢复同一 Run，不重复发布已提交事件。"""
+
+        async with self._lock:
+            runtime_event = await self._build_event(event)
+            commit = await self._repository.resume_interrupt(
+                run_id=self._run_id,
+                interrupt_id=interrupt_id,
+                request_id=request_id,
+                request_fingerprint=request_fingerprint,
+                resume_payload=resume_payload,
+                event=runtime_event,
+                updated_at=updated_at,
             )
             if commit.event is not None:
                 await self._publish_best_effort(commit.event)

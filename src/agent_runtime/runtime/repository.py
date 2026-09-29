@@ -22,6 +22,7 @@ from agent_runtime.runtime.models import (
     RunSubmission,
     RunType,
 )
+from agent_runtime.runtime.interrupts import PostgresRunInterruptRepository
 from agent_runtime.sessions.models import Session
 
 logger = logging.getLogger(__name__)
@@ -202,6 +203,11 @@ DELETE FROM runtime_events
 WHERE run_id IN (SELECT run_id FROM runs WHERE session_id = %s)
 """
 
+_DELETE_INTERRUPTS_BY_SESSION = """
+DELETE FROM run_interrupts
+WHERE run_id IN (SELECT run_id FROM runs WHERE session_id = %s)
+"""
+
 _DELETE_RUNS_BY_SESSION = """
 DELETE FROM runs
 WHERE session_id = %s
@@ -287,6 +293,7 @@ class PostgresRunRepository:
                 await connection.execute(_CREATE_RUNS_TABLE)
                 await connection.execute(_CREATE_ACTIVE_RUN_INDEX)
                 await connection.commit()
+            await PostgresRunInterruptRepository(self._settings).setup()
         except Exception as error:
             log_business_event(
                 logger,
@@ -599,10 +606,14 @@ class PostgresRunRepository:
         return [UUID(str(row["run_id"])) for row in rows]
 
     async def delete_by_session(self, *, session_id: UUID) -> None:
-        """在单个事务中先删 RuntimeEvent，再删 Session 的全部 Run。"""
+        """在单个事务中依次删除 Interrupt、Event 与 Session 的全部 Run。"""
 
         try:
             async with open_database_connection(self._settings) as connection:
+                await connection.execute(
+                    _DELETE_INTERRUPTS_BY_SESSION,
+                    (session_id,),
+                )
                 await connection.execute(
                     _DELETE_RUNTIME_EVENTS_BY_SESSION,
                     (session_id,),

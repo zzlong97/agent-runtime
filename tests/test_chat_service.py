@@ -2666,3 +2666,167 @@ def test_direct_persistent_cancel_finishes_after_caller_is_cancelled(
         assert not finalization_interrupted.is_set()
 
     asyncio.run(exercise())
+
+
+def test_resume_stream_uses_command_without_adding_human_message() -> None:
+    """Resume 必须把恢复输入交给 Command，不能伪造成新 HumanMessage。"""
+
+    from langgraph.types import Command
+
+    from agent_runtime.chat import ChatService, PreparedChatTurn
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runs import ActiveRun
+
+    session_id = uuid4()
+    response_message_id = uuid4()
+
+    class FakeParentGraph:
+        def __init__(self) -> None:
+            self.inputs = []
+
+        async def astream(self, graph_input, config, *, stream_mode):
+            self.inputs.append((graph_input, config, stream_mode))
+            if False:
+                yield None
+
+    graph = FakeParentGraph()
+    service = ChatService(
+        settings=Settings(_env_file=None),
+        session_repository=object(),
+        session_service=object(),
+        parent_graph=graph,
+    )
+    async def exercise() -> None:
+        turn = PreparedChatTurn(
+            session_id=session_id,
+            human_message=None,
+            response_message_id=response_message_id,
+            config={"configurable": {"thread_id": str(session_id)}},
+            active_run=ActiveRun(
+                session_id=session_id,
+                response_message_id=response_message_id,
+            ),
+            is_resume=True,
+            resume_payload={"approved": True},
+        )
+        assert [message async for message in service.stream_turn(turn)] == []
+
+    asyncio.run(exercise())
+
+    graph_input, _config, stream_mode = graph.inputs[0]
+    assert isinstance(graph_input, Command)
+    assert graph_input.resume == {"approved": True}
+    assert stream_mode == "custom"
+
+
+def test_idempotent_resume_retry_repeats_coordinator_wakeup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """事务已提交但首次唤醒丢失时，相同 Resume 重试必须再次安全唤醒。"""
+
+    from dataclasses import replace
+
+    from agent_runtime import chat as chat_module
+    from agent_runtime.chat import ChatService
+    from agent_runtime.core.config import Settings
+    from agent_runtime.runtime.interrupts import (
+        InterruptRunCommit,
+        RunInterrupt,
+    )
+    from agent_runtime.runtime.models import Run
+
+    now = datetime(2026, 9, 29, 16, 0, tzinfo=UTC)
+    run = Run(
+        run_id=uuid4(),
+        request_id=uuid4(),
+        session_id=uuid4(),
+        thread_id="resume-retry-run",
+        parent_run_id=None,
+        run_type="normal",
+        input_message_id=uuid4(),
+        response_message_id=uuid4(),
+        start_checkpoint_id="old-start-checkpoint",
+        input_payload={"message": {"content": "不应写入日志的正文"}},
+        request_fingerprint="c" * 64,
+        status="running",
+        recovery_attempts=0,
+        seq_high_watermark=4,
+        error_code=None,
+        error_message=None,
+        created_at=now,
+        started_at=now,
+        finished_at=None,
+        updated_at=now,
+    )
+    interrupt_id = uuid4()
+    request_id = uuid4()
+    stored_interrupt = RunInterrupt(
+        run_id=run.run_id,
+        interrupt_id=interrupt_id,
+        status="resumed",
+        interrupt_payload={"prompt": "是否继续？"},
+        resume_payload={"approved": True},
+        resume_request_id=request_id,
+        resume_request_fingerprint="d" * 64,
+        created_at=now,
+        resumed_at=now,
+        cancelled_at=None,
+    )
+
+    class FakeSessionRepository:
+        async def get(self, session_id):
+            return _session(session_id, user_id="local-user")
+
+    class FakeRunRepository:
+        async def get(self, run_id):
+            assert run_id == run.run_id
+            return run
+
+    class FakeCoordinator:
+        def __init__(self) -> None:
+            self.wake_calls = []
+
+        @asynccontextmanager
+        async def claim_guard(self, run_id):
+            assert run_id == run.run_id
+            yield
+
+        async def wake_resumed(self, run_id):
+            self.wake_calls.append(run_id)
+
+    class FakeSequencer:
+        async def resume_interrupt(self, **_kwargs):
+            return InterruptRunCommit(
+                run=replace(run, status="running"),
+                interrupt=stored_interrupt,
+                event=None,
+                changed=False,
+            )
+
+    coordinator = FakeCoordinator()
+    monkeypatch.setattr(
+        chat_module.RunSequencer,
+        "for_run",
+        lambda **_kwargs: FakeSequencer(),
+    )
+    service = ChatService(
+        settings=Settings(local_user_id="local-user", _env_file=None),
+        session_repository=FakeSessionRepository(),
+        session_service=object(),
+        parent_graph=object(),
+        persistent_run_repository=FakeRunRepository(),
+        runtime_event_repository=object(),
+        run_coordinator=coordinator,
+    )
+
+    result = asyncio.run(
+        service.resume_persistent_run(
+            run_id=run.run_id,
+            interrupt_id=interrupt_id,
+            request_id=request_id,
+            resume_payload={"approved": True},
+        )
+    )
+
+    assert result.run_id == run.run_id
+    assert coordinator.wake_calls == [run.run_id]

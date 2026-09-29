@@ -52,7 +52,7 @@ type GatewayItem = PublicRuntimeEvent | GatewayHeartbeat
 
 
 class RuntimeEventGateway:
-    """按 seq 有限批次合并两类公开事件，并在 Run 终态后关闭。"""
+    """按 seq 有限批次合并两类公开事件，并在终态或中断后关闭。"""
 
     def __init__(
         self,
@@ -115,8 +115,8 @@ class RuntimeEventGateway:
                     continue
 
                 run = await self._run_repository.get(run_id)
-                if run.status in TERMINAL_RUN_STATUSES:
-                    # 首轮合并可能早于终态事务提交；关闭前用同一有界收口
+                if run.status in TERMINAL_RUN_STATUSES or run.status == "interrupted":
+                    # 首轮合并可能早于状态事务提交；关闭前用同一有界收口
                     # 再读两种存储，避免漏发终态前已经可见的较低序号事件。
                     terminal_batch = await self._read_merged_batch(
                         run_id=run_id,

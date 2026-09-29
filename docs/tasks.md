@@ -20,7 +20,7 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2.5
-Current Task: S2.5-06
+Current Task: S2.5-07
 Last Verified Task: S2.5-06
 Last Verified Commit: 5d70a95（S2.5-06 Cancel、非空终态与 Session 删除）
 Blockers: None
@@ -1724,7 +1724,7 @@ stop and wait
 
 ## S2.5-07 Interrupt / Resume
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-02, S2.5-04, S2.5-05
 
@@ -1738,11 +1738,32 @@ stop and wait
 
 ### Acceptance
 
-- [ ] 每个 Run 同时最多一个 pending Interrupt
-- [ ] 同一 Interrupt 只成功 Resume 一次
-- [ ] 不同恢复内容复用请求 ID 返回 409
-- [ ] Resume 不新增 HumanMessage，也不创建新 Run
-- [ ] 页面可在刷新后恢复中断提示
+- [x] 每个 Run 同时最多一个 pending Interrupt
+- [x] 同一 Interrupt 只成功 Resume 一次
+- [x] 不同恢复内容复用请求 ID 返回 409
+- [x] Resume 不新增 HumanMessage，也不创建新 Run
+- [x] 页面可在刷新后恢复中断提示
+
+### Verification Notes
+
+- 2026-09-29：完成 `run_interrupts` 持久化、`interrupt.required` /
+  `interrupt.resumed` 原子状态事件、同 Run Resume、恢复请求幂等、活动中断查询、
+  SSE 中断关闭和 Cancel 关闭 pending Interrupt。
+- 2026-09-29：修复 `REV-S25-07-001`。首次执行只在需要时使用 Run 的
+  `start_checkpoint_id`，中断投影和 `Command(resume=...)` 均使用当前线程的最新
+  Checkpoint；真实 LangGraph 测试覆盖已有 Session 的非空起点和 Regenerate。
+- 2026-09-29：修复 `REV-S25-07-002`。相同 Resume 请求幂等重试也会安全重试
+  本地 Coordinator 唤醒，避免数据库已转为 `running` 后因首次唤醒遗漏而停滞。
+- 2026-09-29：Interrupt/Resume 专项为 `91 passed, 3 skipped`；真实 PostgreSQL
+  专项为 `14 passed`；默认完整套件为 `383 passed, 28 skipped`；启用真实
+  PostgreSQL 与 Redis 的完整套件为 `410 passed, 1 skipped`，唯一跳过项为真实
+  百炼模型 smoke test。
+- 2026-09-29：`uv lock --check`、`uv pip check`、`compileall`、`uv build` 和
+  `git diff --check` 全部通过。
+- 2026-09-29：Reviewer 复审通过，负责人确认验收通过，允许按工程流程提交并同步
+  GitHub、Gitee，两个远程确认一致后进入 S2.5-08。
+- Result：S2.5-07 已通过实现、真实依赖门禁、独立复审和负责人验收，状态更新为
+  `VERIFIED`。
 
 ---
 

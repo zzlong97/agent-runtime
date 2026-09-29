@@ -42,7 +42,7 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-当前后端已实现到 S2.5-06，Run 已从 POST SSE 和进程内 Registry 中解耦：
+当前后端已验收实现到 S2.5-07，Run 已从 POST SSE 和进程内 Registry 中解耦：
 
 ```text
 POST 创建持久 Run → HTTP 202
@@ -56,12 +56,15 @@ PostgreSQL RuntimeEvent + Redis Stream
 GET SSE Gateway → API 客户端（/chat 页面迁移属于 S2.5-10）
              ↓
 异步 Cancel + 非空终态 + Session 完整硬删除
+             ↓
+同 Run Interrupt / Resume
 ```
 
 当前代码已具备 PostgreSQL 持久 Run、RuntimeEvent、Redis Stream 尽力发布、
 HTTP 202 Run API、活动 Run 查询、单进程 Coordinator，以及合并 PostgreSQL 与
 Redis 的独立 GET SSE、异步 Cancel、非空终态消息和 Session 完整硬删除。
-Interrupt/Resume、崩溃恢复及页面迁移仍须按 `docs/tasks.md` 后续任务逐项实现。
+同 Run Interrupt/Resume 已通过验收；崩溃恢复及页面迁移仍须按
+`docs/tasks.md` 后续任务逐项实现。
 
 ---
 
@@ -219,7 +222,7 @@ ChildResult
 
 ### Stage 2.5：持久化 Run 与可恢复 Runtime
 
-当前已实现到 S2.5-06：
+当前已验收实现到 S2.5-07：
 
 - PostgreSQL 持久 Run、幂等请求和数据库活动 Run 唯一约束
 - 类型化 RuntimeEvent、每 Run Sequencer 和公开/内部事件隔离
@@ -228,10 +231,10 @@ ChildResult
 - 独立 GET SSE、PostgreSQL/Redis 事件合并、背压和断点续传
 - 异步 Cancel、协作式/超时强制取消、首终态竞争和非空终态消息
 - Session 删除屏障及 Run、RuntimeEvent、Redis、Checkpoint、Feedback 完整清理
+- 单 pending Interrupt、同 Run Resume、恢复请求幂等和刷新后中断提示恢复
 
 后续计划：
 
-- 同 Run Interrupt / Resume
 - Checkpoint-first 对账与最多三次崩溃恢复
 - 最小 Agent 执行契约
 - `/chat` 页面迁移和开发环境真实 Runtime 演示模式
@@ -260,7 +263,7 @@ ChildResult
 
 ## 5. 运行当前 Runtime
 
-以下说明运行 S2.5-06 后端及其 PostgreSQL / Redis 开发依赖。当前
+以下说明运行 S2.5-07 后端及其 PostgreSQL / Redis 开发依赖。当前
 `/chat` 仍是已验收的 Stage 2 构建产物，尚未迁移到 HTTP 202 Run API；完整
 页面迁移属于 S2.5-10。在该任务完成前，请使用下方 API 验证当前后端。
 
