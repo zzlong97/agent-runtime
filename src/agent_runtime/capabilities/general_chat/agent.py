@@ -1,17 +1,19 @@
 """Stage 1 普通聊天 Child Agent。"""
 
-from collections.abc import Callable
-from typing import Any
-
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.graph.child_result import ChildResult
+from agent_runtime.runtime.agent_contract import (
+    AgentContext,
+    AgentTextEvent,
+    RunContext,
+    TaskInput,
+)
 
 GENERAL_CHAT_SCOPE_PROMPT = """你是 general_chat 的能力边界判断器，只判断当前用户消息是否要求翻译。
 凡是要求把内容从一种语言转换为另一种语言，无论源语言、目标语言或内容长短，都属于翻译请求。
@@ -21,9 +23,6 @@ GENERAL_CHAT_SCOPE_PROMPT = """你是 general_chat 的能力边界判断器，�
 GENERAL_CHAT_SYSTEM_PROMPT = """你是 AgentRuntime 的普通聊天助手。
 你只处理普通聊天、知识问答和简单咨询，不得执行任何翻译。
 回答应简洁、直接、准确；除非用户明确要求展开，否则避免不必要的铺陈。"""
-
-GeneralChatMessageEvent = tuple[BaseMessage, dict[str, Any]]
-
 
 class GeneralChatError(ApplicationError):
     """普通聊天能力输入、边界判断或执行不符合运行约束。"""
@@ -68,12 +67,13 @@ class GeneralChatCapability:
     async def run(
         self,
         *,
-        messages: list[BaseMessage],
-        config: RunnableConfig,
-        emit: Callable[[GeneralChatMessageEvent], None],
+        run_context: RunContext,
+        agent_context: AgentContext,
+        task_input: TaskInput,
     ) -> ChildResult:
         """执行范围守卫；仅对范围内请求生成并转发消息事件。"""
 
+        messages = list(task_input.messages)
         latest_message = next(
             (
                 message
@@ -92,9 +92,10 @@ class GeneralChatCapability:
             content=f"待判断的当前用户消息：\n{latest_message.content}"
         )
         try:
+            await run_context.cancellation.raise_if_requested()
             output = await self._scope_model.ainvoke(
                 [SystemMessage(content=GENERAL_CHAT_SCOPE_PROMPT), scope_request],
-                config,
+                agent_context.config,
             )
             decision = GeneralChatScopeDecision.model_validate(output)
         except ValidationError as error:
@@ -117,10 +118,14 @@ class GeneralChatCapability:
         try:
             async for event in self._agent.astream(
                 {"messages": messages},
-                config,
+                agent_context.config,
                 stream_mode="messages",
             ):
-                emit(event)
+                await run_context.cancellation.raise_if_requested()
+                message, _metadata = event
+                text = str(message.text)
+                if text:
+                    run_context.events.emit(AgentTextEvent(text=text))
         except Exception as error:
             raise GeneralChatError(
                 code="GENERAL_CHAT_CALL_FAILED",

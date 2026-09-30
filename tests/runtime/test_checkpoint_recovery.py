@@ -105,6 +105,8 @@ def test_checkpoint_inspector_finds_exact_latest_checkpoint_for_run() -> None:
         )
         assert recovery_config["metadata"] == {
             "run_id": str(first_run.run_id),
+            "request_id": str(first_run.request_id),
+            "input_message_id": str(first_run.input_message_id),
             "response_message_id": str(first_run.response_message_id),
         }
 

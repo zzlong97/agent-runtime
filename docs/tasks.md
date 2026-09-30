@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2.5
-Current Task: S2.5-08
-Last Verified Task: S2.5-07
-Last Verified Commit: 5b5e5af（S2.5-07 Interrupt / Resume）
+Current Task: S2.5-09
+Last Verified Task: S2.5-08
+Last Verified Commit: e6fe9c2（S2.5-08 Checkpoint 对账与崩溃恢复）
 Blockers: None
 ```
 
@@ -1833,12 +1833,14 @@ stop and wait
   S2.5-09。
 - Result：S2.5-08 已通过实现、真实依赖门禁、独立复审和负责人验收，状态更新为
   `VERIFIED`。
+- 2026-09-30：S2.5-08 已提交为 `e6fe9c2`，GitHub 与 Gitee 的 `master` 均已
+  核对指向该提交，允许开始 S2.5-09。
 
 ---
 
 ## S2.5-09 最小 Agent 执行契约
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-02, S2.5-04
 
@@ -1851,10 +1853,44 @@ stop and wait
 
 ### Acceptance
 
-- [ ] Agent 无法直接操作 SSE、Redis、Session 删除或 Run 终态
-- [ ] Agent 私有状态不进入 Parent 或公开事件
-- [ ] 现有 general_chat / en_to_zh / OUT_OF_SCOPE 行为不回归
-- [ ] 未引入 Manifest、动态 Registry、权限或多 Agent 调度
+- [x] Agent 无法直接操作 SSE、Redis、Session 删除或 Run 终态
+- [x] Agent 私有状态不进入 Parent 或公开事件
+- [x] 现有 general_chat / en_to_zh / OUT_OF_SCOPE 行为不回归
+- [x] 未引入 Manifest、动态 Registry、权限或多 Agent 调度
+
+### Verification Notes
+
+- 2026-09-30：新增最小统一 Agent Contract：`RunContext` 只提供 Run 稳定标识、
+  只读取消探针和类型化事件出口；`AgentContext` 只提供固定 capability 标识与隔离的
+  Child 配置；`TaskInput` 只保存由 Parent 公共消息派生且与原对象深拷贝隔离的执行
+  视图。
+- 2026-09-30：`general_chat` 与 `en_to_zh` 已通过既有 Adapter 接入统一三上下文
+  调用入口。Agent 只发送 `AgentTextEvent`，Adapter 重建允许公开的消息字段后再写回
+  Parent 数据面；`ChildResult` 继续只承载状态与 `OUT_OF_SCOPE` 控制信号。
+- 2026-09-30：持久 Run 的 `request_id`、`input_message_id` 与
+  `response_message_id` 会随 Parent Checkpoint metadata 贯穿普通执行、Regenerate
+  fork 和崩溃恢复；Child 仍只使用 `{session_id}:{capability_id}` 隔离配置。
+- 2026-09-30：Fake Agent 测试覆盖慢速执行观察协作式取消、失败控制结果以及真实
+  LangGraph Checkpoint 的 Interrupt/Resume；契约测试同时证明上下文不含 SSE、
+  Redis、Session 删除和 Run Repository，未定义事件与私有字段无法通过事件出口。
+- 2026-09-30：S2.5-09 相关专项为 `43 passed, 4 skipped`；默认完整套件为
+  `394 passed, 39 skipped`；启用真实 PostgreSQL 与 Redis 的完整套件为
+  `432 passed, 1 skipped`，唯一跳过项为按规范显式启用的真实百炼 smoke test。
+- 2026-09-30：`uv lock --check`、`uv pip check`、`compileall`、`uv build`、
+  `docker compose config --quiet` 与 `git diff --check` 全部通过。
+- 2026-09-30：修复 `REV-S25-09-001`。`TaskInput` 在统一契约边界对每条
+  `BaseMessage` 及其嵌套字段执行深拷贝，不再与 Parent `messages` 共享可变引用；
+  两个 Adapter 的确定性 Fake Agent 测试均验证修改消息正文、普通元数据和嵌套
+  元数据后，Parent Checkpoint 中稳定消息 ID、原始正文及元数据保持不变。
+- 2026-09-30：隔离回归为 `2 passed`，S2.5-09 相关专项为
+  `45 passed, 4 skipped`；修复后默认完整套件为 `396 passed, 39 skipped`；启用
+  真实 PostgreSQL 与 Redis 的完整套件为 `434 passed, 1 skipped`，唯一跳过项
+  仍为真实百炼 smoke test。
+- 2026-09-30：Reviewer 确认 `REV-S25-09-001` 修复通过，负责人确认 S2.5-09
+  验收通过，允许按工程流程提交并同步 GitHub、Gitee，两个远程确认一致后进入
+  S2.5-10。
+- Result：S2.5-09 已通过实现、真实依赖门禁、独立复审和负责人验收，状态更新为
+  `VERIFIED`。
 
 ---
 

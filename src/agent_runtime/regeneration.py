@@ -110,6 +110,8 @@ class CheckpointForker:
         start_checkpoint_id: str,
         response_message_id: UUID,
         run_id: UUID | None = None,
+        request_id: UUID | None = None,
+        input_message_id: UUID | None = None,
     ) -> RunnableConfig:
         """在 Run 落库后从已捕获起点创建 Parent 执行分支。"""
 
@@ -118,6 +120,8 @@ class CheckpointForker:
                 session_id,
                 message_id=response_message_id,
                 run_id=run_id,
+                request_id=request_id,
+                input_message_id=input_message_id,
                 response_message_id=response_message_id,
             )
             if run_id is not None

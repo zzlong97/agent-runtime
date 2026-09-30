@@ -35,7 +35,10 @@ from agent_runtime.feedback import (
     FeedbackService,
     PostgresFeedbackStore,
 )
-from agent_runtime.graph.config import parent_thread_config
+from agent_runtime.graph.config import (
+    parent_thread_config,
+    run_id_from_parent_config,
+)
 from agent_runtime.graph.parent import build_parent_graph
 from agent_runtime.graph.router import StageOneRouter
 from agent_runtime.history import MessageHistoryAdapter, MessagePage
@@ -1614,6 +1617,8 @@ class ChatService:
             run.session_id,
             message_id=run.response_message_id,
             run_id=run.run_id,
+            request_id=run.request_id,
+            input_message_id=run.input_message_id,
             response_message_id=run.response_message_id,
         )
         configurable = config["configurable"]
@@ -1642,6 +1647,8 @@ class ChatService:
                 start_checkpoint_id=run.start_checkpoint_id,
                 response_message_id=run.response_message_id,
                 run_id=run.run_id,
+                request_id=run.request_id,
+                input_message_id=run.input_message_id,
             )
         else:
             try:
@@ -2845,10 +2852,28 @@ async def open_chat_service(
         async def invoke_capability(state, config):
             """只在两个固定 Stage 1 Adapter 之间分发。"""
 
+            configured_run_id = run_id_from_parent_config(config)
+
+            async def cancellation_probe() -> bool:
+                return (
+                    configured_run_id is not None
+                    and await run_coordinator.is_cancel_requested(
+                        configured_run_id
+                    )
+                )
+
             if state["resolved_capability_id"] == "general_chat":
-                return await general_chat.invoke(state, config)
+                return await general_chat.invoke(
+                    state,
+                    config,
+                    cancellation_probe=cancellation_probe,
+                )
             if state["resolved_capability_id"] == "en_to_zh":
-                return await en_to_zh.invoke(state, config)
+                return await en_to_zh.invoke(
+                    state,
+                    config,
+                    cancellation_probe=cancellation_probe,
+                )
             raise ChatRuntimeError(
                 code="CHAT_CAPABILITY_INVALID",
                 message="Parent Graph 选择了非法的 Stage 1 能力",

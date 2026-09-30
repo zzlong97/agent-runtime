@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Iterator
 from uuid import UUID, uuid4
 
+import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -79,7 +80,9 @@ def test_adapters_refresh_child_views_and_keep_parent_authoritative() -> None:
     from agent_runtime.capabilities.en_to_zh.graph import (
         EnglishToChineseCapability,
     )
-    from agent_runtime.capabilities.general_chat.adapter import GeneralChatAdapter
+    from agent_runtime.capabilities.general_chat.adapter import (
+        GeneralChatAdapter,
+    )
     from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
     from agent_runtime.graph.config import child_thread_config, parent_thread_config
     from agent_runtime.graph.parent import build_parent_graph
@@ -231,3 +234,193 @@ def test_adapters_refresh_child_views_and_keep_parent_authoritative() -> None:
         )
         is None
     )
+
+
+def test_adapter_builds_unified_agent_contract_and_sanitizes_public_data() -> None:
+    """Adapter 只向 Agent 传三上下文，并只把类型化文本写回公共数据面。"""
+
+    from agent_runtime.capabilities.general_chat.adapter import GeneralChatAdapter
+    from agent_runtime.graph.child_result import ChildResult
+    from agent_runtime.graph.config import parent_thread_config
+    from agent_runtime.graph.parent import build_parent_graph
+    from agent_runtime.runtime.agent_contract import AgentTextEvent
+
+    session_id = uuid4()
+    run_id = uuid4()
+    request_id = uuid4()
+    input_message_id = uuid4()
+    response_message_id = uuid4()
+    captured = {}
+
+    class FakeContractAgent:
+        async def run(self, *, run_context, agent_context, task_input):
+            captured["run_context"] = run_context
+            captured["agent_context"] = agent_context
+            captured["task_input"] = task_input
+            assert await run_context.cancellation.is_requested() is True
+            run_context.events.emit(AgentTextEvent(text="安全公开文本"))
+            return ChildResult(status="completed", control_signal=None)
+
+    adapter = GeneralChatAdapter(capability=FakeContractAgent())
+
+    async def route(_state, _config):
+        return {"resolved_capability_id": "general_chat"}
+
+    async def invoke_capability(state, config):
+        async def cancellation_probe() -> bool:
+            return True
+
+        return await adapter.invoke(
+            state,
+            config,
+            cancellation_probe=cancellation_probe,
+        )
+
+    parent = build_parent_graph(
+        route=route,
+        invoke_capability=invoke_capability,
+        checkpointer=InMemorySaver(),
+    )
+    config = parent_thread_config(
+        session_id,
+        message_id=response_message_id,
+        run_id=run_id,
+        request_id=request_id,
+        input_message_id=input_message_id,
+        response_message_id=response_message_id,
+    )
+
+    async def exercise():
+        streamed = []
+        async for event in parent.astream(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="契约测试",
+                        id=str(input_message_id),
+                    )
+                ],
+                "resolved_capability_id": None,
+                "rejected_capability_ids": [],
+            },
+            config,
+            stream_mode="custom",
+        ):
+            streamed.append(event)
+        return streamed, await parent.aget_state(config)
+
+    streamed, parent_state = asyncio.run(exercise())
+    run_context = captured["run_context"]
+    agent_context = captured["agent_context"]
+    task_input = captured["task_input"]
+    final_message = parent_state.values["messages"][-1]
+
+    assert run_context.run_id == run_id
+    assert run_context.request_id == request_id
+    assert run_context.input_message_id == input_message_id
+    assert run_context.response_message_id == response_message_id
+    assert agent_context.session_id == session_id
+    assert agent_context.capability_id == "general_chat"
+    assert agent_context.thread_id == f"{session_id}:general_chat"
+    assert task_input.messages[-1].content == "契约测试"
+    assert sum(
+        isinstance(message, HumanMessage) for message in task_input.messages
+    ) == 1
+    assert [str(event.text) for event in streamed] == ["安全公开文本"]
+    assert final_message.content == "安全公开文本"
+    assert final_message.additional_kwargs == {
+        "runtime_status": "completed",
+        "capability_id": "general_chat",
+    }
+
+
+@pytest.mark.parametrize("capability_id", ["general_chat", "en_to_zh"])
+def test_agent_input_mutation_cannot_change_parent_history(
+    capability_id: str,
+) -> None:
+    """Agent 修改输入消息及嵌套元数据时不得污染 Parent 权威历史。"""
+
+    from agent_runtime.capabilities.en_to_zh.adapter import (
+        EnglishToChineseAdapter,
+    )
+    from agent_runtime.capabilities.general_chat.adapter import GeneralChatAdapter
+    from agent_runtime.graph.child_result import ChildResult
+    from agent_runtime.graph.config import parent_thread_config
+    from agent_runtime.graph.parent import build_parent_graph
+    from agent_runtime.runtime.agent_contract import AgentTextEvent
+
+    session_id = uuid4()
+    input_message_id = uuid4()
+    response_message_id = uuid4()
+    parent_saver = InMemorySaver()
+
+    class MutatingFakeAgent:
+        async def run(self, *, run_context, agent_context, task_input):
+            current_message = next(
+                message
+                for message in reversed(task_input.messages)
+                if isinstance(message, HumanMessage)
+            )
+            current_message.content = "MUTATED_BY_AGENT"
+            current_message.additional_kwargs["private_agent_state"] = "LEAKED"
+            current_message.additional_kwargs["nested"]["value"] = "MUTATED"
+            run_context.events.emit(AgentTextEvent(text="安全回复"))
+            return ChildResult(status="completed", control_signal=None)
+
+    adapter = (
+        GeneralChatAdapter(capability=MutatingFakeAgent())
+        if capability_id == "general_chat"
+        else EnglishToChineseAdapter(capability=MutatingFakeAgent())
+    )
+
+    async def route(_state, _config):
+        return {"resolved_capability_id": capability_id}
+
+    async def invoke_capability(state, config):
+        return await adapter.invoke(state, config)
+
+    parent = build_parent_graph(
+        route=route,
+        invoke_capability=invoke_capability,
+        checkpointer=parent_saver,
+    )
+    config = parent_thread_config(
+        session_id,
+        message_id=response_message_id,
+    )
+
+    async def exercise():
+        async for _event in parent.astream(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="原始用户消息",
+                        id=str(input_message_id),
+                        additional_kwargs={
+                            "public_marker": "original",
+                            "nested": {"value": "original"},
+                        },
+                    )
+                ],
+                "resolved_capability_id": None,
+                "rejected_capability_ids": [],
+            },
+            config,
+            stream_mode="custom",
+        ):
+            pass
+        return await parent.aget_state(config)
+
+    parent_state = asyncio.run(exercise())
+    parent_human = next(
+        message
+        for message in parent_state.values["messages"]
+        if isinstance(message, HumanMessage)
+    )
+
+    assert parent_human.id == str(input_message_id)
+    assert parent_human.content == "原始用户消息"
+    assert parent_human.additional_kwargs == {
+        "public_marker": "original",
+        "nested": {"value": "original"},
+    }

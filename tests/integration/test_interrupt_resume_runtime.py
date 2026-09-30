@@ -132,6 +132,8 @@ def test_regenerate_interrupt_resumes_latest_fork_checkpoint() -> None:
         initial_turn = await service._turn_from_run(run)
         assert initial_turn.config["metadata"] == {
             "run_id": str(run.run_id),
+            "request_id": str(run.request_id),
+            "input_message_id": str(run.input_message_id),
             "response_message_id": str(regenerate_response_id),
         }
         assert [

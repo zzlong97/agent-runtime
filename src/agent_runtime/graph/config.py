@@ -16,6 +16,8 @@ def parent_thread_config(
     *,
     message_id: UUID | None = None,
     run_id: UUID | None = None,
+    request_id: UUID | None = None,
+    input_message_id: UUID | None = None,
     response_message_id: UUID | None = None,
 ) -> RunnableConfig:
     """构造 Parent thread_id，并可关联持久 Run 的 Checkpoint metadata。"""
@@ -27,9 +29,34 @@ def parent_thread_config(
     if run_id is not None and response_message_id is not None:
         config["metadata"] = {
             "run_id": str(run_id),
+            **(
+                {"request_id": str(request_id)}
+                if request_id is not None
+                else {}
+            ),
+            **(
+                {"input_message_id": str(input_message_id)}
+                if input_message_id is not None
+                else {}
+            ),
             "response_message_id": str(response_message_id),
         }
     return config
+
+
+def run_id_from_parent_config(config: RunnableConfig) -> UUID | None:
+    """读取持久 Run UUID；Stage 2 兼容调用没有该 metadata 时返回空。"""
+
+    raw_run_id = config.get("metadata", {}).get("run_id")
+    if raw_run_id is None:
+        return None
+    try:
+        return UUID(str(raw_run_id))
+    except (TypeError, ValueError) as error:
+        raise ThreadConfigError(
+            code="RUN_ID_INVALID",
+            message="Parent 调用配置中的 Run 标识不是有效 UUID",
+        ) from error
 
 
 def child_thread_config(

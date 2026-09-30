@@ -107,6 +107,8 @@ class RunCheckpointInspector:
             run.session_id,
             message_id=run.response_message_id,
             run_id=run.run_id,
+            request_id=run.request_id,
+            input_message_id=run.input_message_id,
             response_message_id=run.response_message_id,
         )
         config["configurable"] = {

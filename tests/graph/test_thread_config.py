@@ -45,10 +45,15 @@ def test_parent_thread_config_carries_one_stable_response_message_id() -> None:
 def test_parent_thread_config_carries_persistent_run_checkpoint_metadata() -> None:
     """持久 Run 的每个 Parent Checkpoint 必须可按 Run 和稳定回复标识精确筛选。"""
 
-    from agent_runtime.graph.config import parent_thread_config
+    from agent_runtime.graph.config import (
+        parent_thread_config,
+        run_id_from_parent_config,
+    )
 
     session_id = UUID("10000000-0000-0000-0000-000000000801")
     run_id = UUID("20000000-0000-0000-0000-000000000801")
+    request_id = UUID("21000000-0000-0000-0000-000000000801")
+    input_message_id = UUID("22000000-0000-0000-0000-000000000801")
     response_message_id = UUID(
         "30000000-0000-0000-0000-000000000801"
     )
@@ -57,6 +62,8 @@ def test_parent_thread_config_carries_persistent_run_checkpoint_metadata() -> No
         session_id,
         message_id=response_message_id,
         run_id=run_id,
+        request_id=request_id,
+        input_message_id=input_message_id,
         response_message_id=response_message_id,
     )
 
@@ -67,6 +74,10 @@ def test_parent_thread_config_carries_persistent_run_checkpoint_metadata() -> No
         },
         "metadata": {
             "run_id": str(run_id),
+            "request_id": str(request_id),
+            "input_message_id": str(input_message_id),
             "response_message_id": str(response_message_id),
         },
     }
+    assert run_id_from_parent_config(config) == run_id
+    assert run_id_from_parent_config(parent_thread_config(session_id)) is None

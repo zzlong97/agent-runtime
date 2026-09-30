@@ -1,8 +1,5 @@
 """Stage 1 英文到中文翻译 Child Graph。"""
 
-from collections.abc import Callable
-from typing import Any
-
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -14,6 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from agent_runtime.capabilities.en_to_zh.state import EnglishToChineseState
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.graph.child_result import ChildResult
+from agent_runtime.runtime.agent_contract import (
+    AgentContext,
+    AgentTextEvent,
+    RunContext,
+    TaskInput,
+)
 
 EN_TO_ZH_SCOPE_PROMPT = """你是 en_to_zh 的能力边界判断器，只判断当前用户消息能否由英文到中文翻译能力处理。
 纯英文内容视为待翻译原文；明确要求把英文内容翻译成中文也属于能力范围。
@@ -24,9 +27,6 @@ EN_TO_ZH_SYSTEM_PROMPT = """你是 AgentRuntime 的英文到中文翻译助手�
 只翻译当前 HumanMessage 中的英文原文，输出忠实、完整、自然的中文译文。
 历史消息仅用于理解代词、语境和术语，不得翻译或复述历史消息。
 不得省略、概括、缩写、解释或添加原文没有的信息；最终只输出当前原文的中文译文。"""
-
-EnglishToChineseMessageEvent = tuple[BaseMessage, dict[str, Any]]
-
 
 class EnglishToChineseError(ApplicationError):
     """英译汉能力输入、边界判断或执行不符合运行约束。"""
@@ -99,12 +99,13 @@ class EnglishToChineseCapability:
     async def run(
         self,
         *,
-        messages: list[BaseMessage],
-        config: RunnableConfig,
-        emit: Callable[[EnglishToChineseMessageEvent], None],
+        run_context: RunContext,
+        agent_context: AgentContext,
+        task_input: TaskInput,
     ) -> ChildResult:
         """先执行范围守卫，再转发翻译图的消息事件。"""
 
+        messages = list(task_input.messages)
         latest_message = next(
             (
                 message
@@ -123,9 +124,10 @@ class EnglishToChineseCapability:
             content=f"待判断的当前用户消息：\n{latest_message.content}"
         )
         try:
+            await run_context.cancellation.raise_if_requested()
             output = await self._scope_model.ainvoke(
                 [SystemMessage(content=EN_TO_ZH_SCOPE_PROMPT), scope_request],
-                config,
+                agent_context.config,
             )
             decision = EnglishToChineseScopeDecision.model_validate(output)
         except ValidationError as error:
@@ -151,10 +153,14 @@ class EnglishToChineseCapability:
                     "messages": messages,
                     "draft_translation": "",
                 },
-                config,
+                agent_context.config,
                 stream_mode="messages",
             ):
-                emit(event)
+                await run_context.cancellation.raise_if_requested()
+                message, _metadata = event
+                text = str(message.text)
+                if text:
+                    run_context.events.emit(AgentTextEvent(text=text))
         except Exception as error:
             raise EnglishToChineseError(
                 code="EN_TO_ZH_CALL_FAILED",

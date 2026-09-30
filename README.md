@@ -42,13 +42,14 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-当前后端已验收到 S2.5-08。Run 已从
-POST SSE 和进程内 Registry 中解耦：
+当前后端已验收到 S2.5-09。Run 已从 POST SSE 和进程内 Registry 中解耦：
 
 ```text
 POST 创建持久 Run → HTTP 202
              ↓
 Single-process Coordinator / Executor
+             ↓
+RunContext + AgentContext + TaskInput + 类型化事件出口
              ↓
 Parent Graph → PostgreSQL Checkpoint
              ↓
@@ -68,7 +69,9 @@ HTTP 202 Run API、活动 Run 查询、单进程 Coordinator，以及合并 Post
 Redis 的独立 GET SSE、异步 Cancel、非空终态消息和 Session 完整硬删除。
 同 Run Interrupt/Resume、Checkpoint-first 对账、精确 Run Checkpoint 恢复、
 stopped 取消补投影和最多三次恢复接管均已通过验收。页面迁移仍须按
-`docs/tasks.md` 后续任务逐项实现。
+`docs/tasks.md` 后续任务逐项实现。现有两个 Capability 已接入统一 Agent 执行
+边界；Agent 只获得稳定标识、Child 执行配置、派生任务输入、只读取消探针和
+类型化文本事件出口，不直接接触 SSE、Redis、Session 生命周期或顶层 Run 终态。
 
 ---
 
@@ -226,7 +229,7 @@ ChildResult
 
 ### Stage 2.5：持久化 Run 与可恢复 Runtime
 
-当前已验收到 S2.5-08：
+当前已验收到 S2.5-09：
 
 - PostgreSQL 持久 Run、幂等请求和数据库活动 Run 唯一约束
 - 类型化 RuntimeEvent、每 Run Sequencer 和公开/内部事件隔离
@@ -240,10 +243,12 @@ ChildResult
 - stopped Checkpoint 的幂等取消补投影及 queued/interrupted 崩溃窗口对账
 - 精确中间 Checkpoint 续跑、首 Checkpoint 前输入重放和最多三次恢复接管
 - 未声明副作用幂等保障的能力拒绝自动恢复
+- `RunContext`、`AgentContext`、`TaskInput` 与类型化 Agent 文本事件出口
+- `general_chat`、`en_to_zh` 统一调用边界及只读协作式取消探针
+- Fake Agent 慢速取消、失败控制结果和 LangGraph Interrupt/Resume 契约验证
 
 后续计划：
 
-- 最小 Agent 执行契约
 - `/chat` 页面迁移和开发环境真实 Runtime 演示模式
 
 ### Future：候选方向，不构成阶段承诺
@@ -270,7 +275,7 @@ ChildResult
 
 ## 5. 运行当前 Runtime
 
-以下说明运行已完成 S2.5-08 编码的后端及其 PostgreSQL / Redis 开发依赖。当前
+以下说明运行已完成 S2.5-09 编码的后端及其 PostgreSQL / Redis 开发依赖。当前
 `/chat` 仍是已验收的 Stage 2 构建产物，尚未迁移到 HTTP 202 Run API；完整
 页面迁移属于 S2.5-10。在该任务完成前，请使用下方 API 验证当前后端。
 

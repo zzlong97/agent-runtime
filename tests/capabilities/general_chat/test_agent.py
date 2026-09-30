@@ -1,6 +1,6 @@
 import asyncio
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -9,6 +9,14 @@ from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import Field
 
 from agent_runtime.graph.config import child_thread_config
+from agent_runtime.runtime.agent_contract import (
+    AgentCancellation,
+    AgentContext,
+    AgentEventOutlet,
+    AgentTextEvent,
+    RunContext,
+    TaskInput,
+)
 
 
 class FakeScopeChatModel(BaseChatModel):
@@ -76,12 +84,40 @@ class FakeResponseChatModel(BaseChatModel):
         )
 
 
-def _event_text(events: list[tuple[BaseMessage, dict[str, Any]]]) -> str:
-    return "".join(
-        str(message.content)
-        for message, _metadata in events
-        if isinstance(message, AIMessage) and message.content
-    )
+async def _never_cancelled() -> bool:
+    return False
+
+
+def _contract_call(
+    *,
+    messages: list[BaseMessage],
+    config: dict[str, Any],
+    events: list[AgentTextEvent],
+) -> dict[str, object]:
+    """为能力单测构造不含基础设施对象的统一 Agent Contract。"""
+
+    session_id = UUID(str(config["configurable"]["thread_id"]).split(":")[0])
+    return {
+        "run_context": RunContext(
+            run_id=uuid4(),
+            request_id=uuid4(),
+            input_message_id=uuid4(),
+            response_message_id=uuid4(),
+            cancellation=AgentCancellation(_never_cancelled),
+            events=AgentEventOutlet(events.append),
+        ),
+        "agent_context": AgentContext(
+            session_id=session_id,
+            capability_id="general_chat",
+            thread_id=str(config["configurable"]["thread_id"]),
+            config=config,
+        ),
+        "task_input": TaskInput(messages=tuple(messages)),
+    }
+
+
+def _event_text(events: list[AgentTextEvent]) -> str:
+    return "".join(event.text for event in events)
 
 
 def test_general_chat_scope_schema_describes_translation_boundary() -> None:
@@ -116,13 +152,16 @@ def test_general_chat_answers_ordinary_chat_with_system_prompt() -> None:
         response_model=response_model,
         checkpointer=InMemorySaver(),
     )
-    events: list[tuple[BaseMessage, dict[str, Any]]] = []
+    events: list[AgentTextEvent] = []
+    config = child_thread_config(uuid4(), "general_chat")
 
     result = asyncio.run(
         capability.run(
-            messages=[HumanMessage(content="请简要介绍 LangGraph")],
-            config=child_thread_config(uuid4(), "general_chat"),
-            emit=events.append,
+            **_contract_call(
+                messages=[HumanMessage(content="请简要介绍 LangGraph")],
+                config=config,
+                events=events,
+            )
         )
     )
 
@@ -153,19 +192,24 @@ def test_general_chat_preserves_multi_turn_child_history() -> None:
         checkpointer=saver,
     )
     config = child_thread_config(uuid4(), "general_chat")
+    events: list[AgentTextEvent] = []
 
     first_result = asyncio.run(
         capability.run(
-            messages=[HumanMessage(content="我喜欢蓝色")],
-            config=config,
-            emit=lambda _event: None,
+            **_contract_call(
+                messages=[HumanMessage(content="我喜欢蓝色")],
+                config=config,
+                events=events,
+            )
         )
     )
     second_result = asyncio.run(
         capability.run(
-            messages=[HumanMessage(content="我刚才说喜欢什么颜色？")],
-            config=config,
-            emit=lambda _event: None,
+            **_contract_call(
+                messages=[HumanMessage(content="我刚才说喜欢什么颜色？")],
+                config=config,
+                events=events,
+            )
         )
     )
 
@@ -195,11 +239,14 @@ def test_translation_rejection_emits_nothing_and_does_not_advance_history() -> N
         checkpointer=saver,
     )
     config = child_thread_config(uuid4(), "general_chat")
+    accepted_events: list[AgentTextEvent] = []
     asyncio.run(
         capability.run(
-            messages=[HumanMessage(content="你好")],
-            config=config,
-            emit=lambda _event: None,
+            **_contract_call(
+                messages=[HumanMessage(content="你好")],
+                config=config,
+                events=accepted_events,
+            )
         )
     )
     checkpoint_before = saver.get_tuple(config)
@@ -207,13 +254,15 @@ def test_translation_rejection_emits_nothing_and_does_not_advance_history() -> N
     history_before = list(
         checkpoint_before.checkpoint["channel_values"]["messages"]
     )
-    rejected_events: list[tuple[BaseMessage, dict[str, Any]]] = []
+    rejected_events: list[AgentTextEvent] = []
 
     result = asyncio.run(
         capability.run(
-            messages=[HumanMessage(content="请把 hello 翻译成中文")],
-            config=config,
-            emit=rejected_events.append,
+            **_contract_call(
+                messages=[HumanMessage(content="请把 hello 翻译成中文")],
+                config=config,
+                events=rejected_events,
+            )
         )
     )
 
