@@ -93,6 +93,7 @@ from agent_runtime.runtime.repository import (
     RunNotFoundError,
     RunRequestConflictError,
 )
+from agent_runtime.runtime.demo import build_runtime_demo_graph
 from agent_runtime.runtime.sequencer import RunSequencer
 from agent_runtime.runtime.coordinator import RunCoordinator
 from agent_runtime.session_deletion import (
@@ -2830,60 +2831,69 @@ async def open_chat_service(
         cancel_grace_seconds=settings.run_cancel_grace_seconds,
     )
     parent_state_store = PostgresParentStateStore(settings)
-    runtime_model = model or build_chat_model(settings)
-
     async with open_stage_one_checkpointers(settings) as checkpointers:
-        router = StageOneRouter(runtime_model)
-        general_chat = GeneralChatAdapter(
-            capability=GeneralChatCapability(
-                scope_model=runtime_model,
-                response_model=runtime_model,
-                checkpointer=checkpointers.general_chat,
+        if settings.runtime_demo_mode:
+            parent_graph = build_runtime_demo_graph(
+                checkpointer=checkpointers.parent
             )
-        )
-        en_to_zh = EnglishToChineseAdapter(
-            capability=EnglishToChineseCapability(
-                scope_model=runtime_model,
-                translation_model=runtime_model,
-                checkpointer=checkpointers.en_to_zh,
+            log_business_event(
+                logger,
+                "Runtime开发演示模式已启用",
+                runtime_demo_mode=True,
             )
-        )
+        else:
+            runtime_model = model or build_chat_model(settings)
+            router = StageOneRouter(runtime_model)
+            general_chat = GeneralChatAdapter(
+                capability=GeneralChatCapability(
+                    scope_model=runtime_model,
+                    response_model=runtime_model,
+                    checkpointer=checkpointers.general_chat,
+                )
+            )
+            en_to_zh = EnglishToChineseAdapter(
+                capability=EnglishToChineseCapability(
+                    scope_model=runtime_model,
+                    translation_model=runtime_model,
+                    checkpointer=checkpointers.en_to_zh,
+                )
+            )
 
-        async def invoke_capability(state, config):
-            """只在两个固定 Stage 1 Adapter 之间分发。"""
+            async def invoke_capability(state, config):
+                """只在两个固定 Stage 1 Adapter 之间分发。"""
 
-            configured_run_id = run_id_from_parent_config(config)
+                configured_run_id = run_id_from_parent_config(config)
 
-            async def cancellation_probe() -> bool:
-                return (
-                    configured_run_id is not None
-                    and await run_coordinator.is_cancel_requested(
-                        configured_run_id
+                async def cancellation_probe() -> bool:
+                    return (
+                        configured_run_id is not None
+                        and await run_coordinator.is_cancel_requested(
+                            configured_run_id
+                        )
                     )
+
+                if state["resolved_capability_id"] == "general_chat":
+                    return await general_chat.invoke(
+                        state,
+                        config,
+                        cancellation_probe=cancellation_probe,
+                    )
+                if state["resolved_capability_id"] == "en_to_zh":
+                    return await en_to_zh.invoke(
+                        state,
+                        config,
+                        cancellation_probe=cancellation_probe,
+                    )
+                raise ChatRuntimeError(
+                    code="CHAT_CAPABILITY_INVALID",
+                    message="Parent Graph 选择了非法的 Stage 1 能力",
                 )
 
-            if state["resolved_capability_id"] == "general_chat":
-                return await general_chat.invoke(
-                    state,
-                    config,
-                    cancellation_probe=cancellation_probe,
-                )
-            if state["resolved_capability_id"] == "en_to_zh":
-                return await en_to_zh.invoke(
-                    state,
-                    config,
-                    cancellation_probe=cancellation_probe,
-                )
-            raise ChatRuntimeError(
-                code="CHAT_CAPABILITY_INVALID",
-                message="Parent Graph 选择了非法的 Stage 1 能力",
+            parent_graph = build_parent_graph(
+                route=router.route,
+                invoke_capability=invoke_capability,
+                checkpointer=checkpointers.parent,
             )
-
-        parent_graph = build_parent_graph(
-            route=router.route,
-            invoke_capability=invoke_capability,
-            checkpointer=checkpointers.parent,
-        )
         session_service = SessionService(
             settings=settings,
             session_repository=session_repository,

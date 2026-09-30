@@ -1,8 +1,4 @@
-import {
-  DeleteOutlined,
-  EditOutlined,
-  StopOutlined,
-} from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, StopOutlined } from '@ant-design/icons';
 import { Sender } from '@ant-design/x';
 import { Button, Space, Spin, Typography } from 'antd';
 
@@ -17,7 +13,8 @@ export function ChatWorkspace({
   nextBefore,
   loadingOlder,
   senderValue,
-  running,
+  active,
+  submitting,
   run,
   latestRegeneratableId,
   onRename,
@@ -25,7 +22,8 @@ export function ChatWorkspace({
   onLoadOlder,
   onSenderChange,
   onSend,
-  onStop,
+  onCancel,
+  onResume,
   onRegenerate,
   onFeedback,
 }) {
@@ -41,16 +39,16 @@ export function ChatWorkspace({
         <Space>
           <Button
             icon={<StopOutlined />}
-            aria-label="停止当前回答"
-            title="停止当前回答"
-            disabled={!running || !activeSessionId}
-            onClick={onStop}
+            aria-label="取消当前运行"
+            title="取消当前运行"
+            disabled={!active || !run.runId || run.status === 'cancel_requested'}
+            onClick={onCancel}
           />
           <Button
             icon={<EditOutlined />}
             aria-label="重命名当前会话"
             title="重命名当前会话"
-            disabled={!activeSessionId || running}
+            disabled={!activeSessionId || active}
             onClick={onRename}
           />
           <Button
@@ -58,13 +56,13 @@ export function ChatWorkspace({
             icon={<DeleteOutlined />}
             aria-label="删除当前会话"
             title="删除当前会话"
-            disabled={!activeSessionId || running}
+            disabled={!activeSessionId || active}
             onClick={onDelete}
           />
         </Space>
       </header>
 
-      <RunStatusPanel run={run} />
+      <RunStatusPanel run={run} onResume={onResume} />
 
       {nextBefore ? (
         <div className="older-messages-control">
@@ -76,13 +74,11 @@ export function ChatWorkspace({
 
       <div className="conversation-body">
         {messagesLoading ? (
-          <div className="centered-state">
-            <Spin description="正在读取活动分支" />
-          </div>
+          <div className="centered-state"><Spin description="正在读取活动分支" /></div>
         ) : (
           <MessageList
             messages={messages}
-            running={running}
+            running={active}
             latestRegeneratableId={latestRegeneratableId}
             onRegenerate={onRegenerate}
             onFeedback={onFeedback}
@@ -95,10 +91,14 @@ export function ChatWorkspace({
           value={senderValue}
           onChange={onSenderChange}
           onSubmit={onSend}
-          onCancel={onStop}
-          loading={running}
-          disabled={messagesLoading}
-          placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+          onCancel={onCancel}
+          loading={active}
+          disabled={messagesLoading || submitting || run.status === 'interrupted'}
+          placeholder={
+            submitting
+              ? '正在提交运行…'
+              : '输入消息，Enter 发送，Shift+Enter 换行'
+          }
           submitType="enter"
           autoSize={{ minRows: 1, maxRows: 6 }}
         />

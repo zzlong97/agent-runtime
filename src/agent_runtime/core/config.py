@@ -82,6 +82,14 @@ class Settings(BaseSettings):
             "仅强制取消当前进程内对应任务，不承诺回滚已经发生的外部副作用。"
         ),
     )
+    runtime_demo_mode: bool = Field(
+        default=False,
+        description=(
+            "是否启用仅供开发环境使用的确定性 Runtime 演示图；默认关闭，启用后"
+            "请求绕过正式 Capability Router，但仍经过真实 Run、Event、Redis、SSE、"
+            "Interrupt 与 Resume 链路。"
+        ),
+    )
 
     @field_validator("database_url")
     @classmethod

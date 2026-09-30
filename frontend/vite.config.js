@@ -28,5 +28,7 @@ export default defineConfig(({ mode }) => ({
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
     css: true,
+    fileParallelism: false,
+    maxWorkers: 1,
   },
 }));

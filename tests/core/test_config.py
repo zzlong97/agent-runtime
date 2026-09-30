@@ -21,6 +21,7 @@ def test_settings_read_runtime_values_from_environment(monkeypatch: pytest.Monke
     monkeypatch.setenv("REDIS_SOCKET_TIMEOUT_SECONDS", "0.75")
     monkeypatch.setenv("RUN_COORDINATOR_SCAN_INTERVAL_SECONDS", "0.25")
     monkeypatch.setenv("RUN_CANCEL_GRACE_SECONDS", "1.5")
+    monkeypatch.setenv("RUNTIME_DEMO_MODE", "true")
 
     from agent_runtime.core.config import Settings
 
@@ -43,6 +44,7 @@ def test_settings_read_runtime_values_from_environment(monkeypatch: pytest.Monke
     assert settings.redis_socket_timeout_seconds == 0.75
     assert settings.run_coordinator_scan_interval_seconds == 0.25
     assert settings.run_cancel_grace_seconds == 1.5
+    assert settings.runtime_demo_mode is True
 
 
 def test_settings_do_not_require_a_real_model_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,8 +70,9 @@ def test_settings_ignore_blank_values_in_copied_env_example(tmp_path) -> None:
         "REDIS_URL=\n"
         "REDIS_STREAM_TTL_SECONDS=\n"
         "REDIS_SOCKET_TIMEOUT_SECONDS=\n"
-        "RUN_COORDINATOR_SCAN_INTERVAL_SECONDS=\n"
-        "RUN_CANCEL_GRACE_SECONDS=\n",
+            "RUN_COORDINATOR_SCAN_INTERVAL_SECONDS=\n"
+            "RUN_CANCEL_GRACE_SECONDS=\n"
+            "RUNTIME_DEMO_MODE=\n",
         encoding="utf-8",
     )
 
@@ -88,6 +91,7 @@ def test_settings_ignore_blank_values_in_copied_env_example(tmp_path) -> None:
     assert settings.redis_socket_timeout_seconds == 0.5
     assert settings.run_coordinator_scan_interval_seconds == 1.0
     assert settings.run_cancel_grace_seconds == 2.0
+    assert settings.runtime_demo_mode is False
 
 
 def test_settings_reject_non_postgresql_database_urls() -> None:

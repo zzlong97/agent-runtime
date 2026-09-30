@@ -102,6 +102,14 @@ class RunSummaryResponse(BaseModel):
             "五个活动状态和三个终态。"
         )
     )
+    recovery_attempts: int = Field(
+        ge=0,
+        le=3,
+        description=(
+            "PostgreSQL 已记录的崩溃恢复接管次数；初次执行为 0，Stage 2.5 "
+            "最多允许 3 次，用于页面展示公开恢复进度。"
+        ),
+    )
 
 
 class ActiveRunResponse(RunSummaryResponse):

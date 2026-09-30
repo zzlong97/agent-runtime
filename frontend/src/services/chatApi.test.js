@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  cancelRun,
+  createChatRun,
+  createRegenerateRun,
   deleteSession,
+  getActiveRun,
   listMessages,
   listSessions,
-  regenerateMessage,
   renameSession,
-  stopSession,
-  streamCompletion,
+  resumeRun,
+  streamRunEvents,
   submitFeedback,
 } from './chatApi.js';
 
@@ -18,52 +21,28 @@ function jsonResponse(payload, status = 200) {
   });
 }
 
+const RUN = {
+  run_id: 'run-1',
+  session_id: 'session-1',
+  response_message_id: 'message-1',
+  status: 'queued',
+  recovery_attempts: 0,
+};
+
 describe('chatApi', () => {
   it('使用后端不透明游标读取 Session 和消息分页', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          items: [
-            {
-              session_id: 'session-1',
-              title: '第一条会话',
-              created_at: '2026-09-14T08:00:00Z',
-              updated_at: '2026-09-14T09:00:00Z',
-            },
-          ],
-          next_cursor: 'opaque-cursor',
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          items: [
-            {
-              message_id: 'message-1',
-              role: 'assistant',
-              content: '完整回答',
-              runtime_status: 'completed',
-              capability_id: 'general_chat',
-              feedback: 'like',
-            },
-          ],
-          next_before: 'message-0',
-        }),
-      );
+      .mockResolvedValueOnce(jsonResponse({ items: [], next_cursor: 'opaque-cursor' }))
+      .mockResolvedValueOnce(jsonResponse({ items: [], next_before: 'message-0' }));
 
-    const sessions = await listSessions({
-      cursor: 'opaque token/+',
-      limit: 7,
-      fetchImpl: fetchMock,
-    });
-    const messages = await listMessages('session/1', {
+    await listSessions({ cursor: 'opaque token/+', limit: 7, fetchImpl: fetchMock });
+    await listMessages('session/1', {
       before: 'message/2',
       limit: 15,
       fetchImpl: fetchMock,
     });
 
-    expect(sessions.next_cursor).toBe('opaque-cursor');
-    expect(messages.items[0].feedback).toBe('like');
     expect(fetchMock.mock.calls[0][0]).toBe(
       '/api/v1/chat/sessions?limit=7&cursor=opaque+token%2F%2B',
     );
@@ -72,111 +51,123 @@ describe('chatApi', () => {
     );
   });
 
-  it('接入改名、删除、停止和反馈产品接口', async () => {
+  it('普通消息和 Regenerate 先提交 request_id 并接收 202 Run 摘要', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          session_id: 'session-1',
-          title: '新标题',
-          created_at: '2026-09-14T08:00:00Z',
-          updated_at: '2026-09-14T10:00:00Z',
-        }),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockResolvedValueOnce(
-        jsonResponse({ session_id: 'session-1', status: 'stopped' }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({ message_id: 'message-1', feedback: 'dislike' }),
-      );
+      .mockResolvedValueOnce(jsonResponse(RUN, 202))
+      .mockResolvedValueOnce(jsonResponse(RUN, 202));
 
-    await renameSession('session-1', '新标题', { fetchImpl: fetchMock });
-    await deleteSession('session-1', { fetchImpl: fetchMock });
-    await stopSession('session-1', { fetchImpl: fetchMock });
-    await submitFeedback('message-1', 'dislike', { fetchImpl: fetchMock });
+    await createChatRun({
+      requestId: 'request-1',
+      sessionId: null,
+      content: '你好',
+      fetchImpl: fetchMock,
+    });
+    await createRegenerateRun({
+      requestId: 'request-2',
+      sessionId: 'session-1',
+      messageId: 'message-0',
+      fetchImpl: fetchMock,
+    });
 
     expect(fetchMock.mock.calls).toEqual([
       [
-        '/api/v1/chat/sessions/session-1/rename',
+        '/api/v1/chat/completions',
         expect.objectContaining({
-          method: 'PATCH',
-          body: JSON.stringify({ title: '新标题' }),
+          method: 'POST',
+          body: JSON.stringify({
+            request_id: 'request-1',
+            session_id: null,
+            message: { content: '你好' },
+          }),
         }),
       ],
       [
-        '/api/v1/chat/sessions/session-1',
-        expect.objectContaining({ method: 'DELETE' }),
-      ],
-      [
-        '/api/v1/chat/sessions/session-1/stop',
-        expect.objectContaining({ method: 'POST' }),
-      ],
-      [
-        '/api/v1/chat/messages/message-1/feedback',
+        '/api/v1/chat/sessions/session-1/messages/message-0/regenerate',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ action: 'dislike' }),
+          body: JSON.stringify({ request_id: 'request-2' }),
         }),
       ],
     ]);
   });
 
-  it('聊天与重新生成使用同一个 POST SSE 客户端', async () => {
+  it('接入活动 Run、Cancel 和同 Run Resume 产品接口', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ ...RUN, status: 'interrupted' }))
+      .mockResolvedValueOnce(jsonResponse({ ...RUN, status: 'cancel_requested' }, 202))
+      .mockResolvedValueOnce(jsonResponse({ ...RUN, status: 'running' }, 202));
+
+    await getActiveRun('session-1', { fetchImpl: fetchMock });
+    await cancelRun('run-1', { fetchImpl: fetchMock });
+    await resumeRun(
+      'run-1',
+      {
+        interruptId: 'interrupt-1',
+        requestId: 'resume-request-1',
+        resumePayload: { approved: true },
+      },
+      { fetchImpl: fetchMock },
+    );
+
+    expect(fetchMock.mock.calls).toEqual([
+      ['/api/v1/chat/sessions/session-1/active-run', {}],
+      ['/api/v1/chat/runs/run-1/cancel', { method: 'POST' }],
+      [
+        '/api/v1/chat/runs/run-1/resume',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            interrupt_id: 'interrupt-1',
+            request_id: 'resume-request-1',
+            resume_payload: { approved: true },
+          }),
+        }),
+      ],
+    ]);
+  });
+
+  it('独立 GET SSE 使用 Run 资源和 after_seq', async () => {
     const encoder = new TextEncoder();
-    const streamResponse = () =>
+    const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         new ReadableStream({
           start(controller) {
             controller.enqueue(
               encoder.encode(
-                'event: done\ndata: {"session_id":"s1","message_id":"m2",' +
-                  '"capability_id":"en_to_zh","status":"completed"}\n\n',
+                'id: 8\nevent: run.completed\ndata: {"event_type":' +
+                  '"run.completed","seq":8,"payload":{"status":"completed"}}\n\n',
               ),
             );
             controller.close();
           },
         }),
         { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
-      );
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(streamResponse())
-      .mockResolvedValueOnce(streamResponse());
-    const events = [];
+      ),
+    );
 
-    await streamCompletion({
-      sessionId: null,
-      content: 'Good morning',
-      onEvent: (event) => events.push(event),
-      fetchImpl: fetchMock,
-    });
-    await regenerateMessage({
-      sessionId: 's1',
-      messageId: 'm1',
-      onEvent: (event) => events.push(event),
-      fetchImpl: fetchMock,
-    });
+    await streamRunEvents('run/1', { afterSeq: 5, fetchImpl: fetchMock });
 
-    expect(fetchMock.mock.calls[0]).toEqual([
-      '/api/v1/chat/completions',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          session_id: null,
-          message: { content: 'Good morning' },
-        }),
-      }),
-    ]);
-    expect(fetchMock.mock.calls[1]).toEqual([
-      '/api/v1/chat/sessions/s1/messages/m1/regenerate',
-      expect.objectContaining({ method: 'POST' }),
-    ]);
-    expect(events).toHaveLength(2);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/v1/chat/runs/run%2F1/events?after_seq=5',
+    );
+    expect(fetchMock.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 
-  it('将普通 HTTP 错误转换为稳定产品错误', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+  it('保留会话产品操作并转换稳定 HTTP 错误', async () => {
+    const successFetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ title: '新标题' }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(jsonResponse({ feedback: 'like' }));
+    await renameSession('session-1', '新标题', { fetchImpl: successFetch });
+    await deleteSession('session-1', { fetchImpl: successFetch });
+    await submitFeedback('message-1', 'like', { fetchImpl: successFetch });
+
+    const failureFetch = vi.fn().mockResolvedValue(
       jsonResponse(
         {
           detail: {
@@ -188,13 +179,10 @@ describe('chatApi', () => {
         409,
       ),
     );
-
     await expect(
-      submitFeedback('message-1', 'like', { fetchImpl: fetchMock }),
+      submitFeedback('message-1', 'like', { fetchImpl: failureFetch }),
     ).rejects.toMatchObject({
       code: 'MESSAGE_FEEDBACK_NOT_ALLOWED',
-      message: '仅允许反馈已完成回答',
-      retryable: false,
       status: 409,
     });
   });

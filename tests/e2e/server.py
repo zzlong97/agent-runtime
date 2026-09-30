@@ -10,9 +10,6 @@ from agent_runtime.core.config import Settings
 from agent_runtime.core.event_loop import psycopg_compatible_loop_factory
 from agent_runtime.main import create_app
 
-from fake_model import StageTwoBrowserFakeModel
-
-
 async def _delete_e2e_sessions(service: ChatService) -> None:
     """清理浏览器验收专用用户遗留的 Session 及关联持久化数据。"""
 
@@ -46,11 +43,10 @@ async def _serve() -> None:
         dashscope_api_key=None,
         llm_base_url=None,
         llm_model=None,
+        runtime_demo_mode=True,
+        run_cancel_grace_seconds=0.1,
     )
-    async with open_chat_service(
-        settings,
-        model=StageTwoBrowserFakeModel(),
-    ) as service:
+    async with open_chat_service(settings) as service:
         await _delete_e2e_sessions(service)
         server = uvicorn.Server(
             uvicorn.Config(

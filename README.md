@@ -42,7 +42,8 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-当前后端已验收到 S2.5-09。Run 已从 POST SSE 和进程内 Registry 中解耦：
+当前已验收到 S2.5-09；S2.5-10 `/chat` 页面迁移与 Runtime 演示模式已完成编码，
+正在等待复审。Run 已从 POST SSE 和进程内 Registry 中解耦：
 
 ```text
 POST 创建持久 Run → HTTP 202
@@ -55,7 +56,7 @@ Parent Graph → PostgreSQL Checkpoint
              ↓
 PostgreSQL RuntimeEvent + Redis Stream
              ↓
-GET SSE Gateway → API 客户端（/chat 页面迁移属于 S2.5-10）
+GET SSE Gateway → /chat API 客户端
              ↓
 异步 Cancel + 非空终态 + Session 完整硬删除
              ↓
@@ -68,8 +69,9 @@ Checkpoint-first 对账与最多三次崩溃恢复
 HTTP 202 Run API、活动 Run 查询、单进程 Coordinator，以及合并 PostgreSQL 与
 Redis 的独立 GET SSE、异步 Cancel、非空终态消息和 Session 完整硬删除。
 同 Run Interrupt/Resume、Checkpoint-first 对账、精确 Run Checkpoint 恢复、
-stopped 取消补投影和最多三次恢复接管均已通过验收。页面迁移仍须按
-`docs/tasks.md` 后续任务逐项实现。现有两个 Capability 已接入统一 Agent 执行
+stopped 取消补投影和最多三次恢复接管均已通过验收。`/chat` 已迁移到 HTTP 202
+Run API 与独立 GET SSE，并支持状态观察、刷新续传、Cancel 和同 Run
+Interrupt/Resume。现有两个 Capability 已接入统一 Agent 执行
 边界；Agent 只获得稳定标识、Child 执行配置、派生任务输入、只读取消探针和
 类型化文本事件出口，不直接接触 SSE、Redis、Session 生命周期或顶层 Run 终态。
 
@@ -229,7 +231,7 @@ ChildResult
 
 ### Stage 2.5：持久化 Run 与可恢复 Runtime
 
-当前已验收到 S2.5-09：
+S2.5-09 已验收，S2.5-10 已完成编码并等待复审：
 
 - PostgreSQL 持久 Run、幂等请求和数据库活动 Run 唯一约束
 - 类型化 RuntimeEvent、每 Run Sequencer 和公开/内部事件隔离
@@ -246,10 +248,15 @@ ChildResult
 - `RunContext`、`AgentContext`、`TaskInput` 与类型化 Agent 文本事件出口
 - `general_chat`、`en_to_zh` 统一调用边界及只读协作式取消探针
 - Fake Agent 慢速取消、失败控制结果和 LangGraph Interrupt/Resume 契约验证
+- `/chat` 使用 HTTP 202 Run API、独立 GET SSE、断点续传和 Parent 历史终态回读
+- 页面刷新恢复活动 Run 与待处理中断，支持显式 Cancel 和同 Run Resume
+- 默认关闭的确定性 Runtime 演示模式通过真实 Run、Event、Redis、SSE 和
+  Interrupt/Resume 链路运行，不进入正式 Capability Router
 
 后续计划：
 
-- `/chat` 页面迁移和开发环境真实 Runtime 演示模式
+- S2.5-10 独立复审
+- S2.5-11 Stage 2.5 集成验收
 
 ### Future：候选方向，不构成阶段承诺
 
@@ -275,9 +282,8 @@ ChildResult
 
 ## 5. 运行当前 Runtime
 
-以下说明运行已完成 S2.5-09 编码的后端及其 PostgreSQL / Redis 开发依赖。当前
-`/chat` 仍是已验收的 Stage 2 构建产物，尚未迁移到 HTTP 202 Run API；完整
-页面迁移属于 S2.5-10。在该任务完成前，请使用下方 API 验证当前后端。
+以下说明运行已完成 S2.5-10 编码的后端、`/chat` 页面及其 PostgreSQL / Redis
+开发依赖。S2.5-10 当前处于待复审状态。
 
 本地 PostgreSQL 和 Redis 由 Windows Docker Desktop 承载。先确认 Docker Desktop
 已启动，然后在项目根目录启动依赖：
@@ -301,6 +307,23 @@ docker compose up -d postgres redis
 ```powershell
 uv run --env-file .env python -m agent_runtime
 ```
+
+服务启动后访问 `http://127.0.0.1:8000/chat`。页面先以 HTTP 202 提交 Run，再通过
+独立 GET SSE 展示执行状态和增量事件；刷新页面会查询当前活动 Run 并从已处理的
+事件序号继续连接。Run 终态后，页面重新读取 Parent 公共历史作为最终显示依据。
+
+开发环境可显式启用默认关闭的确定性 Runtime 演示模式。该模式不调用正式
+Capability Router，也不依赖真实模型，但会经过真实 Run、RuntimeEvent、Redis、
+GET SSE、Checkpoint 和 Interrupt/Resume 链路：
+
+```powershell
+$env:RUNTIME_DEMO_MODE='true'
+uv run --env-file .env python -m agent_runtime
+```
+
+在 `/chat` 中分别发送 `/demo normal`、`/demo interrupt`、`/demo fail` 和
+`/demo slow`，可验证正常完成、中断后继续、确定性失败及慢速取消。正式运行时应
+保持 `RUNTIME_DEMO_MODE=false`（默认值）。
 
 普通消息必须提供全局唯一 `request_id`，成功提交后立即返回 HTTP
 202 和公开 Run 摘要：
@@ -420,9 +443,9 @@ $env:RUN_REDIS_TESTS='1'
 uv run pytest -q
 ```
 
-可选浏览器端到端验收使用同一 PostgreSQL，并注入确定性 Fake Model。测试服务
-为每次运行生成独立端口和唯一的 `stage-two-playwright-*` 测试用户；启动时清理
-本运行遗留数据，并在每个用例结束及正常关闭时再次只清理该运行的数据：
+可选浏览器端到端验收使用同一 PostgreSQL 和 Redis，并显式启用确定性 Runtime
+演示模式。测试服务为每次运行生成独立端口和唯一测试用户；启动时清理本运行
+遗留数据，并在每个用例结束及正常关闭时再次只清理该运行的数据：
 
 ```powershell
 cd frontend

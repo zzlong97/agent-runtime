@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 2.5
-Current Task: S2.5-09
-Last Verified Task: S2.5-08
-Last Verified Commit: e6fe9c2（S2.5-08 Checkpoint 对账与崩溃恢复）
+Current Task: S2.5-10
+Last Verified Task: S2.5-09
+Last Verified Commit: 13a2ec1（S2.5-09 最小 Agent 执行契约）
 Blockers: None
 ```
 
@@ -1896,7 +1896,7 @@ stop and wait
 
 ## S2.5-10 `/chat` 页面迁移与 Runtime 演示模式
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-04 ~ S2.5-09
 
@@ -1910,12 +1910,63 @@ stop and wait
 
 ### Acceptance
 
-- [ ] 页面可观察 queued 到终态的完整状态变化
-- [ ] 页面刷新后可恢复活动 Run 和中断操作
-- [ ] attempt 增长时不会混合旧、新流式文本
-- [ ] 开发演示场景经过真实后端链路，前端不伪造
-- [ ] 演示模式不进入正式 Capability Router
-- [ ] 构建继续产出独立且带哈希的 JS / CSS
+- [x] 页面可观察 queued 到终态的完整状态变化
+- [x] 页面刷新后可恢复活动 Run 和中断操作
+- [x] attempt 增长时不会混合旧、新流式文本
+- [x] 开发演示场景经过真实后端链路，前端不伪造
+- [x] 演示模式不进入正式 Capability Router
+- [x] 构建继续产出独立且带哈希的 JS / CSS
+
+### Verification Notes
+
+- 2026-09-30：`/chat` 已迁移到 HTTP 202 Run API 与独立 GET SSE；公开 Run
+  状态面板支持 queued、running、recovering、interrupted、cancel_requested 和
+  终态展示，页面刷新可恢复活动 Run、游标和待处理中断，同 Run Resume 与异步
+  Cancel 均通过确定性前端测试。
+- 2026-09-30：客户端只投影公开事件白名单，按已成功处理的 `seq` 断点续传；
+  `message.started.attempt` 增大时清空旧草稿，终态始终重新读取 Parent 公共历史，
+  不依赖临时增量作为最终权威内容。
+- 2026-09-30：新增默认关闭的 `RUNTIME_DEMO_MODE`。显式启用后，normal、
+  interrupt、fail、slow 四种确定性场景经过真实 Run、RuntimeEvent、Redis、GET
+  SSE、Checkpoint 与 Interrupt/Resume 链路；演示 Graph 不构建或调用正式
+  Capability Router。
+- 2026-09-30：S2.5-10 后端专项为 `28 passed`，前端 Vitest 为 `23 passed`；
+  默认完整套件为 `399 passed, 39 skipped`；启用真实 PostgreSQL 与 Redis 的完整
+  套件为 `437 passed, 1 skipped`，唯一跳过项为按规范独立启用的真实百炼 smoke
+  test。
+- 2026-09-30：使用系统 Chrome 的 Playwright 真实页面验收为 `1 passed`，覆盖
+  正常完成、中断后刷新恢复与 Resume、确定性失败以及慢速运行 Cancel；Vite 构建
+  继续生成独立且带内容哈希的 JS 与 CSS。
+- 2026-09-30：收尾复审补齐真实网络异常后的游标续传、queued/interrupted 直接
+  Cancel 终态回读以及刷新跨终态提交窗口的确定性测试；客户端在 `fetch` 或
+  `reader.read()` 网络失败后从最后成功处理的 `seq` 重连，直接取消终态立即回读
+  Parent 历史，页面恢复先确认活动 Run 再读取权威历史。页面元数据同步更新为
+  Stage 2.5。
+- 2026-09-30：独立代码二次复核确认上述三个 Important 与一个 Minor 均已解决，
+  结论为 `Ready to merge: Yes`；任务仍按流程保持 `DONE`，等待负责人验收。
+- 2026-10-01：Reviewer 发现 `REV-S25-10-001`。页面在 Run 创建请求返回 202 前
+  仍处于 idle，快速重复提交会使用不同 `request_id` 创建多个 Run；新会话场景会
+  进一步创建多个 Session，因此退回修复且继续保持 `DONE / 待复审`。
+- 2026-10-01：新增同步 `submittingRef` 与页面 `submitting` 状态，在任何网络等待
+  前原子占用提交入口；提交期间禁用 Sender、Regenerate、新建和会话切换。Run
+  摘要返回并投影 queued 后才释放提交锁，POST 确定失败时删除对应乐观用户消息并
+  恢复交互，避免保留非权威页面内容。
+- 2026-10-01：延迟 202 的 Vitest 回归先稳定复现两次 API 调用，修复后确认快速
+  重复提交只调用一次创建接口；失败清理与再次提交测试同时通过。前端完整测试为
+  `25 passed`。
+- 2026-10-01：Edge Playwright 新增 800ms HTTP 202 延迟场景，真实 PostgreSQL、
+  Redis 与 Runtime 链路确认只有一次 POST、一个 Session 和一条用户消息；连同
+  原有完整流程共 `2 passed`。修复后默认套件为 `399 passed, 39 skipped`，真实
+  PostgreSQL + Redis 完整套件为 `437 passed, 1 skipped`。
+- 2026-10-01：独立代码复核确认提交锁在首个 `await` 前建立，成功路径先投影
+  queued 再释放，失败路径无条件释放且只清理本次乐观消息；未发现解锁空窗、死锁
+  或范围回归，`REV-S25-10-001` 复核结论为 `Ready to merge: Yes`。
+- 2026-10-01：负责人确认 S2.5-10 验收通过，允许按工程流程提交并同步 GitHub、
+  Gitee；两个远程确认一致后进入 S2.5-11。
+- 2026-09-30：`uv lock --check`、`uv pip check`、`compileall`、`uv build`、
+  `docker compose config --quiet` 与 `git diff --check` 全部通过。
+- Result：S2.5-10 已通过实现、真实依赖门禁、独立复审和负责人验收，状态更新为
+  `VERIFIED`。
 
 ---
 

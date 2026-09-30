@@ -6,6 +6,7 @@ export function SessionSidebar({
   sessions,
   activeSessionId,
   loading,
+  disabled,
   nextCursor,
   onCreate,
   onSelect,
@@ -17,7 +18,7 @@ export function SessionSidebar({
         <div className="brand-mark">AR</div>
         <div>
           <Typography.Title level={4}>AgentRuntime</Typography.Title>
-          <Typography.Text type="secondary">Stage 2 演示</Typography.Text>
+          <Typography.Text type="secondary">Stage 2.5 Runtime</Typography.Text>
         </div>
       </div>
 
@@ -27,6 +28,7 @@ export function SessionSidebar({
         size="large"
         icon={<PlusOutlined />}
         onClick={onCreate}
+        disabled={disabled}
         block
       >
         新建会话
@@ -46,6 +48,7 @@ export function SessionSidebar({
             items={sessions.map((session) => ({
               key: session.session_id,
               label: session.title,
+              disabled,
             }))}
             onActiveChange={onSelect}
           />
@@ -56,6 +59,7 @@ export function SessionSidebar({
         <Button
           type="text"
           loading={loading}
+          disabled={disabled}
           onClick={onLoadMore}
           aria-label="加载更多会话"
           block

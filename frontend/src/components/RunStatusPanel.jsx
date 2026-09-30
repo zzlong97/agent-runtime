@@ -1,16 +1,19 @@
-import { Collapse, Descriptions, Tag } from 'antd';
+import { Button, Collapse, Descriptions, Space, Tag, Typography } from 'antd';
 
 const STATUS_COLORS = {
+  queued: 'default',
   running: 'processing',
-  stopping: 'warning',
+  recovering: 'warning',
+  interrupted: 'warning',
+  cancel_requested: 'warning',
   completed: 'success',
-  unsupported: 'default',
-  stopped: 'warning',
   failed: 'error',
+  cancelled: 'default',
   idle: 'default',
 };
 
-export function RunStatusPanel({ run }) {
+export function RunStatusPanel({ run, onResume }) {
+  const prompt = run.pendingInterrupt?.interrupt_payload?.prompt;
   const items = [
     {
       key: 'runtime-status',
@@ -18,36 +21,33 @@ export function RunStatusPanel({ run }) {
         <span className="run-panel-label">
           运行状态
           <Tag color={STATUS_COLORS[run.status]}>{run.status}</Tag>
+          {run.attempt > 0 ? <Tag>attempt {run.attempt}</Tag> : null}
         </span>
       ),
       children: (
-        <Descriptions
-          className="run-descriptions"
-          size="small"
-          column={{ xs: 1, sm: 2, lg: 4 }}
-          items={[
-            {
-              key: 'session_id',
-              label: 'session_id',
-              children: <code>{run.sessionId ?? '—'}</code>,
-            },
-            {
-              key: 'message_id',
-              label: 'message_id',
-              children: <code>{run.messageId ?? '—'}</code>,
-            },
-            {
-              key: 'capability_id',
-              label: 'capability_id',
-              children: <code>{run.capabilityId ?? '—'}</code>,
-            },
-            {
-              key: 'status',
-              label: 'status',
-              children: <code>{run.status}</code>,
-            },
-          ]}
-        />
+        <>
+          <Descriptions
+            className="run-descriptions"
+            size="small"
+            column={{ xs: 1, sm: 2, lg: 5 }}
+            items={[
+              { key: 'run_id', label: 'Run ID', children: <code>{run.runId ?? '—'}</code> },
+              { key: 'session_id', label: 'Session ID', children: <code>{run.sessionId ?? '—'}</code> },
+              { key: 'message_id', label: '消息 ID', children: <code>{run.messageId ?? '—'}</code> },
+              { key: 'capability_id', label: 'Capability', children: <code>{run.capabilityId ?? '—'}</code> },
+              { key: 'recovery_attempts', label: '恢复次数', children: <code>{run.recoveryAttempts}</code> },
+            ]}
+          />
+          {run.status === 'interrupted' && run.pendingInterrupt ? (
+            <div className="interrupt-action" aria-label="中断操作">
+              <Typography.Text>{typeof prompt === 'string' ? prompt : '运行等待人工确认。'}</Typography.Text>
+              <Space>
+                <Button type="primary" onClick={() => onResume(true)}>确认并继续</Button>
+                <Button onClick={() => onResume(false)}>拒绝并继续</Button>
+              </Space>
+            </div>
+          ) : null}
+        </>
       ),
     },
   ];

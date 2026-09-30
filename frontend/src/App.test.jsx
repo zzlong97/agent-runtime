@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,430 +6,363 @@ import RuntimeApp from './App.jsx';
 import * as chatApi from './services/chatApi.js';
 
 vi.mock('./services/chatApi.js', () => ({
+  cancelRun: vi.fn(),
+  createChatRun: vi.fn(),
+  createRegenerateRun: vi.fn(),
   deleteSession: vi.fn(),
+  getActiveRun: vi.fn(),
   listMessages: vi.fn(),
   listSessions: vi.fn(),
-  regenerateMessage: vi.fn(),
   renameSession: vi.fn(),
-  stopSession: vi.fn(),
-  streamCompletion: vi.fn(),
+  resumeRun: vi.fn(),
+  streamRunEvents: vi.fn(),
   submitFeedback: vi.fn(),
 }));
 
-const SESSION_ONE = {
-  session_id: '00000000-0000-0000-0000-000000000101',
-  title: '第一条会话',
-  created_at: '2026-09-14T08:00:00Z',
-  updated_at: '2026-09-14T09:00:00Z',
+const SESSION_ID = '00000000-0000-0000-0000-000000000101';
+const RUN_ID = '00000000-0000-0000-0000-000000000102';
+const MESSAGE_ID = '00000000-0000-0000-0000-000000000103';
+const INTERRUPT_ID = '00000000-0000-0000-0000-000000000104';
+const SESSION = {
+  session_id: SESSION_ID,
+  title: 'Runtime 会话',
+  created_at: '2026-09-30T08:00:00Z',
+  updated_at: '2026-09-30T09:00:00Z',
+};
+const RUN = {
+  run_id: RUN_ID,
+  session_id: SESSION_ID,
+  response_message_id: MESSAGE_ID,
+  status: 'queued',
+  recovery_attempts: 0,
 };
 
-const SESSION_TWO = {
-  session_id: '00000000-0000-0000-0000-000000000102',
-  title: '更早的会话',
-  created_at: '2026-09-13T08:00:00Z',
-  updated_at: '2026-09-13T09:00:00Z',
-};
-
-const COMPLETE_HISTORY = {
-  items: [
-    {
-      message_id: '00000000-0000-0000-0000-000000000201',
-      role: 'user',
-      content: '介绍一下 FastAPI',
-      runtime_status: null,
-      capability_id: null,
-      feedback: null,
-    },
-    {
-      message_id: '00000000-0000-0000-0000-000000000202',
-      role: 'assistant',
-      content: 'FastAPI 是一个现代 Python Web 框架。',
-      runtime_status: 'completed',
-      capability_id: 'general_chat',
-      feedback: null,
-    },
-  ],
-  next_before: null,
-};
+function event(id, type, payload) {
+  return {
+    id,
+    type,
+    data: { seq: id, event_type: type, payload },
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   chatApi.listSessions.mockResolvedValue({ items: [], next_cursor: null });
   chatApi.listMessages.mockResolvedValue({ items: [], next_before: null });
-  chatApi.renameSession.mockResolvedValue(SESSION_ONE);
+  chatApi.getActiveRun.mockResolvedValue(null);
+  chatApi.createChatRun.mockResolvedValue(RUN);
+  chatApi.createRegenerateRun.mockResolvedValue(RUN);
+  chatApi.cancelRun.mockResolvedValue({ ...RUN, status: 'cancel_requested' });
+  chatApi.resumeRun.mockResolvedValue({ ...RUN, status: 'running' });
+  chatApi.streamRunEvents.mockResolvedValue({ lastEventId: 0, reason: 'terminal' });
+  chatApi.renameSession.mockResolvedValue(SESSION);
   chatApi.deleteSession.mockResolvedValue(null);
-  chatApi.stopSession.mockResolvedValue({
-    session_id: SESSION_ONE.session_id,
-    status: 'stopped',
-  });
-  chatApi.submitFeedback.mockResolvedValue({
-    message_id: COMPLETE_HISTORY.items[1].message_id,
-    feedback: 'like',
-  });
-  chatApi.streamCompletion.mockResolvedValue();
-  chatApi.regenerateMessage.mockResolvedValue();
+  chatApi.submitFeedback.mockResolvedValue({ message_id: MESSAGE_ID, feedback: 'like' });
 });
 
-describe('RuntimeApp', () => {
-  it('新的 Session 全量刷新不会被较早的列表响应覆盖', async () => {
+describe('RuntimeApp Stage 2.5', () => {
+  it('HTTP 202 返回前原子锁定提交入口并拒绝快速重复提交', async () => {
     const user = userEvent.setup();
-    let resolveInitialSessions;
-    chatApi.listSessions
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveInitialSessions = resolve;
-          }),
-      )
-      .mockResolvedValueOnce({ items: [SESSION_ONE], next_cursor: null });
-    chatApi.streamCompletion.mockImplementation(async ({ onEvent }) => {
-      await onEvent({
-        type: 'done',
-        data: {
-          session_id: SESSION_ONE.session_id,
-          message_id: '00000000-0000-0000-0000-000000000200',
-          capability_id: 'general_chat',
-          status: 'completed',
-        },
-      });
-    });
+    let resolveCreateRun;
+    chatApi.createChatRun.mockImplementation(() => new Promise((resolve) => {
+      resolveCreateRun = resolve;
+    }));
 
     render(<RuntimeApp />);
     const sender = screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行');
-    await user.type(sender, '你好{enter}');
-    const sessionSidebar = screen.getByLabelText('会话列表');
-    expect(await within(sessionSidebar).findByText('第一条会话')).toBeInTheDocument();
+    await user.type(sender, '/demo normal{enter}');
+    await waitFor(() => expect(chatApi.createChatRun).toHaveBeenCalledTimes(1));
 
-    await act(async () => {
-      resolveInitialSessions({ items: [SESSION_TWO], next_cursor: null });
-    });
-    expect(within(sessionSidebar).getByText('第一条会话')).toBeInTheDocument();
-    expect(within(sessionSidebar).queryByText('更早的会话')).not.toBeInTheDocument();
+    await user.type(sender, '/demo normal{enter}');
+
+    expect(chatApi.createChatRun).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('/demo normal')).toHaveLength(1);
+    expect(sender).toBeDisabled();
+
+    await act(async () => resolveCreateRun(RUN));
   });
 
-  it('分页加载、选择 Session，并从后端读取活动分支历史', async () => {
+  it('Run 提交失败时清理乐观用户消息并释放提交锁', async () => {
     const user = userEvent.setup();
-    chatApi.listSessions
-      .mockResolvedValueOnce({
-        items: [SESSION_ONE],
-        next_cursor: 'next-session-page',
-      })
-      .mockResolvedValueOnce({
-        items: [SESSION_TWO],
-        next_cursor: null,
-      });
-    chatApi.listMessages.mockResolvedValue(COMPLETE_HISTORY);
+    chatApi.createChatRun
+      .mockRejectedValueOnce(new Error('提交响应丢失'))
+      .mockResolvedValueOnce(RUN);
 
     render(<RuntimeApp />);
+    const sender = screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行');
+    await user.type(sender, '/demo normal{enter}');
 
-    await screen.findByText('第一条会话');
-    await user.click(screen.getByRole('button', { name: '加载更多会话' }));
-    expect(await screen.findByText('更早的会话')).toBeInTheDocument();
-    expect(chatApi.listSessions).toHaveBeenLastCalledWith({
-      cursor: 'next-session-page',
-    });
-
-    await user.click(screen.getByText('第一条会话'));
-    expect(await screen.findByText('介绍一下 FastAPI')).toBeInTheDocument();
-    expect(screen.getByText('FastAPI 是一个现代 Python Web 框架。')).toBeInTheDocument();
-    expect(chatApi.listMessages).toHaveBeenCalledWith(SESSION_ONE.session_id);
-  });
-
-  it('快速切换 Session 时不会让较早响应覆盖当前活动会话', async () => {
-    const user = userEvent.setup();
-    let resolveFirstHistory;
-    chatApi.listSessions.mockResolvedValue({
-      items: [SESSION_ONE, SESSION_TWO],
-      next_cursor: null,
-    });
-    chatApi.listMessages
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveFirstHistory = resolve;
-          }),
-      )
-      .mockResolvedValueOnce({
-        items: [
-          {
-            message_id: '00000000-0000-0000-0000-000000000211',
-            role: 'assistant',
-            content: '第二个会话的权威历史',
-            runtime_status: 'completed',
-            capability_id: 'general_chat',
-            feedback: null,
-          },
-        ],
-        next_before: null,
-      });
-
-    render(<RuntimeApp />);
-    await screen.findByText('第一条会话');
-    await user.click(screen.getByText('第一条会话'));
-    await user.click(screen.getByText('更早的会话'));
-    expect(await screen.findByText('第二个会话的权威历史')).toBeInTheDocument();
-
-    resolveFirstHistory(COMPLETE_HISTORY);
     await waitFor(() => {
-      expect(screen.queryByText('介绍一下 FastAPI')).not.toBeInTheDocument();
+      expect(screen.queryByText('/demo normal')).not.toBeInTheDocument();
+      expect(sender).not.toBeDisabled();
     });
-    expect(screen.getByText('第二个会话的权威历史')).toBeInTheDocument();
+
+    await user.type(sender, '/demo normal{enter}');
+    expect(chatApi.createChatRun).toHaveBeenCalledTimes(2);
   });
 
-  it('切换 Session 后丢弃旧会话尚未完成的更早消息分页', async () => {
+  it('先展示 queued，再投影独立 SSE，并在 attempt 增长时清除旧草稿', async () => {
     const user = userEvent.setup();
-    let resolveOlderPage;
-    chatApi.listSessions.mockResolvedValue({
-      items: [SESSION_ONE, SESSION_TWO],
-      next_cursor: null,
-    });
-    chatApi.listMessages
-      .mockResolvedValueOnce({ ...COMPLETE_HISTORY, next_before: 'older-page' })
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveOlderPage = resolve;
-          }),
-      )
-      .mockResolvedValueOnce({
-        items: [
-          {
-            message_id: '00000000-0000-0000-0000-000000000212',
-            role: 'assistant',
-            content: '第二个会话的权威历史',
-            runtime_status: 'completed',
-            capability_id: 'general_chat',
-            feedback: null,
-          },
-        ],
-        next_before: null,
-      });
-
-    render(<RuntimeApp />);
-    await user.click(await screen.findByText('第一条会话'));
-    await screen.findByText('FastAPI 是一个现代 Python Web 框架。');
-    await user.click(screen.getByRole('button', { name: '加载更早消息' }));
-    await user.click(screen.getByText('更早的会话'));
-    expect(await screen.findByText('第二个会话的权威历史')).toBeInTheDocument();
-
-    await act(async () => {
-      resolveOlderPage({
-        items: [
-          {
-            message_id: '00000000-0000-0000-0000-000000000213',
-            role: 'assistant',
-            content: '不应混入新会话的旧分页消息',
-            runtime_status: 'completed',
-            capability_id: 'general_chat',
-            feedback: null,
-          },
-        ],
-        next_before: null,
-      });
-    });
-    expect(screen.queryByText('不应混入新会话的旧分页消息')).not.toBeInTheDocument();
-  });
-
-  it('新建 Session 后流式展示回答并更新运行状态面板', async () => {
-    const user = userEvent.setup();
-    const finalHistory = {
-      items: [
-        {
-          message_id: '00000000-0000-0000-0000-000000000301',
-          role: 'user',
-          content: '你好',
-          runtime_status: null,
-          capability_id: null,
-          feedback: null,
-        },
-        {
-          message_id: '00000000-0000-0000-0000-000000000302',
-          role: 'assistant',
-          content: '你好，很高兴见到你。',
-          runtime_status: 'completed',
-          capability_id: 'general_chat',
-          feedback: null,
-        },
-      ],
-      next_before: null,
-    };
-    chatApi.listMessages.mockResolvedValue(finalHistory);
-    chatApi.streamCompletion.mockImplementation(async ({ onEvent }) => {
-      await onEvent({
-        type: 'message',
-        data: {
-          session_id: SESSION_ONE.session_id,
-          message_id: finalHistory.items[1].message_id,
-          capability_id: 'general_chat',
-          delta: '你好，很高兴见到你。',
-        },
-      });
-      await onEvent({
-        type: 'done',
-        data: {
-          session_id: SESSION_ONE.session_id,
-          message_id: finalHistory.items[1].message_id,
-          capability_id: 'general_chat',
-          status: 'completed',
-        },
-      });
-    });
-
-    render(<RuntimeApp />);
-    const sender = await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行');
-    await user.type(sender, '你好{enter}');
-
-    expect(await screen.findByText('你好，很高兴见到你。')).toBeInTheDocument();
-    expect(chatApi.streamCompletion).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: null, content: '你好' }),
-    );
-    const runPanel = screen.getByLabelText('运行状态');
-    expect(runPanel).toHaveTextContent(SESSION_ONE.session_id);
-    expect(runPanel).toHaveTextContent(finalHistory.items[1].message_id);
-    expect(runPanel).toHaveTextContent('general_chat');
-    expect(runPanel).toHaveTextContent('completed');
-  });
-
-  it('SSE 意外断开后回读服务端已持久化的权威消息状态', async () => {
-    const user = userEvent.setup();
+    let releaseStream;
     chatApi.listSessions
       .mockResolvedValueOnce({ items: [], next_cursor: null })
-      .mockResolvedValue({ items: [SESSION_ONE], next_cursor: null });
+      .mockResolvedValue({ items: [SESSION], next_cursor: null });
     chatApi.listMessages.mockResolvedValue({
       items: [
         {
-          message_id: '00000000-0000-0000-0000-000000000311',
+          message_id: 'user-1',
           role: 'user',
-          content: '生成一段内容',
+          content: '/demo normal',
           runtime_status: null,
           capability_id: null,
           feedback: null,
         },
         {
-          message_id: '00000000-0000-0000-0000-000000000312',
+          message_id: MESSAGE_ID,
           role: 'assistant',
-          content: '服务端保存的部分内容',
-          runtime_status: 'incomplete',
-          capability_id: 'general_chat',
+          content: '服务端权威完成文本',
+          runtime_status: 'completed',
+          capability_id: null,
           feedback: null,
         },
       ],
       next_before: null,
     });
-    chatApi.streamCompletion.mockImplementation(async ({ onEvent }) => {
-      await onEvent({
-        type: 'message',
-        data: {
-          session_id: SESSION_ONE.session_id,
-          message_id: '00000000-0000-0000-0000-000000000312',
-          capability_id: 'general_chat',
-          delta: '部分内容',
-        },
-      });
-      throw new Error('事件流意外中断');
-    });
-
-    render(<RuntimeApp />);
-    const sender = await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行');
-    await user.type(sender, '生成一段内容{enter}');
-
-    expect(await screen.findByText('服务端保存的部分内容')).toBeInTheDocument();
-    expect(chatApi.listMessages).toHaveBeenCalledWith(SESSION_ONE.session_id);
-    expect(screen.getByText('未完成')).toBeInTheDocument();
-  });
-
-  it('运行期间可调用 Stop，并等待 SSE 发布停止终态', async () => {
-    const user = userEvent.setup();
-    let publishDone;
-    chatApi.listSessions.mockResolvedValue({
-      items: [SESSION_ONE],
-      next_cursor: null,
-    });
-    chatApi.streamCompletion.mockImplementation(
-      ({ onEvent }) =>
-        new Promise((resolve) => {
-          publishDone = async () => {
-            await onEvent({
-              type: 'done',
-              data: {
-                session_id: SESSION_ONE.session_id,
-                message_id: '00000000-0000-0000-0000-000000000401',
-                capability_id: 'general_chat',
-                status: 'stopped',
-              },
-            });
-            resolve();
-          };
-        }),
-    );
-
-    render(<RuntimeApp />);
-    await user.click(await screen.findByText('第一条会话'));
-    const sender = screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行');
-    await user.type(sender, '请执行长任务{enter}');
-    expect(screen.getByRole('button', { name: '删除当前会话' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: '停止当前回答' }));
-
-    expect(chatApi.stopSession).toHaveBeenCalledWith(SESSION_ONE.session_id);
-    await publishDone();
-    await waitFor(() => {
-      expect(screen.getByLabelText('运行状态')).toHaveTextContent('stopped');
-    });
-  });
-
-  it('支持重命名、二次确认删除、重新生成与反馈', async () => {
-    const user = userEvent.setup();
-    chatApi.listSessions
-      .mockResolvedValueOnce({ items: [SESSION_ONE], next_cursor: null })
-      .mockResolvedValue({ items: [], next_cursor: null });
-    chatApi.listMessages.mockResolvedValue(COMPLETE_HISTORY);
-    chatApi.regenerateMessage.mockImplementation(async ({ onEvent }) => {
-      await onEvent({
-        type: 'done',
-        data: {
-          session_id: SESSION_ONE.session_id,
-          message_id: '00000000-0000-0000-0000-000000000203',
-          capability_id: 'general_chat',
-          status: 'completed',
-        },
-      });
-    });
-
-    render(<RuntimeApp />);
-    await user.click(await screen.findByText('第一条会话'));
-    await screen.findByText('FastAPI 是一个现代 Python Web 框架。');
-
-    const feedback = screen.getByLabelText('回答反馈');
-    await user.click(within(feedback).getAllByRole('button')[0]);
-    expect(chatApi.submitFeedback).toHaveBeenCalledWith(
-      COMPLETE_HISTORY.items[1].message_id,
-      'like',
-    );
-
-    await user.click(screen.getByRole('button', { name: '重新生成最新回答' }));
-    expect(chatApi.regenerateMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: SESSION_ONE.session_id,
-        messageId: COMPLETE_HISTORY.items[1].message_id,
+    chatApi.streamRunEvents.mockImplementation(
+      (_runId, { onEvent }) => new Promise((resolve) => {
+        releaseStream = async () => {
+          await onEvent(event(1, 'run.started', { status: 'running' }));
+          await onEvent(event(2, 'message.started', {
+            response_message_id: MESSAGE_ID,
+            attempt: 1,
+          }));
+          await onEvent(event(3, 'message.delta', {
+            response_message_id: MESSAGE_ID,
+            attempt: 1,
+            delta: '旧草稿',
+          }));
+          await onEvent(event(4, 'message.started', {
+            response_message_id: MESSAGE_ID,
+            attempt: 2,
+          }));
+          await onEvent(event(5, 'message.delta', {
+            response_message_id: MESSAGE_ID,
+            attempt: 2,
+            delta: '新草稿',
+          }));
+          await onEvent(event(6, 'message.finalized', {
+            response_message_id: MESSAGE_ID,
+            runtime_status: 'completed',
+            capability_id: null,
+          }));
+          await onEvent(event(7, 'run.completed', { status: 'completed' }));
+          resolve({ lastEventId: 7, reason: 'terminal' });
+        };
       }),
     );
 
-    await user.click(screen.getByRole('button', { name: '重命名当前会话' }));
-    const renameInput = screen.getByRole('textbox', { name: '新会话标题' });
-    await user.clear(renameInput);
-    await user.type(renameInput, '新的演示标题');
-    await user.click(screen.getByRole('button', { name: /保\s*存/ }));
-    expect(chatApi.renameSession).toHaveBeenCalledWith(
-      SESSION_ONE.session_id,
-      '新的演示标题',
+    render(<RuntimeApp />);
+    const sender = screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行');
+    await user.type(sender, '/demo normal{enter}');
+
+    expect(await screen.findByText('queued')).toBeInTheDocument();
+    expect(chatApi.createChatRun).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: null, content: '/demo normal' }),
     );
-    await user.click(screen.getByRole('button', { name: '删除当前会话' }));
-    const dialog = screen.getByText('确认删除会话').closest('[role="dialog"]');
-    expect(dialog).not.toBeNull();
-    expect(dialog).toHaveTextContent('删除后无法恢复');
-    await user.click(
-      within(dialog).getByRole('button', { name: /确\s*认\s*删\s*除/ }),
-    );
-    expect(chatApi.deleteSession).toHaveBeenCalledWith(SESSION_ONE.session_id);
+    await act(releaseStream);
+
+    expect(await screen.findByText('服务端权威完成文本')).toBeInTheDocument();
+    expect(screen.queryByText('旧草稿')).not.toBeInTheDocument();
+    expect(screen.queryByText('新草稿')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('运行状态')).toHaveTextContent('completed');
+    expect(screen.getByLabelText('运行状态')).toHaveTextContent('attempt 2');
   });
+
+  it('刷新选择会话后恢复 running Run、重连事件并回读 Parent 历史', async () => {
+    const user = userEvent.setup();
+    chatApi.listSessions.mockResolvedValue({ items: [SESSION], next_cursor: null });
+    chatApi.getActiveRun.mockResolvedValue({ ...RUN, status: 'recovering', recovery_attempts: 2 });
+    chatApi.listMessages
+      .mockResolvedValueOnce({ items: [], next_before: null })
+      .mockResolvedValueOnce({
+        items: [{
+          message_id: MESSAGE_ID,
+          role: 'assistant',
+          content: '恢复后的权威回答',
+          runtime_status: 'completed',
+          capability_id: 'general_chat',
+          feedback: null,
+        }],
+        next_before: null,
+      });
+    chatApi.streamRunEvents.mockImplementation(async (_runId, { onEvent }) => {
+      await onEvent(event(10, 'message.started', {
+        response_message_id: MESSAGE_ID,
+        attempt: 3,
+      }));
+      await onEvent(event(11, 'run.completed', { status: 'completed' }));
+      return { lastEventId: 11, reason: 'terminal' };
+    });
+
+    render(<RuntimeApp />);
+    await user.click(await screen.findByText('Runtime 会话'));
+
+    expect(await screen.findByText('恢复后的权威回答')).toBeInTheDocument();
+    expect(chatApi.getActiveRun).toHaveBeenCalledWith(SESSION_ID);
+    expect(chatApi.streamRunEvents).toHaveBeenCalledWith(
+      RUN_ID,
+      expect.objectContaining({ afterSeq: 0 }),
+    );
+    expect(screen.getByLabelText('运行状态')).toHaveTextContent('恢复次数');
+    expect(screen.getByLabelText('运行状态')).toHaveTextContent('2');
+  });
+
+  it('刷新查询先确定无活动 Run，再读取终态 Parent 历史', async () => {
+    const user = userEvent.setup();
+    let resolveActiveRun;
+    chatApi.listSessions.mockResolvedValue({ items: [SESSION], next_cursor: null });
+    chatApi.getActiveRun.mockImplementation(() => new Promise((resolve) => {
+      resolveActiveRun = resolve;
+    }));
+    chatApi.listMessages.mockResolvedValue({
+      items: [{
+        message_id: MESSAGE_ID,
+        role: 'assistant',
+        content: '跨终态窗口后的权威回答',
+        runtime_status: 'completed',
+        capability_id: 'general_chat',
+        feedback: null,
+      }],
+      next_before: null,
+    });
+
+    render(<RuntimeApp />);
+    await user.click(await screen.findByText('Runtime 会话'));
+    await waitFor(() => expect(chatApi.getActiveRun).toHaveBeenCalledWith(SESSION_ID));
+    expect(chatApi.listMessages).not.toHaveBeenCalled();
+
+    await act(async () => resolveActiveRun(null));
+
+    expect(await screen.findByText('跨终态窗口后的权威回答')).toBeInTheDocument();
+    expect(chatApi.listMessages).toHaveBeenCalledWith(SESSION_ID);
+  });
+
+  it('刷新后恢复 pending Interrupt，并用同一 Run 提交 Resume', async () => {
+    const user = userEvent.setup();
+    chatApi.listSessions.mockResolvedValue({ items: [SESSION], next_cursor: null });
+    chatApi.getActiveRun.mockResolvedValue({
+      ...RUN,
+      status: 'interrupted',
+      pending_interrupt: {
+        interrupt_id: INTERRUPT_ID,
+        interrupt_payload: { prompt: '是否继续完成演示运行？' },
+        created_at: '2026-09-30T09:10:00Z',
+      },
+    });
+    chatApi.streamRunEvents.mockImplementation(async (_runId, { onEvent }) => {
+      await onEvent(event(8, 'interrupt.resumed', { interrupt_id: INTERRUPT_ID }));
+      await onEvent(event(9, 'run.completed', { status: 'completed' }));
+      return { lastEventId: 9, reason: 'terminal' };
+    });
+
+    render(<RuntimeApp />);
+    await user.click(await screen.findByText('Runtime 会话'));
+
+    expect(await screen.findByText('是否继续完成演示运行？')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '确认并继续' }));
+
+    expect(chatApi.resumeRun).toHaveBeenCalledWith(
+      RUN_ID,
+      expect.objectContaining({
+        interruptId: INTERRUPT_ID,
+        resumePayload: { approved: true },
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText('运行状态')).toHaveTextContent('completed');
+    });
+  });
+
+  it('显式 Cancel 展示 cancel_requested，并等待 SSE 取消终态', async () => {
+    const user = userEvent.setup();
+    let publishCancelled;
+    chatApi.streamRunEvents.mockImplementation(
+      (_runId, { onEvent }) => new Promise((resolve) => {
+        publishCancelled = async () => {
+          await onEvent(event(4, 'run.cancelled', { status: 'cancelled' }));
+          resolve({ lastEventId: 4, reason: 'terminal' });
+        };
+      }),
+    );
+    chatApi.listMessages.mockResolvedValue({
+      items: [{
+        message_id: MESSAGE_ID,
+        role: 'assistant',
+        content: '已停止本次回复。',
+        runtime_status: 'stopped',
+        capability_id: null,
+        feedback: null,
+      }],
+      next_before: null,
+    });
+
+    render(<RuntimeApp />);
+    const sender = screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行');
+    await user.type(sender, '/demo slow{enter}');
+    await user.click(await screen.findByRole('button', { name: '取消当前运行' }));
+
+    expect(chatApi.cancelRun).toHaveBeenCalledWith(RUN_ID);
+    expect(screen.getByLabelText('运行状态')).toHaveTextContent('cancel_requested');
+    await act(publishCancelled);
+    expect(await screen.findByText('已停止本次回复。')).toBeInTheDocument();
+    expect(screen.getByLabelText('运行状态')).toHaveTextContent('cancelled');
+  });
+
+  it.each(['queued', 'interrupted'])(
+    '%s Run 直接取消为终态后立即回读 Parent 历史',
+    async (status) => {
+      const user = userEvent.setup();
+      chatApi.listSessions.mockResolvedValue({ items: [SESSION], next_cursor: null });
+      chatApi.getActiveRun.mockResolvedValue({
+        ...RUN,
+        status,
+        ...(status === 'interrupted' ? {
+          pending_interrupt: {
+            interrupt_id: INTERRUPT_ID,
+            interrupt_payload: { prompt: '是否继续？' },
+            created_at: '2026-09-30T09:10:00Z',
+          },
+        } : {}),
+      });
+      chatApi.listMessages
+        .mockResolvedValueOnce({ items: [], next_before: null })
+        .mockResolvedValue({
+          items: [{
+            message_id: MESSAGE_ID,
+            role: 'assistant',
+            content: '已停止本次回复。',
+            runtime_status: 'stopped',
+            capability_id: null,
+            feedback: null,
+          }],
+          next_before: null,
+        });
+      chatApi.cancelRun.mockResolvedValue({ ...RUN, status: 'cancelled' });
+      if (status === 'queued') {
+        chatApi.streamRunEvents.mockImplementation(() => new Promise(() => {}));
+      }
+
+      render(<RuntimeApp />);
+      await user.click(await screen.findByText('Runtime 会话'));
+      await waitFor(() => {
+        expect(screen.getByLabelText('运行状态')).toHaveTextContent(status);
+      });
+      await user.click(await screen.findByRole('button', { name: '取消当前运行' }));
+
+      expect(await screen.findByText('已停止本次回复。')).toBeInTheDocument();
+      expect(screen.getByLabelText('运行状态')).toHaveTextContent('cancelled');
+      expect(chatApi.listMessages).toHaveBeenCalledTimes(2);
+    },
+  );
 });

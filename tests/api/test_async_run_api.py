@@ -192,6 +192,7 @@ def test_normal_message_returns_accepted_persisted_run_summary() -> None:
         "session_id": str(SESSION_ID),
         "response_message_id": str(RESPONSE_MESSAGE_ID),
         "status": "queued",
+        "recovery_attempts": 0,
     }
     assert service.normal_calls == [
         (REQUEST_ID, SESSION_ID, "提交异步 Run")
@@ -256,6 +257,7 @@ def test_active_run_query_supports_page_refresh_without_private_fields() -> None
         "session_id": str(SESSION_ID),
         "response_message_id": str(RESPONSE_MESSAGE_ID),
         "status": "running",
+        "recovery_attempts": 0,
     }
     assert service.active_calls == [SESSION_ID]
     assert "input_payload" not in response.text
@@ -336,6 +338,7 @@ def test_resume_uses_same_run_and_returns_accepted_summary() -> None:
         "session_id": str(SESSION_ID),
         "response_message_id": str(RESPONSE_MESSAGE_ID),
         "status": "running",
+        "recovery_attempts": 0,
     }
     assert service.resume_calls == [
         (
@@ -418,6 +421,7 @@ def test_run_cancel_persists_request_and_returns_accepted_summary() -> None:
         "session_id": str(SESSION_ID),
         "response_message_id": str(RESPONSE_MESSAGE_ID),
         "status": "cancel_requested",
+        "recovery_attempts": 0,
     }
     assert service.cancel_calls == [RUN_ID, RUN_ID]
 
