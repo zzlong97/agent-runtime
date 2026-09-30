@@ -12,7 +12,7 @@ from agent_runtime.core.logging import log_business_event
 from agent_runtime.runtime.models import Run
 from agent_runtime.runtime.repository import PostgresRunRepository
 
-RunExecutor = Callable[[Run], Awaitable[None]]
+RunExecutor = Callable[[Run, str], Awaitable[None]]
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ class RunCoordinator:
         )
 
     async def scan_once(self, *, reason: str = "compensation") -> None:
-        """扫描固定用户的非终态 Run，并分派 queued 或取消投影任务。"""
+        """扫描固定用户的非终态 Run，并分派新执行、恢复或取消投影。"""
 
         started_at = perf_counter()
         try:
@@ -130,17 +130,35 @@ class RunCoordinator:
             )
             return
         queued_count = 0
+        recovery_count = 0
+        interrupt_reconciliation_count = 0
         cancel_requested_count = 0
         deferred_count = 0
         for run in runs:
             if run.status == "queued":
                 queued_count += 1
                 await self._dispatch_if_actionable(run, reason=reason)
+            elif run.status in {"running", "recovering"}:
+                recovery_count += 1
+                await self._dispatch_if_actionable(
+                    run,
+                    reason=reason,
+                    allowed_statuses=frozenset({"running", "recovering"}),
+                )
             elif run.status == "cancel_requested":
                 cancel_requested_count += 1
                 await self._dispatch_if_actionable(run, reason=reason)
+            elif run.status == "interrupted" and reason == "startup":
+                # 仅在进程启动时检查取消 Checkpoint；没有 stopped 消息时
+                # 执行器会立即返回，绝不恢复或重跑中断 Graph。
+                interrupt_reconciliation_count += 1
+                await self._dispatch_if_actionable(
+                    run,
+                    reason="startup-reconciliation",
+                    allowed_statuses=frozenset({"interrupted"}),
+                )
             else:
-                # running/recovering 的对账恢复属于 S2.5-08。
+                # interrupted 的周期扫描仍等待显式 Resume 或 Cancel。
                 deferred_count += 1
         log_business_event(
             logger,
@@ -148,6 +166,8 @@ class RunCoordinator:
             scan_reason=reason,
             active_count=len(runs),
             queued_count=queued_count,
+            recovery_count=recovery_count,
+            interrupt_reconciliation_count=interrupt_reconciliation_count,
             cancel_requested_count=cancel_requested_count,
             deferred_count=deferred_count,
             duration_ms=_elapsed_ms(started_at),
@@ -324,7 +344,7 @@ class RunCoordinator:
             dispatch_reason=reason,
         )
         try:
-            await executor(run)
+            await executor(run, reason)
         except asyncio.CancelledError:
             log_business_event(
                 logger,

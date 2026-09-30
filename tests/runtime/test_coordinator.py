@@ -75,8 +75,8 @@ def test_coordinator_submit_wakeup_executes_one_local_task() -> None:
     executed: list[UUID] = []
     finished = asyncio.Event()
 
-    async def execute(selected_run):
-        executed.append(selected_run.run_id)
+    async def execute(selected_run, reason):
+        executed.append((selected_run.run_id, reason))
         repository.runs[selected_run.run_id] = replace(
             selected_run,
             status="completed",
@@ -101,7 +101,7 @@ def test_coordinator_submit_wakeup_executes_one_local_task() -> None:
             await coordinator.close()
 
     asyncio.run(exercise())
-    assert executed == [run.run_id]
+    assert executed == [(run.run_id, "submit")]
 
 
 def test_coordinator_compensates_a_lost_submit_wakeup() -> None:
@@ -111,7 +111,7 @@ def test_coordinator_compensates_a_lost_submit_wakeup() -> None:
     repository = FakeRunRepository([run])
     finished = asyncio.Event()
 
-    async def execute(selected_run):
+    async def execute(selected_run, _reason):
         repository.runs[selected_run.run_id] = replace(
             selected_run,
             status="completed",
@@ -136,22 +136,24 @@ def test_coordinator_compensates_a_lost_submit_wakeup() -> None:
     assert repository.list_calls
 
 
-def test_coordinator_startup_scan_dispatches_queued_runs_only() -> None:
+def test_coordinator_startup_scan_dispatches_recoverable_runs() -> None:
     from agent_runtime.runtime.coordinator import RunCoordinator
 
     queued = _queued_run(3)
     running = replace(_queued_run(4), status="running")
-    repository = FakeRunRepository([queued, running])
-    executed: list[UUID] = []
-    finished = asyncio.Event()
+    recovering = replace(_queued_run(42), status="recovering")
+    interrupted = replace(_queued_run(43), status="interrupted")
+    repository = FakeRunRepository(
+        [queued, running, recovering, interrupted]
+    )
+    executed: list[tuple[UUID, str]] = []
 
-    async def execute(selected_run):
-        executed.append(selected_run.run_id)
+    async def execute(selected_run, reason):
+        executed.append((selected_run.run_id, reason))
         repository.runs[selected_run.run_id] = replace(
             selected_run,
             status="completed",
         )
-        finished.set()
 
     async def exercise() -> None:
         coordinator = RunCoordinator(
@@ -161,27 +163,31 @@ def test_coordinator_startup_scan_dispatches_queued_runs_only() -> None:
         )
         await coordinator.start(execute)
         try:
-            await asyncio.wait_for(finished.wait(), timeout=1)
             await coordinator.wait_until_idle()
         finally:
             await coordinator.close()
 
     asyncio.run(exercise())
     assert repository.list_calls == ["local-user"]
-    assert executed == [queued.run_id]
+    assert set(executed) == {
+        (queued.run_id, "startup"),
+        (running.run_id, "startup"),
+        (recovering.run_id, "startup"),
+        (interrupted.run_id, "startup-reconciliation"),
+    }
 
 
-def test_coordinator_dispatches_running_run_only_for_live_resume_signal() -> None:
-    """显式 Resume 可继续 running Run，普通扫描仍不得提前承担崩溃恢复。"""
+def test_coordinator_marks_live_resume_dispatch_reason() -> None:
+    """显式 Resume 使用独立原因，避免被误计为崩溃恢复。"""
 
     from agent_runtime.runtime.coordinator import RunCoordinator
 
     resumed = replace(_queued_run(41), status="running")
     repository = FakeRunRepository([resumed])
-    executed: list[UUID] = []
+    executed: list[tuple[UUID, str]] = []
 
-    async def execute(selected_run):
-        executed.append(selected_run.run_id)
+    async def execute(selected_run, reason):
+        executed.append((selected_run.run_id, reason))
 
     async def exercise() -> None:
         coordinator = RunCoordinator(
@@ -189,17 +195,15 @@ def test_coordinator_dispatches_running_run_only_for_live_resume_signal() -> Non
             user_id="local-user",
             scan_interval_seconds=60,
         )
-        await coordinator.start(execute)
+        await coordinator.start(execute, scan_on_startup=False)
         try:
-            await coordinator.wait_until_idle()
-            assert executed == []
             await coordinator.wake_resumed(resumed.run_id)
             await coordinator.wait_until_idle()
         finally:
             await coordinator.close()
 
     asyncio.run(exercise())
-    assert executed == [resumed.run_id]
+    assert executed == [(resumed.run_id, "resume")]
 
 
 def test_coordinator_close_cancels_local_tasks_for_later_recovery() -> None:
@@ -210,7 +214,7 @@ def test_coordinator_close_cancels_local_tasks_for_later_recovery() -> None:
     started = asyncio.Event()
     cancelled = asyncio.Event()
 
-    async def execute(selected_run):
+    async def execute(selected_run, _reason):
         started.set()
         try:
             await asyncio.Event().wait()
@@ -249,7 +253,7 @@ def test_coordinator_cancel_first_notifies_cooperative_executor() -> None:
             cancel_grace_seconds=1,
         )
 
-        async def execute(selected_run):
+        async def execute(selected_run, _reason):
             started.set()
             await coordinator.wait_cancel_requested(selected_run.run_id)
             cooperatively_stopped.set()
@@ -275,7 +279,7 @@ def test_coordinator_force_cancels_executor_after_grace_timeout() -> None:
     started = asyncio.Event()
     cancelled = asyncio.Event()
 
-    async def execute(_selected_run):
+    async def execute(_selected_run, _reason):
         started.set()
         try:
             await asyncio.Event().wait()
@@ -321,7 +325,7 @@ def test_coordinator_does_not_interrupt_slow_cancel_finalization() -> None:
             cancel_grace_seconds=0.01,
         )
 
-        async def execute(selected_run):
+        async def execute(selected_run, _reason):
             started.set()
             await coordinator.wait_cancel_requested(selected_run.run_id)
             await coordinator.begin_cancel_finalization(selected_run.run_id)
@@ -370,7 +374,7 @@ def test_cancelled_waiter_does_not_interrupt_cancel_finalization() -> None:
             cancel_grace_seconds=0.01,
         )
 
-        async def execute(selected_run):
+        async def execute(selected_run, _reason):
             try:
                 await coordinator.wait_cancel_requested(selected_run.run_id)
                 await coordinator.begin_cancel_finalization(selected_run.run_id)
@@ -411,7 +415,7 @@ def test_coordinator_startup_dispatches_cancel_requested_for_projection() -> Non
     repository = FakeRunRepository([run])
     executed: list[UUID] = []
 
-    async def execute(selected_run):
+    async def execute(selected_run, _reason):
         executed.append(selected_run.run_id)
 
     async def exercise() -> None:
@@ -464,7 +468,7 @@ def test_real_postgres_scan_compensates_missing_process_wakeup() -> None:
     session_repository = PostgresSessionRepository(settings)
     discovered = asyncio.Event()
 
-    async def execute(run) -> None:
+    async def execute(run, _reason) -> None:
         assert run.run_id == run_id
         discovered.set()
 

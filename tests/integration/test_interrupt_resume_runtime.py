@@ -130,6 +130,10 @@ def test_regenerate_interrupt_resumes_latest_fork_checkpoint() -> None:
             parent_graph=graph,
         )
         initial_turn = await service._turn_from_run(run)
+        assert initial_turn.config["metadata"] == {
+            "run_id": str(run.run_id),
+            "response_message_id": str(regenerate_response_id),
+        }
         assert [
             message async for message in service.stream_turn(initial_turn)
         ] == []
@@ -337,9 +341,9 @@ def test_graph_interrupt_resumes_same_run_without_new_human_message() -> None:
         )
         executor_errors = []
 
-        async def execute_with_evidence(run):
+        async def execute_with_evidence(run, dispatch_reason):
             try:
-                await service.execute_persistent_run(run)
+                await service.execute_persistent_run(run, dispatch_reason)
             except Exception as error:
                 executor_errors.append(error)
                 raise

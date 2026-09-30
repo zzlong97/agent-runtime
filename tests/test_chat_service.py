@@ -2278,7 +2278,7 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         async def close(self) -> None:
             events.append("runs_closed")
 
-        async def execute_persistent_run(self, run) -> None:
+        async def execute_persistent_run(self, run, dispatch_reason) -> None:
             raise AssertionError("测试不应真正执行 Run")
 
     @asynccontextmanager
@@ -2540,11 +2540,17 @@ def test_persistent_run_does_not_commit_failed_without_public_message(
         "for_run",
         lambda **_kwargs: sequencer,
     )
+
+    class FakeParentGraph:
+        async def aget_state_history(self, *_args, **_kwargs):
+            if False:
+                yield None
+
     service = ChatService(
         settings=Settings(_env_file=None),
         session_repository=object(),
         session_service=object(),
-        parent_graph=object(),
+        parent_graph=FakeParentGraph(),
         persistent_run_repository=repository,
         runtime_event_repository=object(),
         run_coordinator=coordinator,

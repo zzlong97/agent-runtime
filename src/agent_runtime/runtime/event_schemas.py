@@ -53,7 +53,11 @@ STATEFUL_PUBLIC_EVENT_TYPES = frozenset(
 )
 
 STATEFUL_INTERNAL_EVENT_TYPES = frozenset(
-    {"internal.run.cancel_requested"}
+    {
+        "internal.run.cancel_requested",
+        "internal.run.recovery_claimed",
+        "internal.run.recovery_activated",
+    }
 )
 
 
@@ -88,6 +92,49 @@ class RunCancelRequestedPayload(_ClosedPayload):
             "固定为 cancel_requested，不允许投影到公开 SSE。"
         )
     )
+
+
+class RunRecoveryClaimedPayload(_ClosedPayload):
+    """重启恢复器已原子接管 Run 的内部数据。"""
+
+    status: Literal["recovering"] = Field(
+        description=(
+            "Run 已进入 Checkpoint 对账恢复态；Stage 2.5 该字段固定为 recovering，"
+            "且不得投影到公开 SSE。"
+        )
+    )
+    recovery_attempt: int = Field(
+        ge=1,
+        le=3,
+        description="本次重启接管的恢复次数，只允许 1 到 3，并与 Run 计数原子递增。",
+    )
+
+
+class RunRecoveryActivatedPayload(_ClosedPayload):
+    """恢复器完成 Checkpoint 对账并准备继续执行的内部数据。"""
+
+    status: Literal["running"] = Field(
+        description=(
+            "Run 已完成恢复安全检查并重新进入执行态；Stage 2.5 固定为 running，"
+            "且不得投影到公开 SSE。"
+        )
+    )
+    recovery_attempt: int = Field(
+        ge=1,
+        le=3,
+        description="当前 Run 已持久化的恢复次数，用于关联本次重新执行尝试。",
+    )
+
+
+INTERNAL_STATE_PAYLOAD_SCHEMA_BY_TYPE: dict[str, type[BaseModel]] = {
+    "internal.run.cancel_requested": RunCancelRequestedPayload,
+    "internal.run.recovery_claimed": RunRecoveryClaimedPayload,
+    "internal.run.recovery_activated": RunRecoveryActivatedPayload,
+}
+
+INTERNAL_STATE_PAYLOAD_SCHEMA_TYPES = tuple(
+    INTERNAL_STATE_PAYLOAD_SCHEMA_BY_TYPE.values()
+)
 
 
 class MessageStartedPayload(_ClosedPayload):
@@ -338,6 +385,22 @@ def serialize_event_draft_payload(
     if draft.visibility == "internal":
         if not draft.event_type.startswith("internal."):
             raise _schema_error("内部事件类型必须使用 internal. 前缀")
+        schema_type = INTERNAL_STATE_PAYLOAD_SCHEMA_BY_TYPE.get(
+            draft.event_type
+        )
+        if schema_type is not None:
+            try:
+                payload = schema_type.model_validate(
+                    draft.payload.model_dump(mode="json")
+                )
+            except ValidationError as error:
+                raise _schema_error(
+                    "内部 Run 状态事件 payload 不符合固定 Schema"
+                ) from error
+            return cast(
+                dict[str, JsonValue],
+                payload.model_dump(mode="json"),
+            )
         return cast(
             dict[str, JsonValue],
             draft.payload.model_dump(mode="json"),

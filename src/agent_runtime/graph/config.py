@@ -15,13 +15,21 @@ def parent_thread_config(
     session_id: UUID,
     *,
     message_id: UUID | None = None,
+    run_id: UUID | None = None,
+    response_message_id: UUID | None = None,
 ) -> RunnableConfig:
-    """构造 Parent thread_id，并可携带本轮公共 AIMessage 的稳定 UUID。"""
+    """构造 Parent thread_id，并可关联持久 Run 的 Checkpoint metadata。"""
 
     configurable = {"thread_id": str(session_id)}
     if message_id is not None:
         configurable["message_id"] = str(message_id)
-    return {"configurable": configurable}
+    config: RunnableConfig = {"configurable": configurable}
+    if run_id is not None and response_message_id is not None:
+        config["metadata"] = {
+            "run_id": str(run_id),
+            "response_message_id": str(response_message_id),
+        }
+    return config
 
 
 def child_thread_config(

@@ -7,11 +7,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 def test_public_runtime_event_schemas_are_closed_and_described_in_chinese() -> None:
     from agent_runtime.runtime.event_schemas import (
+        INTERNAL_STATE_PAYLOAD_SCHEMA_TYPES,
         PUBLIC_EVENT_SCHEMA_TYPES,
         PUBLIC_PAYLOAD_SCHEMA_TYPES,
     )
 
-    for schema_type in (*PUBLIC_PAYLOAD_SCHEMA_TYPES, *PUBLIC_EVENT_SCHEMA_TYPES):
+    for schema_type in (
+        *PUBLIC_PAYLOAD_SCHEMA_TYPES,
+        *PUBLIC_EVENT_SCHEMA_TYPES,
+        *INTERNAL_STATE_PAYLOAD_SCHEMA_TYPES,
+    ):
         schema = schema_type.model_json_schema()
         assert schema["additionalProperties"] is False
         for field_name, field_schema in schema["properties"].items():
@@ -160,6 +165,33 @@ def test_event_draft_requires_declared_public_durability_and_typed_internal_payl
     )
 
     assert payload == {"diagnostic_code": "RECOVERY_CHECK"}
+
+
+def test_stateful_internal_recovery_event_requires_fixed_payload_schema() -> None:
+    """恢复状态事件不得用其他内部 payload 绕过次数与状态约束。"""
+
+    from agent_runtime.runtime.event_models import RuntimeEventDraft
+    from agent_runtime.runtime.event_schemas import (
+        RunRecoveryActivatedPayload,
+        RuntimeEventSchemaError,
+        serialize_event_draft_payload,
+    )
+
+    with pytest.raises(RuntimeEventSchemaError):
+        serialize_event_draft_payload(
+            RuntimeEventDraft(
+                event_type="internal.run.recovery_claimed",
+                source="runtime.recovery",
+                visibility="internal",
+                payload=RunRecoveryActivatedPayload(
+                    status="running",
+                    recovery_attempt=1,
+                ),
+                schema_version=1,
+                durability="durable",
+                created_at=datetime.now(UTC),
+            )
+        )
 
 
 @pytest.mark.parametrize(

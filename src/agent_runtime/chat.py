@@ -13,7 +13,7 @@ from uuid import UUID, uuid4, uuid5
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.types import Command
+from langgraph.types import Command, StateSnapshot
 
 from agent_runtime.api.schemas.chat import (
     CapabilityId,
@@ -63,7 +63,15 @@ from agent_runtime.runtime.event_schemas import (
     RunCancelledPayload,
     RunCompletedPayload,
     RunFailedPayload,
+    RunRecoveryActivatedPayload,
+    RunRecoveryClaimedPayload,
     RunStartedPayload,
+)
+from agent_runtime.runtime.checkpoint_recovery import (
+    RecoveredFinalMessage,
+    RunCheckpointInspector,
+    ensure_automatic_recovery_safe,
+    recovered_final_message,
 )
 from agent_runtime.runtime.fingerprints import build_request_fingerprint
 from agent_runtime.runtime.models import JsonValue, Run, RunSubmission
@@ -122,6 +130,7 @@ class PreparedChatTurn:
     active_run: ActiveRun
     is_regeneration: bool = False
     is_resume: bool = False
+    is_recovery: bool = False
     resume_payload: dict[str, JsonValue] | None = None
 
 
@@ -638,8 +647,14 @@ class ChatService:
             await finalization
             raise
 
-    async def execute_persistent_run(self, run: Run) -> None:
-        """执行 queued 或本进程刚恢复的 Run，并按持久事件协议推进。"""
+    async def execute_persistent_run(
+        self,
+        run: Run,
+        dispatch_reason: str = "submit",
+        *,
+        recovery_config: RunnableConfig | None = None,
+    ) -> None:
+        """执行新 Run、现场 Resume 或按 Checkpoint 对账后的恢复尝试。"""
 
         repository, coordinator = self._persistent_runtime_dependencies()
         event_repository = self._runtime_event_repository
@@ -649,6 +664,15 @@ class ChatService:
                 message="RuntimeEvent 服务尚未完成初始化",
                 retryable=True,
             )
+        is_resume = dispatch_reason == "resume"
+        is_recovery_execution = dispatch_reason == "recovery-active"
+        if (
+            not is_resume
+            and not is_recovery_execution
+            and run.status in {"queued", "interrupted", "cancel_requested"}
+            and await self._reconcile_stopped_checkpoint(run)
+        ):
+            return
         if run.status == "cancel_requested":
             await coordinator.begin_cancel_finalization(run.run_id)
             async with coordinator.claim_guard(run.run_id):
@@ -656,7 +680,13 @@ class ChatService:
                 if current.status == "cancel_requested":
                     await self._finalize_persistent_cancellation_locked(current)
             return
-        is_resume = run.status == "running"
+        if (
+            run.status in {"running", "recovering"}
+            and not is_resume
+            and not is_recovery_execution
+        ):
+            await self._recover_persistent_run(run)
+            return
         resumed_interrupt = None
         if is_resume:
             resumed_interrupt = await self._require_interrupt_repository().get_latest_resumed(
@@ -667,7 +697,7 @@ class ChatService:
                 or resumed_interrupt.resume_payload is None
             ):
                 return
-        elif run.status != "queued":
+        elif run.status != "queued" and not is_recovery_execution:
             return
         sequencer = RunSequencer.for_run(
             run_id=run.run_id,
@@ -694,7 +724,7 @@ class ChatService:
                 return
             if current.status in {"completed", "failed", "cancelled"}:
                 return
-            if is_resume:
+            if is_resume or is_recovery_execution:
                 if current.status != "running":
                     return
             else:
@@ -719,6 +749,7 @@ class ChatService:
                     if resumed_interrupt is not None
                     else None
                 ),
+                recovery_config=recovery_config,
             )
             attempt = await event_repository.next_message_attempt(
                 run_id=run.run_id
@@ -950,6 +981,457 @@ class ChatService:
             duration_ms=round((perf_counter() - started_at) * 1000, 2),
         )
 
+    async def _reconcile_stopped_checkpoint(self, run: Run) -> bool:
+        """识别已落盘 stopped 消息，并在执行 Graph 前只补取消投影。"""
+
+        inspector = RunCheckpointInspector(parent_graph=self._parent_graph)
+        snapshot = await inspector.latest_for_run(run)
+        if snapshot is None:
+            return False
+        final_message = recovered_final_message(run, snapshot)
+        if (
+            final_message is None
+            or final_message.runtime_status != "stopped"
+        ):
+            return False
+
+        repository, coordinator = self._persistent_runtime_dependencies()
+        event_repository = self._runtime_event_repository
+        if event_repository is None:
+            raise ChatRuntimeError(
+                code="RUNTIME_EVENT_SERVICE_UNAVAILABLE",
+                message="RuntimeEvent 服务尚未完成初始化",
+                retryable=True,
+            )
+        sequencer = RunSequencer.for_run(
+            run_id=run.run_id,
+            response_message_id=run.response_message_id,
+            repository=event_repository,
+            publisher=self._runtime_event_publisher,
+        )
+        await coordinator.begin_cancel_finalization(run.run_id)
+        async with coordinator.claim_guard(run.run_id):
+            current = await repository.get(run.run_id)
+            if current.status in {"completed", "failed", "cancelled"}:
+                return True
+            await self._project_stopped_cancellation_locked(
+                current,
+                final_message=final_message,
+                sequencer=sequencer,
+            )
+        return True
+
+    async def _project_stopped_cancellation_locked(
+        self,
+        run: Run,
+        *,
+        final_message: RecoveredFinalMessage,
+        sequencer: RunSequencer,
+    ) -> Run:
+        """幂等补齐 stopped 消息对应的唯一取消事件和 Run 终态。"""
+
+        event_repository = self._runtime_event_repository
+        assert event_repository is not None
+        current = run
+        if current.status in {"completed", "failed", "cancelled"}:
+            return current
+        if current.status in {"running", "recovering"}:
+            requested = await sequencer.transition_run(
+                target_status="cancel_requested",
+                event=self._internal_runtime_event_draft(
+                    "internal.run.cancel_requested",
+                    RunCancelRequestedPayload(status="cancel_requested"),
+                ),
+                updated_at=datetime.now(UTC),
+            )
+            current = requested.run
+        if current.status not in {
+            "queued",
+            "interrupted",
+            "cancel_requested",
+        }:
+            return current
+        if not await event_repository.has_event_type(
+            run_id=run.run_id,
+            event_type="message.finalized",
+        ):
+            await sequencer.emit(
+                self._runtime_event_draft(
+                    "message.finalized",
+                    MessageFinalizedPayload(
+                        response_message_id=run.response_message_id,
+                        runtime_status="stopped",
+                        capability_id=final_message.capability_id,
+                    ),
+                )
+            )
+        commit = await sequencer.transition_run(
+            target_status="cancelled",
+            event=self._runtime_event_draft(
+                "run.cancelled",
+                RunCancelledPayload(status="cancelled"),
+            ),
+            updated_at=datetime.now(UTC),
+        )
+        await self._session_service.touch_session(session_id=run.session_id)
+        log_business_event(
+            logger,
+            "持久Run停止Checkpoint取消投影完成",
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            capability_id=final_message.capability_id,
+            status="cancelled",
+        )
+        return commit.run
+
+    async def _recover_persistent_run(self, run: Run) -> None:
+        """接管遗留活动 Run，并优先从精确 Checkpoint 补齐持久投影。"""
+
+        repository, coordinator = self._persistent_runtime_dependencies()
+        event_repository = self._runtime_event_repository
+        if event_repository is None:
+            raise ChatRuntimeError(
+                code="RUNTIME_EVENT_SERVICE_UNAVAILABLE",
+                message="RuntimeEvent 服务尚未完成初始化",
+                retryable=True,
+            )
+        inspector = RunCheckpointInspector(parent_graph=self._parent_graph)
+        snapshot = await inspector.latest_for_run(run)
+        final_message = (
+            recovered_final_message(run, snapshot)
+            if snapshot is not None
+            else None
+        )
+        graph_interrupt = (
+            self._graph_interrupt_from_snapshot(run=run, snapshot=snapshot)
+            if snapshot is not None
+            else None
+        )
+        sequencer = RunSequencer.for_run(
+            run_id=run.run_id,
+            response_message_id=run.response_message_id,
+            repository=event_repository,
+            publisher=self._runtime_event_publisher,
+        )
+        if (
+            final_message is not None
+            and final_message.runtime_status == "stopped"
+        ):
+            await coordinator.begin_cancel_finalization(run.run_id)
+            async with coordinator.claim_guard(run.run_id):
+                current = await repository.get(run.run_id)
+                if current.status in {
+                    "queued",
+                    "running",
+                    "recovering",
+                    "interrupted",
+                    "cancel_requested",
+                }:
+                    await self._project_stopped_cancellation_locked(
+                        current,
+                        final_message=final_message,
+                        sequencer=sequencer,
+                    )
+            return
+        claimed_run = run
+        async with coordinator.claim_guard(run.run_id):
+            current = await repository.get(run.run_id)
+            if current.status == "cancel_requested":
+                await coordinator.begin_cancel_finalization(run.run_id)
+                await self._finalize_persistent_cancellation_locked(current)
+                return
+            if current.status not in {"running", "recovering"}:
+                return
+            if current.recovery_attempts >= 3:
+                if final_message is None and graph_interrupt is None:
+                    await self._fail_recovery_exhausted_locked(
+                        current,
+                        snapshot=snapshot,
+                        sequencer=sequencer,
+                    )
+                    return
+                claimed_run = current
+            else:
+                next_attempt = current.recovery_attempts + 1
+                claim = await sequencer.claim_recovery(
+                    event=self._internal_runtime_event_draft(
+                        "internal.run.recovery_claimed",
+                        RunRecoveryClaimedPayload(
+                            status="recovering",
+                            recovery_attempt=next_attempt,
+                        ),
+                    ),
+                    updated_at=datetime.now(UTC),
+                )
+                claimed_run = claim.run
+
+        if final_message is not None:
+            await self._project_recovered_final_message(
+                claimed_run,
+                final_message=final_message,
+                sequencer=sequencer,
+            )
+            return
+        if graph_interrupt is not None:
+            await self._project_recovered_interrupt(
+                claimed_run,
+                graph_interrupt=graph_interrupt,
+                sequencer=sequencer,
+            )
+            return
+
+        if snapshot is not None:
+            ensure_automatic_recovery_safe(snapshot)
+        async with coordinator.claim_guard(run.run_id):
+            current = await repository.get(run.run_id)
+            if current.status == "cancel_requested":
+                await coordinator.begin_cancel_finalization(run.run_id)
+                await self._finalize_persistent_cancellation_locked(current)
+                return
+            if current.status != "recovering":
+                return
+            activation = await sequencer.transition_run(
+                target_status="running",
+                event=self._internal_runtime_event_draft(
+                    "internal.run.recovery_activated",
+                    RunRecoveryActivatedPayload(
+                        status="running",
+                        recovery_attempt=current.recovery_attempts,
+                    ),
+                ),
+                updated_at=datetime.now(UTC),
+            )
+            active_run = activation.run
+
+        recovery_config = (
+            inspector.recovery_config(active_run, snapshot)
+            if snapshot is not None
+            else None
+        )
+        log_business_event(
+            logger,
+            "持久Run恢复执行开始",
+            run_id=active_run.run_id,
+            request_id=active_run.request_id,
+            session_id=active_run.session_id,
+            message_id=active_run.response_message_id,
+            recovery_attempt=active_run.recovery_attempts,
+            checkpoint_found=snapshot is not None,
+        )
+        await self.execute_persistent_run(
+            active_run,
+            "recovery-active",
+            recovery_config=recovery_config,
+        )
+
+    async def _project_recovered_final_message(
+        self,
+        run: Run,
+        *,
+        final_message: RecoveredFinalMessage,
+        sequencer: RunSequencer,
+    ) -> None:
+        """Checkpoint 已有终态消息时只补事件和 Run 投影，不重跑 Graph。"""
+
+        repository, coordinator = self._persistent_runtime_dependencies()
+        event_repository = self._runtime_event_repository
+        assert event_repository is not None
+        if final_message.runtime_status == "stopped":
+            await coordinator.begin_cancel_finalization(run.run_id)
+        async with coordinator.claim_guard(run.run_id):
+            current = await repository.get(run.run_id)
+            if final_message.runtime_status == "stopped":
+                await self._project_stopped_cancellation_locked(
+                    current,
+                    final_message=final_message,
+                    sequencer=sequencer,
+                )
+                return
+            if current.status == "cancel_requested":
+                await coordinator.begin_cancel_finalization(run.run_id)
+                await self._finalize_persistent_cancellation_locked(current)
+                return
+            if current.status not in {"running", "recovering"}:
+                return
+            if (
+                current.status == "recovering"
+                and final_message.runtime_status
+                in {"completed", "unsupported"}
+            ):
+                activation = await sequencer.transition_run(
+                    target_status="running",
+                    event=self._internal_runtime_event_draft(
+                        "internal.run.recovery_activated",
+                        RunRecoveryActivatedPayload(
+                            status="running",
+                            recovery_attempt=current.recovery_attempts,
+                        ),
+                    ),
+                    updated_at=datetime.now(UTC),
+                )
+                current = activation.run
+            if not await event_repository.has_event_type(
+                run_id=run.run_id,
+                event_type="message.finalized",
+            ):
+                await sequencer.emit(
+                    self._runtime_event_draft(
+                        "message.finalized",
+                        MessageFinalizedPayload(
+                            response_message_id=run.response_message_id,
+                            runtime_status=final_message.runtime_status,
+                            capability_id=final_message.capability_id,
+                        ),
+                    )
+                )
+            if final_message.runtime_status in {"completed", "unsupported"}:
+                await sequencer.transition_run(
+                    target_status="completed",
+                    event=self._runtime_event_draft(
+                        "run.completed",
+                        RunCompletedPayload(status="completed"),
+                    ),
+                    updated_at=datetime.now(UTC),
+                )
+            else:
+                await sequencer.transition_run(
+                    target_status="failed",
+                    event=self._runtime_event_draft(
+                        "run.failed",
+                        RunFailedPayload(
+                            status="failed",
+                            code="RUN_RECOVERED_INCOMPLETE",
+                            message="进程中断前的未完成回复已恢复。",
+                            retryable=True,
+                        ),
+                    ),
+                    updated_at=datetime.now(UTC),
+                    error_code="RUN_RECOVERED_INCOMPLETE",
+                    error_message="进程中断前的未完成回复已恢复。",
+                )
+            await self._session_service.touch_session(session_id=run.session_id)
+        log_business_event(
+            logger,
+            "持久RunCheckpoint终态投影完成",
+            run_id=run.run_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            status=final_message.runtime_status,
+            recovery_attempt=run.recovery_attempts,
+        )
+
+    async def _project_recovered_interrupt(
+        self,
+        run: Run,
+        *,
+        graph_interrupt: tuple[UUID, dict[str, JsonValue]],
+        sequencer: RunSequencer,
+    ) -> None:
+        """Checkpoint 已有中断时只补 Interrupt、Run 与事件的原子投影。"""
+
+        repository, coordinator = self._persistent_runtime_dependencies()
+        interrupt_id, interrupt_payload = graph_interrupt
+        async with coordinator.claim_guard(run.run_id):
+            current = await repository.get(run.run_id)
+            if current.status == "cancel_requested":
+                await coordinator.begin_cancel_finalization(run.run_id)
+                await self._finalize_persistent_cancellation_locked(current)
+                return
+            if current.status not in {"running", "recovering"}:
+                return
+            await sequencer.require_interrupt(
+                interrupt_id=interrupt_id,
+                interrupt_payload=interrupt_payload,
+                event=self._runtime_event_draft(
+                    "interrupt.required",
+                    InterruptRequiredPayload(interrupt_id=interrupt_id),
+                ),
+                updated_at=datetime.now(UTC),
+            )
+            await self._session_service.touch_session(session_id=run.session_id)
+        log_business_event(
+            logger,
+            "持久RunCheckpoint中断投影完成",
+            run_id=run.run_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            interrupt_id=interrupt_id,
+            status="interrupted",
+            recovery_attempt=run.recovery_attempts,
+        )
+
+    async def _fail_recovery_exhausted_locked(
+        self,
+        run: Run,
+        *,
+        snapshot: StateSnapshot | None,
+        sequencer: RunSequencer,
+    ) -> None:
+        """三次恢复均未形成终态时保存非空回复并提交唯一失败终态。"""
+
+        event_repository = self._runtime_event_repository
+        assert event_repository is not None
+        inspector = RunCheckpointInspector(parent_graph=self._parent_graph)
+        turn = await self._turn_from_run(
+            run,
+            recovery_config=(
+                inspector.recovery_config(run, snapshot)
+                if snapshot is not None
+                else None
+            ),
+        )
+        await self.persist_runtime_message(
+            turn,
+            _FAILED_MESSAGE_FALLBACK,
+            runtime_status="incomplete",
+            capability_id=None,
+            include_human=(turn.human_message is not None),
+        )
+        if not await event_repository.has_event_type(
+            run_id=run.run_id,
+            event_type="message.finalized",
+        ):
+            await sequencer.emit(
+                self._runtime_event_draft(
+                    "message.finalized",
+                    MessageFinalizedPayload(
+                        response_message_id=run.response_message_id,
+                        runtime_status="incomplete",
+                        capability_id=None,
+                    ),
+                )
+            )
+        await sequencer.transition_run(
+            target_status="failed",
+            event=self._runtime_event_draft(
+                "run.failed",
+                RunFailedPayload(
+                    status="failed",
+                    code="RUN_RECOVERY_EXHAUSTED",
+                    message="本次回复连续恢复失败，请重新发送。",
+                    retryable=True,
+                ),
+            ),
+            updated_at=datetime.now(UTC),
+            error_code="RUN_RECOVERY_EXHAUSTED",
+            error_message="本次回复连续恢复失败，请重新发送。",
+        )
+        await self._session_service.touch_session(session_id=run.session_id)
+        log_business_event(
+            logger,
+            "持久Run恢复次数耗尽",
+            level=logging.ERROR,
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            status="failed",
+            recovery_attempt=run.recovery_attempts,
+            error_code="RUN_RECOVERY_EXHAUSTED",
+        )
+
     async def _finalize_persistent_cancellation_locked(
         self,
         run: Run,
@@ -969,6 +1451,28 @@ class ChatService:
             )
         if run.status == "cancelled":
             return run
+        inspector = RunCheckpointInspector(parent_graph=self._parent_graph)
+        snapshot = await inspector.latest_for_run(run)
+        existing_final_message = (
+            recovered_final_message(run, snapshot)
+            if snapshot is not None
+            else None
+        )
+        sequencer = RunSequencer.for_run(
+            run_id=run.run_id,
+            response_message_id=run.response_message_id,
+            repository=event_repository,
+            publisher=self._runtime_event_publisher,
+        )
+        if (
+            existing_final_message is not None
+            and existing_final_message.runtime_status == "stopped"
+        ):
+            return await self._project_stopped_cancellation_locked(
+                run,
+                final_message=existing_final_message,
+                sequencer=sequencer,
+            )
         if turn is None:
             turn = await self._turn_from_run(run)
         content = partial_content
@@ -985,43 +1489,14 @@ class ChatService:
                 and run.status != "interrupted"
             ),
         )
-        sequencer = RunSequencer.for_run(
-            run_id=run.run_id,
-            response_message_id=run.response_message_id,
-            repository=event_repository,
-            publisher=self._runtime_event_publisher,
-        )
-        await sequencer.emit(
-            self._runtime_event_draft(
-                "message.finalized",
-                MessageFinalizedPayload(
-                    response_message_id=run.response_message_id,
-                    runtime_status="stopped",
-                    capability_id=capability_id,
-                ),
-            )
-        )
-        commit = await sequencer.transition_run(
-            target_status="cancelled",
-            event=self._runtime_event_draft(
-                "run.cancelled",
-                RunCancelledPayload(status="cancelled"),
+        return await self._project_stopped_cancellation_locked(
+            run,
+            final_message=RecoveredFinalMessage(
+                runtime_status="stopped",
+                capability_id=capability_id,
             ),
-            updated_at=datetime.now(UTC),
+            sequencer=sequencer,
         )
-        await self._session_service.touch_session(session_id=run.session_id)
-        log_business_event(
-            logger,
-            "持久Run取消完成",
-            run_id=run.run_id,
-            request_id=run.request_id,
-            session_id=run.session_id,
-            message_id=run.response_message_id,
-            capability_id=capability_id,
-            status="cancelled",
-            output_chars=len(content),
-        )
-        return commit.run
 
     async def _require_nonempty_persistent_message(
         self,
@@ -1133,20 +1608,27 @@ class ChatService:
         *,
         is_resume: bool = False,
         resume_payload: dict[str, JsonValue] | None = None,
+        recovery_config: RunnableConfig | None = None,
     ) -> PreparedChatTurn:
-        configurable: dict[str, str] = {
-            "thread_id": str(run.session_id),
-            "message_id": str(run.response_message_id),
-        }
-        if run.start_checkpoint_id is not None:
+        config = parent_thread_config(
+            run.session_id,
+            message_id=run.response_message_id,
+            run_id=run.run_id,
+            response_message_id=run.response_message_id,
+        )
+        configurable = config["configurable"]
+        if (
+            run.start_checkpoint_id is not None
+            and not is_resume
+            and recovery_config is None
+        ):
             configurable["checkpoint_ns"] = ""
             configurable["checkpoint_id"] = run.start_checkpoint_id
-        if is_resume:
+        if recovery_config is not None:
             human_message = None
-            config = parent_thread_config(
-                run.session_id,
-                message_id=run.response_message_id,
-            )
+            config = recovery_config
+        elif is_resume:
+            human_message = None
         elif run.run_type == "regenerate":
             human_message = None
             if run.start_checkpoint_id is None:
@@ -1159,9 +1641,9 @@ class ChatService:
                 session_id=run.session_id,
                 start_checkpoint_id=run.start_checkpoint_id,
                 response_message_id=run.response_message_id,
+                run_id=run.run_id,
             )
         else:
-            config: RunnableConfig = {"configurable": configurable}
             try:
                 content = str(run.input_payload["message"]["content"])
             except (KeyError, TypeError) as error:
@@ -1185,6 +1667,7 @@ class ChatService:
             ),
             is_regeneration=run.run_type == "regenerate",
             is_resume=is_resume,
+            is_recovery=recovery_config is not None,
             resume_payload=resume_payload,
         )
 
@@ -1202,6 +1685,16 @@ class ChatService:
                 message_id=run.response_message_id,
             )
         )
+        return self._graph_interrupt_from_snapshot(run=run, snapshot=snapshot)
+
+    def _graph_interrupt_from_snapshot(
+        self,
+        *,
+        run: Run,
+        snapshot: StateSnapshot,
+    ) -> tuple[UUID, dict[str, JsonValue]] | None:
+        """校验精确快照并投影唯一公开中断提示。"""
+
         raw_interrupts = tuple(snapshot.interrupts)
         if not raw_interrupts:
             return None
@@ -1723,6 +2216,8 @@ class ChatService:
                     status_code=409,
                 )
             graph_input = Command(resume=turn.resume_payload)
+        elif turn.is_recovery:
+            graph_input = None
         else:
             graph_input = (
                 None

@@ -1770,7 +1770,7 @@ stop and wait
 
 ## S2.5-08 Checkpoint 对账与崩溃恢复
 
-**Status:** IN_PROGRESS
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-01, S2.5-02, S2.5-04, S2.5-07
 
@@ -1784,12 +1784,55 @@ stop and wait
 
 ### Acceptance
 
-- [ ] Run 入库后、首 Checkpoint 前崩溃可恢复
-- [ ] Checkpoint 后、Run 投影前崩溃只补投影，不重复模型调用
-- [ ] 流式中崩溃后 message.started 新 attempt 会清除旧草稿
-- [ ] interrupted 不会在启动扫描时自动执行
-- [ ] 第三次恢复失败后形成唯一 failed 终态
-- [ ] 无幂等保障的副作用执行不会进入自动恢复
+- [x] Run 入库后、首 Checkpoint 前崩溃可恢复
+- [x] Checkpoint 后、Run 投影前崩溃只补投影，不重复模型调用
+- [x] 流式中崩溃后 message.started 新 attempt 会清除旧草稿
+- [x] interrupted 启动扫描只对账 stopped Checkpoint，不自动执行 Graph
+- [x] 第三次恢复失败后形成唯一 failed 终态
+- [x] 无幂等保障的副作用执行不会进入自动恢复
+
+### Verification Notes
+
+- 2026-09-29：Parent Run 执行及 Regenerate fork 的每个新 Checkpoint 均写入
+  `run_id` 与稳定 `response_message_id` metadata；恢复器通过 metadata 过滤只读取
+  目标 Run 的最新 Checkpoint，不使用 Session 最新状态进行模糊恢复。
+- 2026-09-29：Coordinator 启动与周期扫描会分派 `running` / `recovering`，继续跳过
+  `interrupted`；现场 Resume 使用独立分派原因，不计入崩溃恢复次数。
+- 2026-09-29：恢复接管在 PostgreSQL 单事务中递增 `recovery_attempts`、切换
+  `recovering` 并写内部 durable event；恢复激活次数必须匹配权威计数，最多三次。
+- 2026-09-29：真实 LangGraph + PostgreSQL 测试证明：最终消息与 Interrupt
+  Checkpoint 只补数据库投影且节点调用次数不增加；中间 Checkpoint 从精确位置继续，
+  首 Checkpoint 前从 `start_checkpoint_id + input_payload` 重放，均产生递增的
+  `message.started` attempt 且不重复 HumanMessage。
+- 2026-09-29：真实 PostgreSQL Checkpointer 在关闭并重新打开 Saver 后，仍能在同一
+  Session 的多个 Run Checkpoint 中按 `run_id` metadata 精确找回目标 Run 终态。
+- 2026-09-29：恢复次数已达三次且仍无终态 Checkpoint 时，不再执行 Graph，保存非空
+  `incomplete` 公共消息并形成唯一 `run.failed`；未知副作用能力在自动执行前被拒绝。
+- 2026-09-29：S2.5-08 与 Interrupt/Coordinator 真实 PostgreSQL 专项结果为
+  `23 passed`；默认完整套件结果为 `388 passed, 35 skipped`；启用真实 PostgreSQL
+  与 Redis 的完整套件结果为 `422 passed, 1 skipped`，唯一跳过项为真实百炼
+  smoke test。
+- 2026-09-30：修复 `REV-S25-08-001`。queued、running、interrupted 与
+  cancel_requested Run 在发现自身已落盘的非空 `stopped` Checkpoint 时，均在任何
+  Graph 执行前只补 `run.cancelled` 投影；running / recovering 先经过既定
+  cancel_requested 状态，不把 stopped 错投影为 failed。interrupted 只在启动扫描
+  进入 Checkpoint 对账，没有 stopped 消息时立即返回并继续等待 Resume / Cancel。
+- 2026-09-30：取消对账在写事件前检查已有 `message.finalized`，因此进程在
+  `message.finalized` 已提交、`run.cancelled` 未提交的窗口崩溃后不会产生重复公开
+  终态事件；interrupted 的 pending Interrupt 随 `run.cancelled` 原子关闭。
+- 2026-09-30：新增真实 PostgreSQL Checkpointer 重启确定性测试，覆盖 queued、
+  running、interrupted、cancel_requested 四种 stopped 崩溃窗口，均验证 Graph
+  调用次数为 0、稳定 stopped AIMessage 唯一、`message.finalized` 唯一且
+  `run.cancelled` 唯一。S2.5-08 与 Interrupt/Coordinator 专项结果为 `27 passed`；
+  默认完整套件结果为 `388 passed, 39 skipped`；启用真实 PostgreSQL 与 Redis 的
+  完整套件结果为 `426 passed, 1 skipped`，唯一跳过项为真实百炼 smoke test。
+- 2026-09-30：`uv lock --check`、`uv pip check`、`compileall`、`uv build`、
+  `docker compose config --quiet` 与 `git diff --check` 全部通过。
+- 2026-09-30：Reviewer 确认 `REV-S25-08-001` 修复通过，负责人确认 S2.5-08
+  验收通过，允许按工程流程提交并同步 GitHub、Gitee，两个远程确认一致后进入
+  S2.5-09。
+- Result：S2.5-08 已通过实现、真实依赖门禁、独立复审和负责人验收，状态更新为
+  `VERIFIED`。
 
 ---
 

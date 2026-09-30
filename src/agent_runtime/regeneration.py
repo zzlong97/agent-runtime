@@ -109,17 +109,26 @@ class CheckpointForker:
         session_id: UUID,
         start_checkpoint_id: str,
         response_message_id: UUID,
+        run_id: UUID | None = None,
     ) -> RunnableConfig:
         """在 Run 落库后从已捕获起点创建 Parent 执行分支。"""
 
-        answer_checkpoint: RunnableConfig = {
-            "configurable": {
-                "thread_id": str(session_id),
-                # Parent Graph 使用顶层 checkpoint 命名空间；持久 Run 仅需保存
-                # checkpoint_id，执行时按固定 Parent 边界恢复空命名空间。
-                "checkpoint_ns": "",
-                "checkpoint_id": start_checkpoint_id,
-            }
+        answer_checkpoint = (
+            parent_thread_config(
+                session_id,
+                message_id=response_message_id,
+                run_id=run_id,
+                response_message_id=response_message_id,
+            )
+            if run_id is not None
+            else parent_thread_config(session_id)
+        )
+        answer_checkpoint["configurable"] = {
+            **answer_checkpoint["configurable"],
+            # Parent Graph 使用顶层 checkpoint 命名空间；持久 Run 仅需保存
+            # checkpoint_id，执行时按固定 Parent 边界恢复空命名空间。
+            "checkpoint_ns": "",
+            "checkpoint_id": start_checkpoint_id,
         }
 
         try:
@@ -151,4 +160,9 @@ class CheckpointForker:
                 **configurable,
                 "message_id": str(response_message_id),
             },
+            **(
+                {"metadata": answer_checkpoint["metadata"]}
+                if "metadata" in answer_checkpoint
+                else {}
+            ),
         }

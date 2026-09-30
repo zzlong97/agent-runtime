@@ -61,6 +61,24 @@ _ALLOWED_STATE_EVENT_TRANSITIONS = frozenset(
         ("running", "run.failed", "failed"),
         ("running", "interrupt.required", "interrupted"),
         (
+            "running",
+            "internal.run.recovery_claimed",
+            "recovering",
+        ),
+        (
+            "recovering",
+            "internal.run.recovery_claimed",
+            "recovering",
+        ),
+        (
+            "recovering",
+            "internal.run.recovery_activated",
+            "running",
+        ),
+        ("recovering", "run.completed", "completed"),
+        ("recovering", "run.failed", "failed"),
+        ("recovering", "interrupt.required", "interrupted"),
+        (
             "recovering",
             "internal.run.cancel_requested",
             "cancel_requested",
@@ -219,6 +237,43 @@ RETURNING
     started_at,
     finished_at,
     updated_at
+"""
+
+_UPDATE_RUN_RECOVERY_STATE = """
+UPDATE runs
+SET status = 'recovering',
+    recovery_attempts = recovery_attempts + 1,
+    updated_at = %s
+WHERE run_id = %s
+RETURNING
+    run_id,
+    request_id,
+    session_id,
+    thread_id,
+    parent_run_id,
+    run_type,
+    input_message_id,
+    response_message_id,
+    start_checkpoint_id,
+    input_payload,
+    request_fingerprint,
+    status,
+    recovery_attempts,
+    seq_high_watermark,
+    error_code,
+    error_message,
+    created_at,
+    started_at,
+    finished_at,
+    updated_at
+"""
+
+_SELECT_EVENT_TYPE_EXISTS = """
+SELECT EXISTS (
+    SELECT 1
+    FROM runtime_events
+    WHERE run_id = %s AND event_type = %s
+) AS event_exists
 """
 
 _INTERRUPT_COLUMNS = """
@@ -488,6 +543,17 @@ class PostgresRuntimeEventRepository:
                     event_type=event.event_type,
                     target_status=target_status,
                 )
+                if (
+                    event.event_type
+                    == "internal.run.recovery_activated"
+                    and int(event.payload.get("recovery_attempt", 0))
+                    != current.recovery_attempts
+                ):
+                    raise RunStateConflictError(
+                        code="RUN_RECOVERY_ATTEMPT_MISMATCH",
+                        message="Run 恢复激活次数与权威计数不一致",
+                        status_code=409,
+                    )
                 if not can_transition_run(current.status, target_status):
                     raise RunStateConflictError(
                         code="RUN_STATE_CONFLICT",
@@ -567,6 +633,114 @@ class PostgresRuntimeEventRepository:
             event=stored_event,
             changed=True,
         )
+
+    async def claim_recovery(
+        self,
+        *,
+        run_id: UUID,
+        event: RuntimeEvent,
+        updated_at: datetime,
+    ) -> RunEventCommit:
+        """原子递增恢复次数、接管 Run 并写入内部 durable 事件。"""
+
+        self._validate_state_transition_event(run_id=run_id, event=event)
+        started_at = perf_counter()
+        current: Run | None = None
+        log_business_event(
+            logger,
+            "Run恢复接管开始",
+            run_id=run_id,
+            event_id=event.event_id,
+            seq=event.seq,
+        )
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_RUN_FOR_UPDATE,
+                    (run_id,),
+                )
+                row = await cursor.fetchone()
+                if row is None:
+                    raise RunNotFoundError(
+                        code="RUN_NOT_FOUND",
+                        message="Run 不存在",
+                        status_code=404,
+                    )
+                current = _run_from_row(row)
+                self._validate_locked_state_event_transition(
+                    current_status=current.status,
+                    event_type=event.event_type,
+                    target_status="recovering",
+                )
+                if current.recovery_attempts >= 3:
+                    raise RunStateConflictError(
+                        code="RUN_RECOVERY_EXHAUSTED",
+                        message="Run 已达到三次恢复上限",
+                        status_code=409,
+                    )
+                expected_attempt = current.recovery_attempts + 1
+                if int(event.payload.get("recovery_attempt", 0)) != expected_attempt:
+                    raise RunStateConflictError(
+                        code="RUN_RECOVERY_ATTEMPT_MISMATCH",
+                        message="Run 恢复事件次数与权威计数不一致",
+                        status_code=409,
+                    )
+                updated_cursor = await connection.execute(
+                    _UPDATE_RUN_RECOVERY_STATE,
+                    (updated_at, run_id),
+                )
+                updated_row = await updated_cursor.fetchone()
+                if updated_row is None:
+                    raise RuntimeEventPersistenceError(
+                        code="RUNTIME_EVENT_PERSIST_FAILED",
+                        message="Run 恢复状态保存失败",
+                        retryable=True,
+                    )
+                updated = _run_from_row(updated_row)
+                stored_event = await self._insert_event(connection, event)
+                await connection.commit()
+        except ApplicationError as error:
+            log_business_event(
+                logger,
+                "Run恢复接管拒绝",
+                run_id=run_id,
+                status=current.status if current is not None else None,
+                recovery_attempt=(
+                    current.recovery_attempts
+                    if current is not None
+                    else None
+                ),
+                error_code=error.code,
+                duration_ms=_elapsed_ms(started_at),
+            )
+            raise
+        except Exception as error:
+            self._log_persistence_failure(
+                event_name="Run恢复接管失败",
+                error_code="RUNTIME_EVENT_PERSIST_FAILED",
+                error=error,
+                started_at=started_at,
+                run_id=run_id,
+                event_id=event.event_id,
+                seq=event.seq,
+            )
+            raise RuntimeEventPersistenceError(
+                code="RUNTIME_EVENT_PERSIST_FAILED",
+                message="Run 恢复接管与 RuntimeEvent 原子保存失败",
+                retryable=True,
+            ) from error
+        log_business_event(
+            logger,
+            "Run恢复接管完成",
+            run_id=run_id,
+            session_id=updated.session_id,
+            status=updated.status,
+            recovery_attempt=updated.recovery_attempts,
+            event_id=stored_event.event_id,
+            seq=stored_event.seq,
+            duration_ms=_elapsed_ms(started_at),
+        )
+        return RunEventCommit(run=updated, event=stored_event, changed=True)
 
     async def require_interrupt(
         self,
@@ -981,6 +1155,24 @@ class PostgresRuntimeEventRepository:
             else 0
         )
         return latest + 1
+
+    async def has_event_type(self, *, run_id: UUID, event_type: str) -> bool:
+        """判断 Run 是否已持久化指定事件类型，用于幂等补齐投影。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_EVENT_TYPE_EXISTS,
+                    (run_id, event_type),
+                )
+                row = await cursor.fetchone()
+        except Exception as error:
+            raise RuntimeEventPersistenceError(
+                code="RUNTIME_EVENT_READ_FAILED",
+                message="RuntimeEvent 对账读取失败",
+                retryable=True,
+            ) from error
+        return bool(row and row["event_exists"])
 
     @staticmethod
     async def _insert_event(connection, event: RuntimeEvent) -> RuntimeEvent:

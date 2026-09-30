@@ -141,6 +141,23 @@ class RunSequencer:
                 await self._publish_best_effort(commit.event)
             return commit
 
+    async def claim_recovery(
+        self,
+        *,
+        event: RuntimeEventDraft,
+        updated_at: datetime,
+    ) -> RunEventCommit:
+        """分配序号并原子递增恢复次数、接管 Run 与写入内部事件。"""
+
+        async with self._lock:
+            runtime_event = await self._build_event(event)
+            commit = await self._repository.claim_recovery(
+                run_id=self._run_id,
+                event=runtime_event,
+                updated_at=updated_at,
+            )
+            return commit
+
     async def require_interrupt(
         self,
         *,
