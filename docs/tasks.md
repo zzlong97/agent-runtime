@@ -19,10 +19,10 @@ VERIFIED
 # 当前工作状态
 
 ```text
-Current Stage: Stage 2.5
-Current Task: S2.5-10
-Last Verified Task: S2.5-09
-Last Verified Commit: 13a2ec1（S2.5-09 最小 Agent 执行契约）
+Current Stage: Stage 2.5（VERIFIED）
+Current Task: None（等待后续阶段重新裁决）
+Last Verified Task: S2.5-11
+Last Verified Commit: S2.5-11 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -1972,25 +1972,54 @@ stop and wait
 
 ## S2.5-11 Stage 2.5 集成验收
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S2.5-01 ~ S2.5-10
 
 ### Acceptance
 
-- [ ] 默认 pytest 使用 Fake Model 并全部通过
-- [ ] PostgreSQL Run / Event / Interrupt 集成测试通过
-- [ ] Redis 正常、启动失败和运行中断验收通过
-- [ ] 进程重启与 Checkpoint 对账恢复验收通过
-- [ ] SSE 续传、合并、去重与慢客户端验收通过
-- [ ] Cancel、Interrupt/Resume 和 Session 删除验收通过
-- [ ] Vitest、前端构建和 Playwright 真实页面验收通过
-- [ ] Stage 1 / Stage 2 产品能力无回归
-- [ ] 未实现 Future 候选能力
-- [ ] README、AGENTS 和全部 docs 与实现一致
+- [x] 默认 pytest 使用 Fake Model 并全部通过
+- [x] PostgreSQL Run / Event / Interrupt 集成测试通过
+- [x] Redis 正常、启动失败和运行中断验收通过
+- [x] 进程重启与 Checkpoint 对账恢复验收通过
+- [x] SSE 续传、合并、去重与慢客户端验收通过
+- [x] Cancel、Interrupt/Resume 和 Session 删除验收通过
+- [x] Vitest、前端构建和 Playwright 真实页面验收通过
+- [x] Stage 1 / Stage 2 产品能力无回归
+- [x] 未实现 Future 候选能力
+- [x] README、AGENTS 和全部 docs 与实现一致
 
 真实百炼仍只作为独立 smoke test。需要执行时，由负责人在项目指定配置文件中
 完成配置后再显式运行，不作为默认或 CI 门禁。
+
+### Verification Notes
+
+- 2026-10-01：默认 `uv run --locked pytest -q` 使用 Fake Model，结果为
+  `399 passed, 39 skipped`；跳过项仅为显式启用的 PostgreSQL、Redis 与真实百炼
+  集成测试。
+- 2026-10-01：项目现有 PostgreSQL 与 Redis Docker Compose 容器均为 `healthy`；
+  启用 `RUN_POSTGRES_TESTS=1` 和 `RUN_REDIS_TESTS=1` 的完整套件结果为
+  `437 passed, 1 skipped`，唯一跳过项为不属于本门禁的真实百炼 smoke test。
+- 2026-10-01：真实依赖完整套件覆盖 Run / RuntimeEvent / Interrupt 事务与幂等、
+  Redis Stream 顺序和故障降级、Checkpoint 对账与最多三次恢复、SSE 合并续传与
+  慢客户端、Cancel 竞争、同 Run Resume 及 Session 完整硬删除。
+- 2026-10-01：前端 Vitest 结果为 `25 passed`；Vite 生产构建成功，系统 Edge 的
+  Playwright 真实页面验收结果为 `2 passed`，覆盖正常完成、中断刷新与 Resume、
+  失败、慢速 Cancel，以及 HTTP 202 延迟期间的重复提交互斥。
+- 2026-10-01：Stage 1 / Stage 2 产品定向回归结果为 `67 passed, 1 skipped`；
+  真实 PostgreSQL 持久化场景已包含在上述 `437 passed` 完整套件中。
+- 2026-10-01：`uv lock --check`、`uv pip check`、Python `compileall`、`uv build`、
+  `docker compose config --quiet`、wheel 哈希 JS/CSS 资源检查和范围审计均通过；
+  未发现 Capability Manifest、动态 Registry、权限、多 Agent、多实例 Worker、
+  Transactional Outbox、文件或 RAG 等 Future 能力实现。
+- 2026-10-01：README 的阶段进度和运行说明已同步到 S2.5-11；AGENTS、需求、架构、
+  决策与当前实现边界一致。
+- 2026-10-01：独立只读复审逐项核对验收标准、测试映射、文档状态和 Future 范围，
+  未发现 Critical、Important 或 Minor 问题，结论为 `Ready to merge: Yes`。
+- 2026-10-01：负责人确认 S2.5-11 验收通过；按工程流程提交并同步 GitHub、Gitee，
+  暂不开始后续阶段开发。
+- Result：S2.5-11 与 Stage 2.5 整体验收通过，状态更新为 `VERIFIED`；后续阶段
+  尚未重新裁决，不进入 Future 候选能力开发。
 
 ---
 

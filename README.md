@@ -42,8 +42,8 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-当前已验收到 S2.5-09；S2.5-10 `/chat` 页面迁移与 Runtime 演示模式已完成编码，
-正在等待复审。Run 已从 POST SSE 和进程内 Registry 中解耦：
+Stage 2.5 已通过 S2.5-11 集成验收；当前暂不开始后续阶段，后续范围需要基于
+现有 Runtime 重新裁决。Run 已从 POST SSE 和进程内 Registry 中解耦：
 
 ```text
 POST 创建持久 Run → HTTP 202
@@ -231,7 +231,7 @@ ChildResult
 
 ### Stage 2.5：持久化 Run 与可恢复 Runtime
 
-S2.5-09 已验收，S2.5-10 已完成编码并等待复审：
+S2.5-11 与 Stage 2.5 整体验收通过：
 
 - PostgreSQL 持久 Run、幂等请求和数据库活动 Run 唯一约束
 - 类型化 RuntimeEvent、每 Run Sequencer 和公开/内部事件隔离
@@ -255,8 +255,8 @@ S2.5-09 已验收，S2.5-10 已完成编码并等待复审：
 
 后续计划：
 
-- S2.5-10 独立复审
-- S2.5-11 Stage 2.5 集成验收
+- 当前暂不开始后续阶段开发
+- 根据 Stage 2.5 真实基线重新裁决后续阶段
 
 ### Future：候选方向，不构成阶段承诺
 
@@ -282,8 +282,8 @@ S2.5-09 已验收，S2.5-10 已完成编码并等待复审：
 
 ## 5. 运行当前 Runtime
 
-以下说明运行已完成 S2.5-10 编码的后端、`/chat` 页面及其 PostgreSQL / Redis
-开发依赖。S2.5-10 当前处于待复审状态。
+以下说明运行已通过 S2.5-11 集成验收的后端、`/chat` 页面及其 PostgreSQL /
+Redis 开发依赖。
 
 本地 PostgreSQL 和 Redis 由 Windows Docker Desktop 承载。先确认 Docker Desktop
 已启动，然后在项目根目录启动依赖：
