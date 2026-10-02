@@ -330,7 +330,7 @@ Stage 1 / 2 固定两个 Capability，不提前做 Manifest。
 
 Stage 3 Manifest 成为 Capability 强制接入契约。
 
-**Status**：Deferred（原正式 Stage 3 已由 D-042 移除，只保留为 Future 候选）
+**Status**：Superseded by D-052 / D-053；S3 已在 S2.5 验收后重新裁决
 
 ---
 
@@ -355,7 +355,7 @@ unmount()
 → 管理平台
 ```
 
-**Status**：Deferred（原正式 Stage 3 已由 D-042 移除，只保留为 Future 候选）
+**Status**：Deferred；S3 只实现启动期静态 Registry，不实现动态挂载
 
 ---
 
@@ -373,7 +373,7 @@ ACTIVE
 
 普通卸载不强杀运行中的任务。
 
-**Status**：Deferred（原正式 Stage 3 已由 D-042 移除，只保留为 Future 候选）
+**Status**：Deferred；S3 不实现卸载或 DRAINING
 
 ---
 
@@ -387,7 +387,7 @@ ACTIVE
 
 权限每次执行前实时读取数据库，不加缓存。
 
-**Status**：Deferred（原正式 Stage 3 已由 D-042 移除，只保留为 Future 候选）
+**Status**：Superseded by D-058；S3 已重新确认最小用户级授权语义
 
 ---
 
@@ -433,7 +433,7 @@ interrupt
 
 **Decision**
 
-Stage 1、Stage 2 和当前 Stage 2.5 均不实现文件上传、解析、RAG。
+Stage 1、Stage 2、Stage 2.5 和当前 Stage 3 均不实现文件上传、解析、RAG。
 
 只在 Future 中保留架构规划。
 
@@ -708,7 +708,7 @@ DRAINING 和 Router confidence 只保留为 Future 候选，必须在 Stage 2.5 
 先建立可靠执行生命周期，避免后续 Capability 平台继续依赖进程内 Run 和 HTTP
 连接生命周期。
 
-**Status**：Accepted
+**Status**：Superseded by D-052；该决策完成了撤销旧方案的作用，S3 已重新裁决
 
 ---
 
@@ -892,5 +892,242 @@ Design X 和第三方开源组件，保持 HTML、JS/JSX、API Client 与 CSS �
 开发环境可以通过显式配置启用确定性 Fake Agent 演示场景，但必须经过真实 Run、
 Event、Redis、SSE、Interrupt 和 Resume 链路。演示模式默认关闭，不进入正式
 Capability 路由，前端不得伪造执行结果。
+
+**Status**：Accepted
+
+---
+
+## D-052：S3 是静态 Capability Runtime 阶段
+
+**Decision**
+
+Stage 2.5 验收后，正式进入 Stage 3。S3 建设本地 Manifest、进程内 Registry、统一
+Capability 协议、Capability Task、State Scope、健康、并发、超时、恢复、Operation
+Ledger 和最小用户权限。
+
+S3 仍为单用户可信环境和单 Runtime 进程。不实现热加载、mount/unmount、DRAINING、
+Remote Capability、多实例同步、Workflow、多 Agent、RBAC、State 自动迁移、Saga、
+Worker Lease、管理 API、文件或 RAG 产品能力。
+
+**Reason**
+
+S2.5 已提供可靠 Run 生命周期，可以在不扩张为完整平台的前提下，把硬编码能力迁移
+为可验证的标准 Capability Runtime。
+
+**Status**：Accepted
+
+---
+
+## D-053：Manifest、Source、Registry 与 entrypoint 契约
+
+**Decision**
+
+S3 使用本地 YAML Source，并预留最小 `CapabilitySource` 抽象。Manifest 使用严格
+关闭 Schema；Registry 在启动时一次性加载为不可热变更 Snapshot。重复
+`capability_id` 的全部实现隔离，其他能力继续启动。
+
+`entrypoint` 固定指向：
+
+```text
+create_capability(CapabilityBootstrapContext) -> Capability
+```
+
+Bootstrap Context 提供只读 Manifest、隔离 Checkpointer、模型工厂、非敏感配置视图
+和资源清理注册。Capability 实现 `initialize / health_check / invoke`，不能获得 SSE、
+Redis、Session 生命周期或顶层 Run 状态写入能力。
+
+Router 只读取 `capability_id / name / description / enabled`。
+
+**Status**：Accepted
+
+---
+
+## D-054：AgentResult 成为 S3 标准调用结果
+
+**Decision**
+
+S3 的统一调用为：
+
+```text
+Capability.invoke(RunContext, AgentContext, TaskInput) -> AgentResult
+```
+
+AgentResult 最小包含 `status / content / metadata`。completed 的非空 content 是最终
+规范全文，Runtime 将其写回 Parent；EventOutlet delta 只是实时投影。rejected 必须
+零输出并携带 OUT_OF_SCOPE。CapabilityError 表达失败，取消传播标准取消异常。
+
+metadata 只承载关闭的控制字段，包括 `control_signal` 和 `task_transition`，不得把
+业务 State 或任意私有 JSON 透传给 Parent 或公开事件。
+
+**Reason**
+
+统一结果需要同时承载最终内容和 Task 生命周期意图，同时保持 Parent 为公共消息
+唯一权威源、Runtime 为唯一控制面。
+
+**Status**：Accepted；在 S3 范围内 supersede D-049 的 S2.5 极薄 ChildResult 边界
+
+---
+
+## D-055：Invocation 不建表并通过 durable event 恢复
+
+**Decision**
+
+每次进入调用生命周期的尝试使用唯一 `invocation_id`。同一 Run 可以顺序调用多个
+Capability，但同时最多一个 open Invocation。S3 不建立 Invocation 表；started、
+completed、failed、cancelled 全部写 internal durable RuntimeEvent。
+
+崩溃恢复从唯一未终结 started event 复用原 invocation_id，不得生成新 ID。该 ID
+同时参与 Operation 幂等键计算。Invocation 和 Task 事件不进入 Redis 或公开 SSE。
+
+**Status**：Accepted
+
+---
+
+## D-056：Capability Task、State Scope 与拒绝回滚
+
+**Decision**
+
+每个 Invocation 关联一个 Capability Task。Task 与 Run 生命周期解耦；同一
+Session + Capability 可以有多个 active Task，但 Context 只有一个 current Task。
+Router 只表达 `continue/new`，不选择 task_id。
+
+Manifest 必须显式声明 invocation/run/session State Scope。Runtime 使用带
+namespace/version 且包含 state schema 版本的确定性 Child thread ID；session scope
+通过 task_id 跨 Run 延续。Task 创建时固化 State Schema 版本；不兼容旧 Task 拒绝
+continue，不迁移、不失败 Task。
+
+`new` 调用若合法返回 OUT_OF_SCOPE，Runtime 回滚本次 provisional Task、恢复原
+current Task 并清理临时 Child thread。Capability 若已产生公开输出、Operation 或
+业务 State 后再拒绝，按契约违规失败。
+
+**Status**：Accepted
+
+---
+
+## D-057：Health、并发与超时由 Runtime 治理
+
+**Decision**
+
+Capability 自治实现健康检查，Runtime 只消费 healthy/degraded/unhealthy。启动强制
+检查，后续使用 Runtime 全局 TTL 并在过期时单飞刷新。degraded 是否服务由 Manifest
+`allow_degraded` 决定。
+
+Manifest 声明 unlimited/bounded 并发、获取超时、执行超时和取消宽限。Runtime 在
+单进程内统一执行；并发槽等待超时返回 CAPABILITY_BUSY，执行超时先协作取消再强制
+取消本地 asyncio Task，返回 CAPABILITY_TIMEOUT。
+
+**Status**：Accepted
+
+---
+
+## D-058：最小用户级 Capability 权限默认拒绝
+
+**Decision**
+
+S3 使用 PostgreSQL `user_capability_permissions`：无记录 deny、false deny、true
+allow。Router 前过滤，invoke 前实时复查，不缓存。没有授权候选时 Run failed 并
+返回 `CAPABILITY_PERMISSION_DENIED`；有授权但均不可服务时返回
+`CAPABILITY_UNAVAILABLE`；只有实际调用后全部 OUT_OF_SCOPE 才是 unsupported。
+
+`general_chat` 与 `en_to_zh` 是标准测试 Capability，不自动授权。测试与验收显式
+创建 allow/deny 记录。
+
+**Status**：Accepted
+
+---
+
+## D-059：Operation Ledger 由 Runtime 提供、业务边界由 Capability 自治
+
+**Decision**
+
+automatic + none 可自动恢复；automatic + idempotent 必须通过 Operation Ledger；
+automatic + unsafe 为非法 Manifest。Capability 定义业务副作用边界和稳定
+operation_key，Runtime 按 run_id + invocation_id + operation_key 生成幂等键。
+
+Capability 使用 Runtime 提供的 `ctx.operation()` 异步 Context Manager。进入前
+创建或复用 pending，正常完成标记 succeeded；普通异常不自动推断失败，结果未知
+保持 pending；只有 Capability 明确确认业务失败时才标记 failed。succeeded 不重复
+执行，failed 默认不自动重试。Ledger 不保存业务响应 payload。
+
+**Status**：Accepted
+
+---
+
+## D-060：manual recovery 在 S3 安全失败
+
+**Decision**
+
+`recovery_policy=manual` 的 Capability 在执行中崩溃后不自动重放。由于 S3 暂不提供
+manual recovery 产品入口，恢复器保存非空 incomplete 消息，并用
+`CAPABILITY_MANUAL_RECOVERY_REQUIRED` 将 Run 置为 failed；Task 和 pending
+Operation 保持原状。
+
+该错误只适用于 manual policy 的崩溃恢复拒绝，不影响 automatic + none/idempotent
+已经确认的自动恢复路径。S3 只是延期 manual recovery 产品能力，不取消 Runtime
+自动恢复。
+
+**Status**：Accepted
+
+---
+
+## D-061：公开 capability_id 使用开放受约束字符串
+
+**Decision**
+
+公开消息、历史接口和 RuntimeEvent 的 capability_id 从
+`general_chat | en_to_zh` 固定 Literal 放宽为符合 Manifest ID 规则的字符串。
+字段名称、null 语义、公开事件类型和 RuntimeEvent `schema_version=1` 不变。
+
+现有两个值完全兼容。前端不得维护能力枚举或按能力 ID 分支产品逻辑，只把该值作为
+普通公开标签展示。
+
+**Reason**
+
+如果保留固定枚举，Registry 可以加载的新 Capability 无法通过公开消息与事件链路。
+值域放宽不改变 JSON 结构，无需制造双版本事件协议。
+
+**Status**：Accepted
+
+---
+
+## D-062：S3 数据所有权和 Session 删除扩展
+
+**Decision**
+
+Capability Task 表只保存生命周期、关系和最近执行投影；Child Checkpoint 保存私有
+State；Parent Checkpoint 保存完整公共历史；Operation Ledger 保存副作用幂等状态；
+RAG 数据继续由未来 Capability 自有存储负责。
+
+Session 删除在 S2.5 屏障内新增显式清理 Task Context、Operation、Task 和动态 Child
+Checkpoint，并兼容清理遗留 Child thread。当前不保留独立审计副本。
+
+**Status**：Accepted
+
+---
+
+## D-063：S3 Regenerate 只允许 invocation + none
+
+**Decision**
+
+S3 不把 Parent Checkpoint Fork 误作 Capability 私有 State Fork。Regenerate 只允许
+目标 Capability 同时满足：
+
+```text
+state_scope = invocation
+side_effect_policy = none
+```
+
+提交前从原回答确定 Capability，复查 Registry、Health、权限和 State Schema，且不
+重新 Router。执行复用 current Task，但使用新的 invocation_id 和独立 Child thread。
+不满足安全组合时，在 Run 创建前返回 HTTP 409
+`CAPABILITY_REGENERATE_UNSUPPORTED`。
+
+两个测试 Capability 使用该安全组合，保留既有 Regenerate。S3 不增加 Manifest
+regenerate 字段，不实现 run/session State Fork 或副作用重生成。
+
+**Reason**
+
+通用 Parent Fork 无法证明私有 Child State 的时间点一致，也无法保证外部副作用不被
+重复执行；保守门禁可以保留现有产品能力而不扩大 S3。
 
 **Status**：Accepted

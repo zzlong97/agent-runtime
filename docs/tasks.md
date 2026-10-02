@@ -19,10 +19,10 @@ VERIFIED
 # 当前工作状态
 
 ```text
-Current Stage: Stage 2.5（VERIFIED）
-Current Task: None（等待后续阶段重新裁决）
-Last Verified Task: S2.5-11
-Last Verified Commit: S2.5-11 验收提交（当前提交）
+Current Stage: Stage 3（IN_PROGRESS）
+Current Task: S3-01（VERIFIED，等待提交并同步双远程）
+Last Verified Task: S3-01
+Last Verified Commit: S3-01 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -1290,8 +1290,8 @@ stop and wait
 
 # Stage 2.5：持久化 Run 与可恢复 Runtime
 
-> Stage 2 已 VERIFIED。Stage 2.5 是当前唯一允许实施的阶段；原 Stage 3 任务已
-> 移出正式任务序列。
+> 本节保留 Stage 2.5 当时的执行记录。Stage 2.5 已 VERIFIED，后续范围已经重新
+> 裁决为本文 Stage 3；历史状态描述不代表当前任务。
 
 ## S2.5-00 Stage 2.5 架构基线确认
 
@@ -2023,6 +2023,994 @@ stop and wait
 
 ---
 
+# Stage 3：Capability Runtime
+
+## S3-00 Stage 3 架构基线确认
+
+**Status:** VERIFIED
+
+**Dependencies:** S2.5-11
+
+### Goal
+
+在已验收 S2.5 Runtime 上确认静态 Capability Runtime 的职责边界、数据模型方向、
+恢复策略和明确非目标。
+
+### Scope
+
+- Manifest / Source / Registry
+- 统一 Capability、Invocation、Task、State Scope
+- Health、并发、超时、恢复、Operation Ledger 和最小用户权限
+- 现有测试 Capability 迁移及 Session 删除扩展
+
+### Forbidden Scope
+
+- 正式功能编码
+- 热加载、Workflow、多实例、RBAC、RAG 或管理平台
+
+### Database Changes
+
+无；本任务只做架构裁决。
+
+### Main Interfaces
+
+无实现接口；输出 S3-00 已确认架构基线。
+
+### Acceptance
+
+- [x] 负责人逐项确认 S3 核心边界
+- [x] 明确 S3 非目标
+- [x] S2.5 的 Run、Event、SSE、Checkpoint 与 Parent 权威源保持有效
+
+### Test Requirements
+
+不运行实现测试；由 S3-01 对真实基线进行文档一致性审查。
+
+### Regression Scope
+
+不修改实现。
+
+### Definition of Done
+
+负责人已完成 S3-00 裁决，可进入 S3-01 文档化。
+
+---
+
+## S3-01 整理 S3 架构文档与任务验收树
+
+**Status:** VERIFIED
+
+**Dependencies:** S3-00
+
+### Goal
+
+把已确认的 S3-00 决策落实到现有权威文档，解决实现级缺口，形成可独立编码、Review
+和验收的 Stage 3 任务树。
+
+### Scope
+
+- 更新 requirements / architecture / decisions / tasks / README / AGENTS
+- 明确 Manifest 最终 Schema、Capability 接入协议和 Runtime 边界
+- 明确四张新增表的字段、约束、索引、外键和删除语义
+- 记录架构调整清单
+- 定义 S3 分阶段任务和最终 Gate
+
+### Forbidden Scope
+
+- 修改业务实现、数据库或测试代码
+- 创建与现有权威文档重复的新规划文档
+- 提前实现 S3-02 及后续任务
+
+### Database Changes
+
+无；仅记录后续数据模型。
+
+### Main Interfaces
+
+无代码接口；文档确定 `CapabilitySource`、Manifest、Bootstrap Factory、Capability、
+AgentResult、Task、Operation 和 Permission 契约。
+
+### Acceptance
+
+- [x] S3-00 已确认内容全部进入现有权威文档
+- [x] 公开 capability_id、测试权限、无候选错误、Operation Context、entrypoint、
+  manual recovery、OUT_OF_SCOPE Task 回滚和 Regenerate 安全门禁已完成负责人裁决
+- [x] 数据表定义包含字段、类型、可空、约束、索引、外键与删除语义
+- [x] 每个开发任务包含目标、依赖、范围、禁止范围、数据库、接口、验收、测试、
+  回归和完成条件
+- [x] 没有编写业务代码
+
+### Test Requirements
+
+- Markdown 标题与链接检查
+- 文档冲突关键字和阶段范围审计
+- `git diff --check`
+
+### Regression Scope
+
+只读核对 S2.5 实现和全部权威文档，不修改已验收代码。
+
+### Definition of Done
+
+文档检查通过、负责人验收后提交并同步两个远程；在此之前不得开始 S3-02。
+
+### Verification Notes
+
+- 2026-10-02：对照 S2.5 实际代码核查固定 Router/Parent 分发、公开 capability_id
+  Literal、Agent Contract、Checkpoint Recovery、RuntimeEvent 内部前缀、数据库建表
+  方式和 Session 删除顺序，没有把草案建立在不存在的抽象上。
+- 2026-10-02：负责人完成公开 capability_id、测试权限、无候选错误、Operation
+  Context、entrypoint 工厂、manual recovery、OUT_OF_SCOPE Task 回滚和 Regenerate
+  安全门禁的逐项裁决。
+- 2026-10-02：原位更新 AGENTS、README、requirements、architecture、decisions 和
+  tasks；未新增相似规划文档，未修改任何业务或测试代码。
+- 2026-10-02：S3-00~S3-14 共 15 个任务连续且每项均具备九类必需章节；架构决策
+  D-001~D-063 连续无重复；六份 Markdown 围栏成对，README 相对链接全部存在，
+  活跃阶段陈旧表述扫描为零，`git diff --check` 通过。
+- 2026-10-03：负责人确认 S3-00、S3-01 已处理并要求开始 S3-02，S3-01 验收通过。
+- Result：S3-01 已 VERIFIED；完成提交并同步 GitHub、Gitee 后开始 S3-02。
+
+---
+
+## S3-02 Manifest Schema 与 Local CapabilitySource
+
+**Status:** TODO
+
+**Dependencies:** S3-01 VERIFIED
+
+### Goal
+
+实现严格、确定且与实例化解耦的 Manifest 解析和本地 Source。
+
+### Scope
+
+- Manifest 及嵌套 concurrency/execution Pydantic Schema
+- ID、版本、entrypoint 与跨字段组合校验
+- `CapabilitySource` Protocol 和只读来源记录
+- 固定目录 Local YAML Source、确定排序和完整错误收集
+- 两个测试 Capability 的标准 Manifest 文件，但暂不接入执行链路
+
+### Forbidden Scope
+
+- entrypoint 导入和 Capability 实例化
+- Registry、Router、权限、Task 或运行时执行
+- 文件监听、热加载、mount/unmount
+- 任意业务扩展字段
+
+### Database Changes
+
+无。
+
+### Main Interfaces
+
+```text
+CapabilityManifest
+ConcurrencyPolicy
+ExecutionPolicy
+CapabilityManifestDocument
+CapabilitySource.load() -> list[CapabilityManifestDocument]
+LocalYamlCapabilitySource
+```
+
+### Acceptance
+
+- [ ] 合法 Manifest 可稳定解析为关闭 Schema
+- [ ] 缺失 state_scope、未知字段、非法 ID/entrypoint/版本均拒绝
+- [ ] automatic + unsafe、并发字段非法组合均拒绝
+- [ ] Source 返回全部文档及来源，不因单文件错误提前停止
+- [ ] 扫描结果顺序跨运行稳定
+- [ ] 两个测试 Manifest 声明 invocation + none，但尚不接入执行链路
+
+### Test Requirements
+
+- Schema 边界与中文 description 单元测试
+- YAML 语法、未知字段、重复列表、路径排序测试
+- property/参数化测试覆盖策略组合
+
+### Regression Scope
+
+- 默认测试不读取外部目录
+- 两个既有 Capability 行为不变
+
+### Definition of Done
+
+实现、专项测试、默认回归、Review 和任务文档证据完成，经负责人验收后提交并同步
+GitHub/Gitee 同一提交。
+
+---
+
+## S3-03 Capability 协议、Bootstrap 与静态 Registry
+
+**Status:** TODO
+
+**Dependencies:** S3-02
+
+### Goal
+
+从已校验 Manifest 构建不可变 Registry Snapshot，并建立统一实例化与资源生命周期。
+
+### Scope
+
+- `CapabilityBootstrapContext` 和统一 entrypoint 工厂校验
+- Capability `initialize / health_check / invoke` Protocol 骨架
+- AgentResult、metadata、HealthResult 和 CapabilityError Schema
+- 动态 import、实例初始化、逆序 cleanup
+- 重复 ID 整组隔离和单 Capability 故障隔离
+- Registry Snapshot 查询与最小 Router Projection
+
+### Forbidden Scope
+
+- Parent/Router 正式改线
+- Task、权限、并发、超时或恢复执行
+- 热加载、卸载、DRAINING 或多版本实例
+
+### Database Changes
+
+无。
+
+### Main Interfaces
+
+```text
+CapabilityBootstrapContext
+CapabilityFactory
+Capability
+AgentResult / AgentResultMetadata
+HealthResult
+CapabilityError
+CapabilityRegistry / CapabilityRegistryEntry / RouterProjection
+```
+
+### Acceptance
+
+- [ ] entrypoint 只能加载合法工厂，错误对象被隔离
+- [ ] 重复 ID 的全部来源不进入 Snapshot
+- [ ] 单个 import/initialize/health 失败不影响其他能力
+- [ ] Capability 看不到 SSE、Redis、Session 或 Run Repository
+- [ ] cleanup 对部分初始化失败和正常关机均幂等逆序执行
+- [ ] Router Projection 只有四个允许字段
+
+### Test Requirements
+
+- Fake Source / Fake Factory / Fake Capability 单元测试
+- import、协议不匹配、初始化失败、cleanup 失败隔离测试
+- 重复 ID 全隔离与顺序确定性测试
+
+### Regression Scope
+
+- 应用主链路尚不切换 Registry
+- S2.5 测试继续通过
+
+### Definition of Done
+
+静态 Registry 可独立构建和关闭，未接入业务链路；测试、Review、负责人验收、双远程
+同步完成。
+
+---
+
+## S3-04 Capability Task、Context、Operation 与 Permission 持久化
+
+**Status:** TODO
+
+**Dependencies:** S3-01 VERIFIED
+
+### Goal
+
+建立 S3 四张表及只负责持久化原子性的 Repository，不提前实现业务编排。
+
+### Scope
+
+- `capability_tasks`
+- `capability_task_contexts`
+- `capability_operations`
+- `user_capability_permissions`
+- 领域模型、建表、约束、索引、CRUD 和事务基础方法
+- 延续现有幂等 `setup()` 方式
+
+### Forbidden Scope
+
+- Task action 业务决策
+- Router、Registry、Capability 调用
+- Operation Context Manager
+- RBAC、审计历史表、workflow_id 或迁移框架替换
+
+### Database Changes
+
+按 architecture 15.7 创建四张表、复合 FK、CHECK 与索引；外键采用 RESTRICT，
+不对本地 Registry 或固定 user 建数据库 FK。
+
+### Main Interfaces
+
+```text
+CapabilityTaskRepository
+CapabilityTaskContextRepository
+CapabilityOperationRepository
+UserCapabilityPermissionRepository
+```
+
+### Acceptance
+
+- [ ] 建表可重复执行
+- [ ] 非法状态、ended_at 组合和跨 Session/Capability current Task 被数据库拒绝
+- [ ] 同一 current context 唯一
+- [ ] Operation 业务键及 idempotency_key 唯一
+- [ ] 权限无记录与 false/true 可准确区分
+- [ ] Repository 不记录用户正文、外部响应或凭据
+
+### Test Requirements
+
+- 纯模型/Repository 单元测试
+- 真实 PostgreSQL 约束、并发写和事务回滚测试
+- setup 重入与旧数据库升级测试
+
+### Regression Scope
+
+- S2.5 原表、Run/Interrupt/Event 约束不变
+- 现有 Session 删除暂不接入新表
+
+### Definition of Done
+
+四张表和 Repository 经真实 PostgreSQL 门禁、Review、负责人验收并同步两个远程。
+
+---
+
+## S3-05 Invocation、Task Service 与 State Scope
+
+**Status:** TODO
+
+**Dependencies:** S3-03, S3-04
+
+### Goal
+
+实现单 Run 顺序 Invocation、Task 解析、确定性 Child thread 和 State Schema 兼容边界。
+
+### Scope
+
+- Invocation ID、open lifecycle invariant 和 internal durable event Schema
+- `continue/new` Task Service 事务
+- continue 缺失降级 new 的 diagnostic
+- provisional Task 与 OUT_OF_SCOPE 回滚
+- Task terminal intent 的 Runtime 应用
+- invocation/run/session thread_id factory
+- State Schema compatibility 校验
+
+### Forbidden Scope
+
+- Router 权限候选、Health、并发、超时和 Operation Ledger
+- 多个并行 Invocation、Invocation 表、State 自动迁移
+- 非 current Task 选择 API
+
+### Database Changes
+
+不新增表；写 S3 Task 表和既有 RuntimeEvent。必要索引调整必须限定在已确认查询路径。
+
+### Main Interfaces
+
+```text
+CapabilityInvocationService
+CapabilityTaskService
+ChildThreadIdFactory
+StateCompatibilityPolicy
+InvocationStarted/Completed/Failed/CancelledPayload
+```
+
+### Acceptance
+
+- [ ] 同一 Run 同时最多一个 open Invocation
+- [ ] new 与 current 切换原子，continue 正确锁定 current
+- [ ] continue 无 current 时原子降级 new 并写 diagnostic
+- [ ] rejected new 恢复原 current，清理 provisional Task/thread
+- [ ] 拒绝前已有输出、Operation 或业务 State 时不执行回滚并失败
+- [ ] 三种 scope 的 thread_id 确定、互不串线
+- [ ] 不兼容 Task 拒绝 continue 且 Task/Context 不变
+- [ ] Run 失败/取消不自动改变 Task 状态
+
+### Test Requirements
+
+- Task Service 状态机和 thread_id 测试向量
+- 真实 PostgreSQL 行锁、事务、并发和回滚测试
+- 真实 Checkpointer 三 scope 隔离/共享测试
+- OUT_OF_SCOPE 零业务副作用测试
+
+### Regression Scope
+
+- Parent 公共 messages 与 10/5 Context Builder 不变
+- 既有有限回流语义不变
+
+### Definition of Done
+
+Task/Invocation/State 专项、真实数据库与 Checkpointer 验证、Review、负责人验收和双远程
+同步完成。
+
+---
+
+## S3-06 权限、动态 Router 候选与公开 capability_id
+
+**Status:** TODO
+
+**Dependencies:** S3-03, S3-04, S3-05
+
+### Goal
+
+移除候选和产品 Schema 中的固定能力枚举，以 Registry + 权限构造动态路由边界。
+
+### Scope
+
+- Router 输入使用 Registry 最小投影
+- Router 结构化输出增加 `task_action`
+- Router 前权限过滤和 invoke 前实时复查
+- `CAPABILITY_PERMISSION_DENIED` / `CAPABILITY_UNAVAILABLE` / unsupported 分流
+- API、RuntimeEvent、历史和 Checkpoint 的 capability_id 放宽为 Manifest ID 字符串
+- 前端按普通标签展示未知合法 ID
+
+### Forbidden Scope
+
+- 管理 API、权限缓存、RBAC/ABAC、用户切换
+- Router confidence interrupt 或自动优化
+- Health 实现细节；本任务使用可服务状态测试替身
+
+### Database Changes
+
+不新增表；只读/写 `user_capability_permissions`。
+
+### Main Interfaces
+
+```text
+CapabilityPermissionService
+RouterCandidateProvider
+RouterDecision(capability_id, task_action, confidence)
+ManifestCapabilityId public schemas
+```
+
+### Acceptance
+
+- [ ] 无记录和 false 均不进入 Router，true 才进入
+- [ ] Router 后撤销权限会在 invoke 前被拒绝
+- [ ] 无权限、不可服务和全部 OUT_OF_SCOPE 的 Run 终态严格区分
+- [ ] 第三个合法测试 ID 可通过消息、事件、历史和前端展示
+- [ ] 公开字段和事件 schema_version 不变
+- [ ] 两个测试 Capability 不被自动授权
+
+### Test Requirements
+
+- Router 候选、双检竞态和错误映射单元测试
+- API/Event Pydantic Schema 回归
+- 真实 PostgreSQL 权限动态变更测试
+- 前端未知 capability_id 渲染测试
+
+### Regression Scope
+
+- S2.5 SSE 白名单、seq、重连和终态事件不变
+- 现有两个 ID 的 JSON 输出完全兼容
+
+### Definition of Done
+
+动态候选和权限行为通过后端/前端专项、Review、负责人验收并同步两个远程。
+
+---
+
+## S3-07 Capability Health 与服务准入
+
+**Status:** TODO
+
+**Dependencies:** S3-03, S3-06
+
+### Goal
+
+实现启动强检、TTL Snapshot、按需单飞刷新和 degraded 服务规则。
+
+### Scope
+
+- Runtime 全局 Health TTL 配置
+- 启动期 health_check
+- Snapshot、过期刷新和单飞锁
+- healthy/degraded/unhealthy 准入
+- allow_degraded 与内部中文告警
+- 单能力检查失败隔离
+
+### Forbidden Scope
+
+- Capability 业务依赖检查实现
+- 健康管理 API、后台持续探测、分布式状态同步
+- 把健康详情传给 Router 或公开 SSE
+
+### Database Changes
+
+无；HealthSnapshot 仅进程内。
+
+### Main Interfaces
+
+```text
+CapabilityHealthService
+HealthSnapshot
+ServiceabilityDecision
+```
+
+### Acceptance
+
+- [ ] 启动时每个已实例化能力恰好强检一次
+- [ ] TTL 内复用，过期并发请求只刷新一次
+- [ ] degraded 的 allow true/false 行为正确
+- [ ] unhealthy 与检查异常不进入候选
+- [ ] 其他健康 Capability 不受影响
+
+### Test Requirements
+
+- 假时钟、并发单飞、异常和 TTL 边界单元测试
+- Registry/Router 准入集成测试
+- 日志脱敏断言
+
+### Regression Scope
+
+- `/health` 现有应用健康语义不擅自扩张为 Capability 明细 API
+- Redis 不可用仍不影响健康准入模块启动
+
+### Definition of Done
+
+健康专项、并发测试、Review、负责人验收和双远程同步完成。
+
+---
+
+## S3-08 Capability 并发、超时与错误映射
+
+**Status:** TODO
+
+**Dependencies:** S3-05, S3-07
+
+### Goal
+
+在 Invocation Gateway 中落实单进程并发准入、两阶段超时取消和稳定 CapabilityError
+到 Run 错误映射。
+
+### Scope
+
+- unlimited/bounded 控制器
+- acquire timeout 与 CAPABILITY_BUSY
+- execution timeout、cooperative cancel、grace、强制 Task cancel
+- 显式 Cancel 与 timeout 区分
+- Semaphore 唯一释放路径
+- CapabilityError 白名单映射和未知异常收敛
+
+### Forbidden Scope
+
+- 分布式 Semaphore、Worker Lease、跨实例限流
+- 重试调度、熔断器或自适应限速
+- 修改公开事件结构
+
+### Database Changes
+
+无新增表；写 Invocation internal event 和既有 Run 终态。
+
+### Main Interfaces
+
+```text
+CapabilityConcurrencyController
+CapabilityExecutionController
+CapabilityErrorMapper
+```
+
+### Acceptance
+
+- [ ] bounded 上限不被并发竞争突破
+- [ ] 等待超时不创建新 Task，并形成 started/failed Invocation
+- [ ] 执行超时先协作取消，宽限后才强制取消
+- [ ] 显式 Cancel 记录 cancelled 而非 timeout
+- [ ] 所有异常和取消路径释放槽位
+- [ ] 失败公共消息非空且 Task 默认保持 active
+
+### Test Requirements
+
+- 可控 Barrier/Clock 的并发测试
+- 忽略协作取消的 Fake Capability 强制取消测试
+- Cancel/完成/timeout 竞态与唯一 Run 终态测试
+- 错误 details 不进入公开事件或日志测试
+
+### Regression Scope
+
+- S2.5 Cancel 202、首终态获胜和 Session 单活动 Run 不变
+- 慢 SSE 客户端仍不取消 Run
+
+### Definition of Done
+
+并发/超时/取消竞态门禁、Review、负责人验收和双远程同步完成。
+
+---
+
+## S3-09 Operation Ledger 与 ctx.operation
+
+**Status:** TODO
+
+**Dependencies:** S3-04, S3-05, S3-08
+
+### Goal
+
+提供逐业务副作用的稳定幂等键、Ledger 状态机和 Runtime 管理的异步 Operation Context。
+
+### Scope
+
+- 幂等键 canonical 编码与固定测试向量
+- `ctx.idempotency_key()`
+- `ctx.operation()` / OperationHandle
+- pending 创建/复用、succeeded 去重、failed 默认不重试
+- 正常退出成功、未知异常保留 pending、确定失败显式标记
+- Task/Capability/Invocation 归属校验
+
+### Forbidden Scope
+
+- Runtime 自动识别业务副作用
+- 保存业务响应 payload
+- 自动重试 failed、Saga、补偿或人工操作界面
+- 外部 Provider 专用 Adapter
+
+### Database Changes
+
+使用 `capability_operations`；若 S3-04 的已确认索引无需变化，不新增表。
+
+### Main Interfaces
+
+```text
+RunContext.idempotency_key(operation_key)
+RunContext.operation(operation_key)
+CapabilityOperationContext
+CapabilityOperationHandle.mark_failed()
+```
+
+### Acceptance
+
+- [ ] 相同 run/invocation/operation 得到相同 key，不同任一维度得到不同 key
+- [ ] 崩溃或普通异常后保持 pending
+- [ ] 正常执行原子进入 succeeded
+- [ ] Capability 显式确定失败才进入 failed
+- [ ] succeeded 不重复调用副作用，failed 默认拒绝自动重试
+- [ ] 一次 Invocation 的多个 Operation 独立记录
+
+### Test Requirements
+
+- canonical hash 测试向量
+- Context Manager 各退出路径单元测试
+- 真实 PostgreSQL 并发 get-or-create、崩溃窗口和唯一约束测试
+- Fake 外部系统幂等调用次数测试
+
+### Regression Scope
+
+- 无副作用 Capability 不要求创建 Operation
+- Operation 内容不进入 Parent、SSE 或业务日志
+
+### Definition of Done
+
+Ledger 真实数据库与崩溃窗口验证、Review、负责人验收和双远程同步完成。
+
+---
+
+## S3-10 Capability 恢复策略与 Checkpoint 对账
+
+**Status:** TODO
+
+**Dependencies:** S3-05, S3-09
+
+### Goal
+
+把 Manifest recovery/side-effect policy 接入 S2.5 恢复器，并保证 Invocation 与
+Operation 标识跨进程重启稳定。
+
+### Scope
+
+- automatic + none 自动恢复
+- automatic + idempotent 的 open invocation 与 pending Operation 恢复
+- automatic + unsafe 加载期拒绝回归
+- manual 崩溃恢复安全失败
+- started 无终结事件的 invocation_id 复用
+- Checkpoint-first 最终消息/Interrupt 投影保持
+
+### Forbidden Scope
+
+- manual recovery API 或 UI
+- 新 retry Run、恰好一次承诺
+- failed Operation 自动重试、状态迁移、Saga 或补偿
+
+### Database Changes
+
+无新增表；读取 RuntimeEvent、Task 和 Operation，写既有 Run/Event/Message 投影。
+
+### Main Interfaces
+
+```text
+CapabilityRecoveryPolicyEvaluator
+OpenInvocationResolver
+RunCheckpointInspector integration
+```
+
+### Acceptance
+
+- [ ] automatic + none 沿用精确 Checkpoint 恢复
+- [ ] automatic + idempotent 复用 invocation_id、task_id 和 idempotency_key
+- [ ] succeeded Operation 不重复，pending 只用原 key 重试
+- [ ] manual 不调用 Capability，形成非空 incomplete + failed
+- [ ] manual 专用错误不影响 automatic 路径
+- [ ] 恢复次数上限、Interrupt 对账和唯一终态保持 S2.5 语义
+
+### Test Requirements
+
+- 真实 PostgreSQL Checkpointer 的进程重启测试
+- 副作用前、外部成功后 ledger 前、ledger 后 checkpoint 前等崩溃窗口
+- automatic/manual 参数化测试
+- 模型与外部副作用调用次数断言
+
+### Regression Scope
+
+- S2.5 三次恢复上限和 start_checkpoint/input_payload 重放不变
+- Run 不新增 retry 类型
+
+### Definition of Done
+
+恢复矩阵与真实崩溃窗口通过、Review、负责人验收并同步两个远程。
+
+---
+
+## S3-11 Regenerate Capability 安全门禁
+
+**Status:** TODO
+
+**Dependencies:** S3-05, S3-06, S3-09, S3-10
+
+### Goal
+
+在创建 regenerate Run 前验证 Capability State 与副作用策略，避免把 Parent Fork
+错误当成 Child State Fork。
+
+### Scope
+
+- 从活动分支最新 completed AIMessage 确定原 capability_id
+- 只允许 `state_scope=invocation + side_effect_policy=none`
+- Registry、Health、权限和 State Schema 提交前复查
+- 复用 current Task、生成新 invocation_id 和独立 Child thread
+- 不支持组合返回 HTTP 409 `CAPABILITY_REGENERATE_UNSUPPORTED`
+- 保持 Parent Checkpoint Fork、request_id 幂等和原 Run API 事务边界
+
+### Forbidden Scope
+
+- Manifest regenerate 扩展字段
+- run/session Child Checkpoint Fork
+- 带副作用 Capability 的重生成、补偿或重复操作确认
+- Regenerate 时重新调用 Router
+
+### Database Changes
+
+无新增表；不支持请求必须在创建 Run、Task、Invocation 和 Operation 前返回。
+
+### Main Interfaces
+
+```text
+CapabilityRegeneratePolicy
+RegenerateSubmissionValidator integration
+CAPABILITY_REGENERATE_UNSUPPORTED
+```
+
+### Acceptance
+
+- [ ] invocation + none 可创建 regenerate Run 并复用 current Task
+- [ ] 每次合法 Regenerate 使用新 invocation_id 和新 Child thread
+- [ ] run/session scope 或 idempotent/unsafe 在 Run 创建前返回 409
+- [ ] 拒绝路径不创建 Run、Task、Invocation、Operation 或 Checkpoint
+- [ ] 不重新 Router，且 invoke 前权限/健康复查仍执行
+- [ ] 旧 Session 无 current Task 时按既定 continue→new 降级
+
+### Test Requirements
+
+- State Scope × Side Effect Policy 参数化门禁测试
+- API 409 无持久化副作用测试
+- 真实 Parent Checkpoint Fork + invocation thread 隔离集成测试
+- request_id 幂等与权限/健康竞态测试
+
+### Regression Scope
+
+- Stage 2 最新 completed 消息限制、Checkpoint Fork 和历史分支不变
+- 两个测试 Capability 的既有 Regenerate 可继续工作
+
+### Definition of Done
+
+Regenerate 安全矩阵、真实 Checkpointer 集成、Review、负责人验收和双远程同步完成。
+
+---
+
+## S3-12 迁移 general_chat / en_to_zh 并移除硬编码分支
+
+**Status:** TODO
+
+**Dependencies:** S3-06 ~ S3-11
+
+### Goal
+
+把两个测试能力完整迁移到标准 Capability Runtime，删除正式链路中的固定能力分发。
+
+### Scope
+
+- 两个 entrypoint 工厂、标准 Capability 和 AgentResult 适配
+- Registry 驱动 composition root、Router 和 Invocation Gateway
+- 删除 Parent/chat/recovery/history 中固定 ID 集合与 if/elif 分发
+- general_chat 简短风格、en_to_zh 忠实完整翻译和范围判断保持
+- Fake Model、真实百炼 smoke 接线保持
+- 测试显式准备 allow/deny 权限
+
+### Forbidden Scope
+
+- 把测试能力宣称为生产能力
+- 新增第三个业务 Capability
+- 修改业务 Prompt 目标或上下文 10/5 规则
+- 热加载、管理 API 或前端能力管理
+
+### Database Changes
+
+无新增表；验收 fixture 显式写权限和 Task 数据。
+
+### Main Interfaces
+
+标准 Manifest/Factory/Capability/AgentResult；Parent 仅调用通用 Invocation Gateway。
+
+### Acceptance
+
+- [ ] 正式代码无两个 ID 的能力分发硬编码
+- [ ] 两个能力均从 Manifest 到 Registry 再到 Runtime 执行
+- [ ] OUT_OF_SCOPE 有限回流和拒绝零业务副作用不回归
+- [ ] 最终完整 AIMessage 仍只由 Parent 保存
+- [ ] 三种 state scope 可通过 Manifest 测试变体验证，不复制业务实现
+- [ ] 两个测试 Manifest 固定为 invocation + none，既有 Regenerate 通过安全门禁
+- [ ] 真实百炼仍仅为显式 smoke
+
+### Test Requirements
+
+- 迁移前全部能力专项等价回归
+- Fake Model 端到端普通聊天、翻译、切换、连续和全部拒绝
+- 动态 Registry 真实 Checkpointer/Run/Event 集成
+- 代码搜索断言固定分发已移除
+
+### Regression Scope
+
+- Stage 1 Cases A~G
+- Stage 2 历史、Regenerate、Feedback
+- Stage 2.5 Run、SSE、Cancel、Interrupt/Resume、恢复
+
+### Definition of Done
+
+两个测试能力完全通过通用链路，旧分发移除，专项与全量回归、Review、负责人验收、
+双远程同步完成。
+
+---
+
+## S3-13 Session 删除与动态 Child Checkpoint 清理
+
+**Status:** TODO
+
+**Dependencies:** S3-05, S3-09, S3-12
+
+### Goal
+
+把 S3 Task、Operation 和动态 Child thread 纳入 S2.5 可重试 Session 硬删除屏障。
+
+### Scope
+
+- 删除前收集 run/task/thread 标识
+- contexts → operations → tasks → runtime → checkpoints → session 顺序
+- 动态三 scope thread 与遗留 thread 清理
+- Redis 继续 best effort
+- 中途失败保持 Session 重试锚点
+
+### Forbidden Scope
+
+- 软删除、归档、审计保留或全局数据保留策略
+- 删除 Capability Manifest 或 Registry 实例
+- 扩张为跨租户数据清理
+
+### Database Changes
+
+无新增表；补充按 Session 查询/删除方法和必要的已确认索引。
+
+### Main Interfaces
+
+```text
+SessionCapabilityDataDeleter
+DynamicChildThreadCollector
+SessionDeletionService integration
+```
+
+### Acceptance
+
+- [ ] 活动 Run 先取消并终止
+- [ ] 四张 S3 表中该 Session 相关数据全部删除
+- [ ] invocation/run/session scope checkpoint 全部删除
+- [ ] 遗留 `{session_id}:{capability_id}` checkpoint 兼容清理
+- [ ] 任一步失败不提前删除 Session，重试可完成
+- [ ] 其他 Session 和 Registry 不受影响
+
+### Test Requirements
+
+- 真实 PostgreSQL + Checkpointer + Redis 集成测试
+- 每个删除步骤故障注入和幂等重试测试
+- 多 Task、多 Run、多 Capability、多 scope 删除矩阵
+
+### Regression Scope
+
+- S2.5 Interrupt/Event/Run/Feedback/Parent checkpoint 删除
+- Redis 不可用不阻塞 PostgreSQL
+
+### Definition of Done
+
+完整删除矩阵、故障重试、Review、负责人验收和双远程同步完成。
+
+---
+
+## S3-14 Stage 3 集成验收 Gate
+
+**Status:** TODO
+
+**Dependencies:** S3-02 ~ S3-13
+
+### Goal
+
+执行完整 S3 Gate，证明 Capability Runtime 可演示、可恢复且没有实现阶段外平台能力。
+
+### Scope
+
+- Manifest / Registry Gate
+- Task / State / Checkpoint Gate
+- Health / Concurrency / Timeout Gate
+- Recovery / Operation Ledger Gate
+- Permission / Router / public capability_id Gate
+- Regenerate Capability 安全门禁 Gate
+- 现有测试 Capability 与 `/chat` 页面 Gate
+- Session 删除和 S1/S2/S2.5 全回归
+- 文档、范围、构建和双远程一致性验收
+
+### Forbidden Scope
+
+- 在 Gate 中顺手增加新功能或重构
+- 真实模型作为默认测试门禁
+- 以 mock 替代必须真实验证的 PostgreSQL、Redis 和 Checkpointer 事务
+
+### Database Changes
+
+无；只验证最终 Schema 和升级路径。
+
+### Main Interfaces
+
+不新增接口；验收所有 S3 已实现契约。
+
+### Acceptance
+
+- [ ] Manifest 严格校验、重复隔离、局部故障隔离通过
+- [ ] Registry Snapshot、动态 Router 与权限双检通过
+- [ ] Task 生命周期、OUT_OF_SCOPE 回滚和三种 State Scope 通过
+- [ ] State Schema 兼容与不兼容拒绝通过
+- [ ] Regenerate 只允许 invocation + none，其他组合在 Run 创建前 409
+- [ ] Health TTL、degraded、并发、timeout 与 Cancel 竞态通过
+- [ ] automatic 恢复、manual 安全失败和 Operation Ledger 崩溃窗口通过
+- [ ] 两个标准测试 Capability 和第三个协议测试 ID 通过完整产品链路
+- [ ] Session 删除覆盖四表和全部 Child checkpoint
+- [ ] `/chat` 可观察通用 capability_id，终态仍回读 Parent 历史
+- [ ] 默认 Fake Model、真实 PostgreSQL/Redis、Vitest、构建和 Playwright 通过
+- [ ] 真实百炼仅作为负责人配置后的可选 smoke
+- [ ] Stage 1 / 2 / 2.5 无回归
+- [ ] 未实现 S3 非目标
+- [ ] README、AGENTS 和全部 docs 与实现一致
+
+### Test Requirements
+
+- 默认 `uv run --locked pytest -q`
+- 显式启用真实 PostgreSQL / Redis 的完整后端套件
+- `uv lock --check`、`uv pip check`、compileall、build、compose config
+- 前端 Vitest、生产 build、系统浏览器 Playwright
+- `git diff --check`、Schema/日志/范围静态审计
+
+### Regression Scope
+
+完整 Stage 1、Stage 2、Stage 2.5 产品与技术回归。
+
+### Definition of Done
+
+所有 Gate 有可复核证据，独立 Reviewer 无未解决 Critical/Important，负责人验收后
+提交最终文档并将 GitHub/Gitee 推送到同一提交；此前不得进入下一阶段。
+
+---
+
 # Future Backlog（只记录，不实施）
 
 - [ ] 文件上传
@@ -2032,11 +3020,9 @@ stop and wait
 - [ ] Capability Admin API
 - [ ] 管理平台
 - [ ] RBAC
-- [ ] Capability Manifest
-- [ ] Capability Registry
 - [ ] Local Capability 动态 mount / unmount
 - [ ] DRAINING 优雅卸载
-- [ ] 用户 Capability 权限
+- [ ] Capability 权限管理 API / RBAC
 - [ ] Router confidence / 低置信度确认策略
 - [ ] Remote Capability
 - [ ] 多实例 Runtime / Worker Lease / 分布式任务队列

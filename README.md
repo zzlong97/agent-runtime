@@ -7,16 +7,17 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 1. 先验证主图能够稳定调度多个子 Agent；
 2. 再补齐完整聊天产品能力；
 3. 再把执行重构为持久、可重连、可取消、可中断和可恢复的 Run；
-4. 后续阶段根据这套 Runtime 的真实结果重新设计。
+4. 在可靠 Run 之上建设静态 Manifest / Registry 驱动的 Capability Runtime。
 
 ---
 
 ## 1. 当前定位
 
-当前项目已经验收通过 **Stage 1：最小 Agent Runtime** 和
-**Stage 2：完整聊天产品能力与演示页面**。当前正按任务顺序建设
-**Stage 2.5：持久化 Run 与可恢复 Runtime**；具体已验收边界、当前任务和最新证据
-以 `docs/tasks.md` 为准。
+当前项目已经验收通过 **Stage 1：最小 Agent Runtime**、
+**Stage 2：完整聊天产品能力与演示页面** 和
+**Stage 2.5：持久化 Run 与可恢复 Runtime**。当前进入
+**Stage 3：Capability Runtime**，S3-01 正在进行架构文档与任务树验收，尚未开始
+S3 功能编码；具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
 的 OpenAI 兼容接口接入；自动化测试默认使用 Fake Model，真实模型只用于
@@ -42,8 +43,8 @@ LangGraph Stream
 FastAPI SSE
 ```
 
-Stage 2.5 已通过 S2.5-11 集成验收；当前暂不开始后续阶段，后续范围需要基于
-现有 Runtime 重新裁决。Run 已从 POST SSE 和进程内 Registry 中解耦：
+Stage 2.5 已通过 S2.5-11 集成验收。Run 已从 POST SSE 和进程内活动执行状态中
+解耦：
 
 ```text
 POST 创建持久 Run → HTTP 202
@@ -255,15 +256,34 @@ S2.5-11 与 Stage 2.5 整体验收通过：
 
 后续计划：
 
-- 当前暂不开始后续阶段开发
-- 根据 Stage 2.5 真实基线重新裁决后续阶段
+- S3-00 架构基线已经确认
+- 当前只验收 S3-01 文档，不进行 S3 功能编码
+- S3-01 验收并完成双远程同步后，建议从 S3-02 Manifest Schema 与 Local
+  CapabilitySource 开始开发
+
+### Stage 3：Capability Runtime
+
+已确认、尚待按任务逐项实现：
+
+- 本地严格 YAML Manifest、`CapabilitySource` 与启动期静态 Registry
+- 统一 entrypoint 工厂、Capability 协议和 AgentResult
+- Capability Task、Invocation、三种 State Scope 和 State Schema 兼容
+- 仅 `invocation + none` Capability 可使用的安全 Regenerate 门禁
+- HealthSnapshot、进程内并发、两阶段超时取消
+- automatic/manual Recovery Policy 和 Operation Ledger
+- 默认拒绝的用户级 Capability 权限与动态 Router 候选
+- 开放但受约束的公开 `capability_id`
+- `general_chat` / `en_to_zh` 作为非生产测试 Capability 的标准迁移
+- Session 删除覆盖 Task、Operation 和动态 Child Checkpoint
+
+S3 不实现热加载、mount/unmount、DRAINING、Remote Capability、多实例 Registry、
+Workflow、多 Agent、RBAC、State 自动迁移、Saga、Worker Lease、管理平台或文件/RAG。
 
 ### Future：候选方向，不构成阶段承诺
 
 - 文件上传 / 文件服务 / RAG
-- Capability Manifest / Registry
 - 动态 `mount()/unmount()` / DRAINING
-- Capability 权限 / RBAC
+- RBAC / ABAC / 组织或租户权限
 - Router confidence 与确认策略
 - Capability Admin API
 - 管理平台
@@ -488,10 +508,10 @@ npm run test:e2e
 4. `docs/decisions.md`
 5. `docs/tasks.md`
 
-当前只允许执行 `docs/tasks.md` 中标记的 **Stage 2.5 当前任务**。
+当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
 
-S2.5-00 架构基线未验收前，不允许开始 S2.5-01；任何 S2.5 任务都不得顺手实现
-Future 候选能力。原 Stage 3 已移出正式阶段，后续范围必须在 S2.5 完成后重新设计。
+S3-01 未经负责人验收、提交并同步 GitHub/Gitee 前，不允许开始 S3-02；任何 S3
+任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、
 `LLM_BASE_URL` 和 `LLM_MODEL`；不得提交真实密钥。

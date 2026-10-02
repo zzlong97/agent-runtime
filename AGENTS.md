@@ -463,7 +463,52 @@ Stage 2.5 禁止提前实现：
 
 ---
 
-# 16. 开发流程
+# 16. Stage 3 约束
+
+Stage 3 是静态 Capability Runtime 阶段，继续使用单用户可信环境和单 Runtime
+进程。S3-01 只允许维护架构与任务文档，负责人验收并完成双远程同步前不得进入
+S3-02 功能编码。
+
+必须遵守：
+
+- Capability 来自严格本地 YAML Manifest 和启动期进程内 Registry Snapshot
+- `entrypoint` 指向接收 `CapabilityBootstrapContext` 的统一工厂
+- Router 只读取 `capability_id`、`name`、`description`、`enabled`
+- 公开 `capability_id` 使用符合 Manifest ID 规则的字符串，不再固定两个枚举
+- Capability 统一返回 `AgentResult(status, content, metadata)`；Runtime 将最终全文
+  写回 Parent，Capability 不能直接写 Parent、SSE、Redis 或顶层 Run 终态
+- 每个 Invocation 使用稳定 UUID；生命周期只写 internal durable RuntimeEvent
+- 每个 Invocation 关联 Capability Task；Run 失败或取消不自动结束 Task
+- `state_scope` 必须显式为 invocation、run 或 session，Child thread_id 由 Runtime
+  按 namespace/version 确定性生成
+- State Schema 不兼容时拒绝 continue，不自动迁移或修改旧 Task
+- Regenerate 只允许 `state_scope=invocation + side_effect_policy=none`；其他组合必须
+  在创建 Run 前返回 `CAPABILITY_REGENERATE_UNSUPPORTED`
+- 权限无记录即 deny，并在 Router 前和 invoke 前双重实时检查
+- `general_chat` 和 `en_to_zh` 只是标准测试 Capability，不自动授权；测试显式配置
+  allow/deny
+- Health、单进程并发、等待超时和执行超时全部由 Runtime 治理
+- automatic + idempotent 的副作用必须使用 `ctx.operation()` 和 Operation Ledger
+- 业务副作用边界、稳定 operation_key 和确定失败判断由 Capability 自治；未知结果
+  保持 pending
+- manual policy 只在崩溃恢复拒绝时安全失败，不得影响 automatic 恢复路径
+- `task_action=new` 后合法 OUT_OF_SCOPE 必须回滚未接受 Task 并恢复原 current Task
+- Session 删除必须清理 Task Context、Operation、Task 和全部新旧 Child Checkpoint
+
+Stage 3 禁止实现：
+
+- 热加载、动态 mount/unmount、DRAINING
+- Remote Capability、Remote Agent、多实例 Registry 同步
+- 多版本 Capability 实现共存
+- Workflow、多 Agent 编排、workflow_id
+- RBAC、ABAC、组织或租户权限
+- State 自动迁移、Saga 或补偿事务
+- 分布式 Capability 并发、Worker Lease、分布式任务队列
+- Capability Admin API、管理平台、文件或 RAG 产品能力
+
+---
+
+# 17. 开发流程
 
 每次任务执行：
 
@@ -488,7 +533,7 @@ Gitee。任一远程推送失败时，不得开始下一阶段，应先修复同
 
 ---
 
-# 17. 修改文档规则
+# 18. 修改文档规则
 
 Codex 可以：
 
@@ -507,7 +552,7 @@ Codex 不可以未经负责人明确裁决直接修改：
 
 ---
 
-# 18. 完成定义
+# 19. 完成定义
 
 任务不是“代码已写完”即完成。
 
@@ -525,7 +570,7 @@ Codex 不可以未经负责人明确裁决直接修改：
 
 ---
 
-# 19. 代码文本与 Schema 描述
+# 20. 代码文本与 Schema 描述
 
 - 新增或修改的代码注释、docstring、模型提示词和用户可见提示信息使用中文
 - 代码标识符继续使用清晰、规范的英文命名
@@ -534,7 +579,7 @@ Codex 不可以未经负责人明确裁决直接修改：
 
 ---
 
-# 20. 业务日志规范
+# 21. 业务日志规范
 
 业务日志是贯穿所有 Stage 的工程规范，不属于独立产品能力。新增或修改业务链路时，
 必须在关键入口、关键出口、拒绝、取消和失败位置记录中文业务事件。

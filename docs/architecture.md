@@ -172,7 +172,8 @@ admin/
 remote_executor/
 ```
 
-这些仍不属于 Stage 1 / 2；原 Stage 3 已移出正式阶段，目前只作为 Future 候选。
+这些不属于 Stage 1 / 2。S3 只按第 15 节引入静态 Manifest、Registry 和最小权限；
+动态挂载、管理、Remote Executor 等仍属于 Future。
 
 ---
 
@@ -1037,11 +1038,718 @@ Playwright  → 构建页面端到端真实链路
 
 ---
 
-# 15. Future 边界
+# 15. Stage 3 Capability Runtime 架构增量
 
-原 Stage 3 的 Manifest、Registry、动态挂载、权限、DRAINING 和 Router confidence
-不再是已承诺阶段，只保留为 Stage 2.5 之后的候选增量。多实例 Runtime 必须先设计
-Worker Lease、任务所有权和故障接管，不能直接复用 S2.5 单进程 Coordinator。
+S3 在 S2.5 持久 Run 与恢复框架内增加静态 Capability Runtime。Registry 只负责
+启动期发现和实例管理；Parent 继续负责会话级调度；Runtime 继续是 Run、事件、
+权限、Task、并发、超时和恢复的唯一控制面。
+
+## 15.1 总体结构与职责
+
+```text
+Local YAML files
+      ↓
+LocalYamlCapabilitySource ── CapabilitySource protocol
+      ↓ strict validation / collect all conflicts
+Capability Registry Snapshot
+      ├── RouterProjection(capability_id, name, description, enabled)
+      ├── Capability factory → initialize → health snapshot
+      └── RuntimePolicy(state / concurrency / recovery / side effect)
+                                      ↓
+Run Executor → Parent Graph → Router → Capability Invocation Gateway
+                                      ├── permission + health recheck
+                                      ├── invocation lifecycle event
+                                      ├── Task / State Scope
+                                      ├── concurrency + timeout
+                                      ├── Operation Ledger
+                                      └── Capability.invoke(...)
+                                                    ↓
+                       Child Checkpointer / Capability-owned stores
+```
+
+职责边界：
+
+| 组件 | 负责 | 禁止 |
+| --- | --- | --- |
+| `CapabilitySource` | 返回原始 Manifest 文档和来源位置 | 导入代码、实例化 Capability、访问 Router |
+| Manifest Validator | 严格 Schema 校验和跨字段校验 | 修复、补猜非法配置 |
+| Registry | 冲突隔离、entrypoint 加载、实例生命周期、健康快照 | 执行顶层 Run、写 SSE、管理 Session |
+| Router | 从允许的最小投影选择 `capability_id + task_action` | 读取 Prompt、State、Tool、entrypoint、健康详情 |
+| Invocation Gateway | 权限复查、Task、State Scope、并发、超时、恢复与事件 | 理解 Capability 业务依赖 |
+| Capability | 范围判断、业务执行、私有 State、业务副作用边界 | 直接访问 SSE/Redis、创建或结束顶层 Run、管理 Session |
+| Parent Graph | 公共消息、有限回流、会话级控制 | 保存 Capability 私有业务 State |
+
+Registry 在应用启动时一次性构建不可变 Snapshot。S3 没有文件监听、热重载、
+mount/unmount 或 DRAINING；Manifest 文件变化必须重启应用后才生效。
+
+## 15.2 Manifest 最终 Schema
+
+本地 Manifest 与其嵌套对象全部使用 `extra=forbid`。所有下列字段均显式出现；尤其
+`state_scope`、恢复与副作用策略不得通过默认值推断。
+
+| 字段 | 类型与约束 | 消费方 | 用途 |
+| --- | --- | --- | --- |
+| `manifest_schema_version` | 整数，S3 固定 `1` | Runtime | Manifest 契约版本 |
+| `capability_id` | 字符串，`^[a-z][a-z0-9_]{0,63}$` | Router + Runtime | 稳定能力标识 |
+| `name` | 非空字符串，最长 80 | Router | 人类可读名称 |
+| `description` | 非空字符串，最长 500 | Router | 路由选择说明，不得包含 Prompt |
+| `enabled` | 布尔 | Router + Runtime | 静态启用开关 |
+| `entrypoint` | `package.module:factory_name` | Runtime | 统一工厂导入位置 |
+| `version` | SemVer 字符串 | Capability 自述 + Runtime | 当前实现版本 |
+| `state_scope` | `invocation \| run \| session` | Runtime | Child State 共享范围 |
+| `state_schema_version` | 1~64 位稳定版本标识 | Capability 自述 + Runtime | 当前私有 State Schema |
+| `compatible_state_schema_versions` | 唯一字符串数组 | Capability 自述 + Runtime | 当前实现可读取的旧 State Schema |
+| `allow_degraded` | 布尔 | Runtime | degraded 是否仍可服务 |
+| `concurrency.mode` | `unlimited \| bounded` | Runtime | 进程内并发模式 |
+| `concurrency.max_concurrency` | bounded 时正整数；unlimited 时 `null` | Runtime | 单 Capability 并发上限 |
+| `concurrency.acquire_timeout_seconds` | 正数 | Runtime | 获取并发槽最大等待时间 |
+| `execution.timeout_seconds` | 正数 | Runtime | 单 Invocation 执行时限 |
+| `execution.cancel_grace_seconds` | 大于等于 0 | Runtime | 协作取消宽限时间 |
+| `recovery_policy` | `automatic \| manual` | Runtime | 崩溃后能否自动重放 |
+| `side_effect_policy` | `none \| idempotent \| unsafe` | Runtime | 外部副作用恢复约束 |
+
+字段视图分层：
+
+```text
+Router 可见
+  capability_id / name / description / enabled
+
+Runtime 内部
+  manifest_schema_version / entrypoint / state_scope / allow_degraded
+  concurrency / execution / recovery_policy / side_effect_policy
+
+Capability 自述、Router 不可见
+  version / state_schema_version / compatible_state_schema_versions
+```
+
+S3 不开放任意 Manifest 顶层扩展字段，也不把业务 Prompt、Tool 或业务配置塞进
+Manifest。Capability 专属非敏感配置由 composition root 形成只读配置视图，经
+Bootstrap Context 注入；敏感值仍从既有安全配置入口获取且不得进入日志。
+
+跨字段校验：
+
+- `automatic + unsafe` 非法
+- `bounded` 必须提供正整数 `max_concurrency`
+- `unlimited` 的 `max_concurrency` 必须为 `null`
+- `compatible_state_schema_versions` 去重；当前版本无需重复列入
+- entrypoint 必须是合法模块路径和属性名，不接受文件系统路径或任意表达式
+
+Manifest 建议与实现同目录：
+
+```text
+src/agent_runtime/capabilities/<capability_id>/manifest.yaml
+```
+
+`CapabilitySource` 只返回带来源标识的原始文档。Local Source 扫描固定受控目录，
+按规范化路径排序以保证测试确定性。Validator 必须先收集全部文档，再按 ID 分组；
+同一 ID 出现多次时整组隔离，不能保留“第一个”或“最后一个”。
+
+## 15.3 entrypoint、Bootstrap 与 Capability 协议
+
+entrypoint 指向同步工厂；异步资源初始化放在 `initialize()`：
+
+```text
+create_capability(
+    bootstrap_context: CapabilityBootstrapContext
+) -> Capability
+```
+
+Bootstrap Context 最小字段：
+
+```text
+manifest                 # 深度只读的已校验 Manifest
+child_checkpointer       # 该 Capability 的隔离 Checkpointer 句柄
+model_factory            # 支持生产模型与 Fake Model 注入
+capability_config        # 非敏感只读配置视图
+register_cleanup         # 向 Runtime 生命周期注册幂等异步清理
+```
+
+工厂必须返回实现以下协议的对象：
+
+```text
+initialize() -> Awaitable[None]
+health_check() -> Awaitable[HealthResult]
+invoke(
+    run_context: RunContext,
+    agent_context: AgentContext,
+    task_input: TaskInput,
+) -> Awaitable[AgentResult]
+```
+
+Registry 校验工厂签名、返回协议和初始化结果。资源清理按成功初始化的逆序运行；
+失败 Capability 已注册的清理也必须执行。S3 不增加热卸载生命周期方法。
+
+运行上下文扩展：
+
+```text
+RunContext
+  run_id / request_id / stable message ids
+  invocation_id
+  cancellation
+  typed EventOutlet
+  idempotency_key(operation_key)
+  operation(operation_key)
+
+AgentContext
+  session_id / capability_id
+  task_id
+  state_scope / state_schema_version
+  deterministic child thread_id / child config
+
+TaskInput
+  deep-copied Parent-derived message snapshot
+```
+
+`AgentResult` 使用关闭 Schema：
+
+```text
+status = completed | rejected
+content: string
+metadata:
+  control_signal = OUT_OF_SCOPE | null
+  task_transition = keep_active | completed | failed | cancelled
+```
+
+组合约束：
+
+- `completed`：`content` 去除空白后非空，`control_signal=null`
+- `rejected`：`content` 为空，`control_signal=OUT_OF_SCOPE`，Task 不得终态转换
+- 失败抛出 `CapabilityError`；取消传播 `asyncio.CancelledError`
+- `task_transition` 默认语义为显式 `keep_active`，避免把 Run 完成误作 Task 完成
+
+EventOutlet delta 是实时投影，`AgentResult.content` 是成功结果的规范全文。Runtime
+用后者构造唯一最终 AIMessage 并写 Parent；metadata 永不直接进入公开事件。若
+Capability 已产生公开 delta 后再返回 rejected，Runtime 视为契约违规。
+
+## 15.4 Registry 状态、HealthSnapshot 与 Router 投影
+
+Registry Snapshot 对每个来源记录以下静态加载状态之一：
+
+```text
+active
+disabled
+invalid_manifest
+duplicate_id
+entrypoint_failed
+initialize_failed
+```
+
+Health Service 在静态 Entry 上叠加 `healthy / degraded / unhealthy` 动态快照；
+`unhealthy` 与不允许服务的 degraded 不改变 Registry Snapshot，只影响当次候选。
+只有静态 `active` 且健康可服务的实例进入服务候选。隔离原因写中文业务日志和内部
+诊断，不写公开 SSE，不包含异常堆栈、凭据或 Manifest 敏感内容。
+
+`HealthSnapshot` 至少包含：
+
+```text
+capability_id
+status = healthy | degraded | unhealthy
+checked_at
+expires_at
+summary_code
+```
+
+TTL 使用 Runtime 全局配置，不扩张 Manifest。启动时强制检查；TTL 内复用快照；
+过期后的首个需要者在单飞锁内刷新，其他并发调用等待同一结果，避免健康检查风暴。
+健康详情只供内部日志与诊断，Router 只得到可服务候选。
+
+Router 请求由 Runtime 每轮构造：
+
+```text
+Registry serviceable projection
+∩ user permissions
+- rejected_capability_ids
+```
+
+结构化 Router 结果：
+
+```text
+capability_id
+task_action = continue | new
+confidence                 # 继续记录，不触发低置信度 interrupt
+```
+
+Parent 可在无明显新意图时把当前 Capability 作为优先提示，但仍必须重新经过 Registry、
+健康和权限过滤。Parent 保存 `resolved_capability_id` 和本轮 `task_action`，不保存
+task_id 或 Capability 私有 State。
+
+## 15.5 Run、Invocation 与 Task 关系
+
+```text
+Session 1 ── N Run
+Session 1 ── N CapabilityTask
+CapabilityTask 1 ── N Invocation
+Run 1 ── N Invocation（S3 顺序执行，同时最多一个 open）
+Invocation 1 ── N CapabilityOperation
+Session + Capability 1 ── 0..1 current Task Context
+```
+
+所有 Capability Invocation 都关联 Task，`state_scope` 只决定私有 State 的共享键，
+不决定是否存在 Task。这样 invocation/run scope 仍可表达长期业务生命周期和副作用
+归属，但其 Child State 不跨越相应边界共享。
+
+调用顺序：
+
+```text
+1. invoke 前权限复查、Registry/Health/State Version 校验
+2. 生成或从 open started event 恢复 invocation_id
+3. durable 写 internal.capability.invocation.started
+4. 在 acquire_timeout 内获取该 Capability 并发槽
+5. 事务解析 continue/new Task，写最近执行投影和 Task 内部事件
+6. 生成确定性 Child thread_id，调用 Capability
+7. 应用 AgentResult 的 Task 意图和最终公共消息
+8. durable 写 completed / failed / cancelled Invocation 事件
+9. 释放并发槽
+```
+
+`CAPABILITY_BUSY` 发生时已有 started/failed Invocation 事件，但可以没有 task_id；
+并发槽未取得前不创建新 Task。Run 内一次只允许一个 open Invocation，使恢复器可以
+从最新未配对的 started 事件唯一复用 `invocation_id`。
+
+Task internal durable 事件至少包括：
+
+```text
+internal.capability.task.created
+internal.capability.task.current_changed
+internal.capability.task.completed
+internal.capability.task.failed
+internal.capability.task.cancelled
+internal.capability.task.continue_degraded_to_new
+internal.capability.task.rejected_rolled_back
+```
+
+这些事件使用固定内部 Schema，经 Run Sequencer 分配 seq，不进入 Redis 或 SSE。
+
+### OUT_OF_SCOPE 的可回滚 Task
+
+`task_action=new` 调用前，Task Service 在一个事务内保存原 current 指针、创建
+provisional Task 并切换 current。若合法返回 rejected：
+
+```text
+验证无公开输出、无 Operation、无 Child Checkpoint
+→ 同一事务删除 provisional Task
+→ 恢复原 current；原本为空则删除 context 行
+→ 写 invocation completed(outcome=rejected)
+→ 清理 provisional Child thread
+```
+
+拒绝后只保留 Invocation 与 provisional Task 创建/回滚的内部诊断，不保留 Task 行、
+current 指针或 Child State。Runtime 只检查 provisional thread 是否存在 Checkpoint，
+不得读取 Capability 私有 payload。若已产生 Operation、公开输出或 Child Checkpoint
+后拒绝，按 `CAPABILITY_EXECUTION_FAILED` 结束，不回滚可能关联外部事实的 Task。
+
+## 15.6 State Scope 与 thread_id
+
+Child thread ID 使用以下规范化格式：
+
+```text
+capability:v1:{session_id}:{capability_id}:schema:{state_schema_version}:
+  invocation:{invocation_id}
+
+capability:v1:{session_id}:{capability_id}:schema:{state_schema_version}:
+  run:{run_id}
+
+capability:v1:{session_id}:{capability_id}:schema:{state_schema_version}:
+  task:{task_id}
+```
+
+实际值为单行，不包含空格和换行。`v1` 是 thread 命名算法版本，不是 Capability
+实现版本。thread_id 不包含 `version`，否则兼容旧 State Schema 的新实现无法继续
+原 Task。
+
+State Scope 映射：
+
+| scope | 共享键 | 生命周期 |
+| --- | --- | --- |
+| `invocation` | `invocation_id` | 每次调用独立 |
+| `run` | `run_id + capability_id` | 同一 Run 内同能力复用 |
+| `session` | `task_id` | Task 跨 Run 继续 |
+
+Task 固化创建时的 State Schema 版本。continue 时有效兼容集合为：
+
+```text
+{manifest.state_schema_version}
+∪ manifest.compatible_state_schema_versions
+```
+
+不兼容时在调用前失败，不创建新 Task、不切换 current、不修改旧 Task，也不自动
+回退为 new。旧的 `{session_id}:{capability_id}` checkpoint 不迁移；两个演示能力
+可从 Parent 公共历史构建新快照。Session 删除必须同时清理新旧命名 thread。
+
+### 15.6.1 Regenerate 安全门禁
+
+Parent Regenerate 只能回到 Parent Checkpoint，不能自动 fork Capability 私有 State。
+S3 因此只允许以下组合：
+
+```text
+state_scope = invocation
+side_effect_policy = none
+```
+
+提交顺序：
+
+```text
+校验仍是活动分支最新 completed AIMessage
+→ 从原 AIMessage 确定 capability_id
+→ 读取 Registry Manifest 并校验 invocation + none
+→ 复查 enabled / Health / Permission / State Schema
+→ 捕获 Parent start_checkpoint_id
+→ 创建 regenerate Run
+```
+
+不重新调用 Router。执行时以 `task_action=continue` 复用 current Task；旧 Session 尚无
+current Task 时沿用既定降级 new 规则。每次 Regenerate 使用新的 invocation_id 和
+invocation-scope Child thread，输入来自 Parent Checkpoint Fork，不读取原 Invocation
+的 Child State。
+
+不满足安全组合时，在 Run 创建前返回 HTTP 409
+`CAPABILITY_REGENERATE_UNSUPPORTED`，不创建 Run、Task、Invocation 或 Operation。
+S3 不增加 Manifest `supports_regenerate` 字段，也不实现 Child Checkpoint Fork。
+
+## 15.7 数据模型
+
+S3 延续当前 Repository 自建表与幂等 `setup()` 方式，不在本阶段额外引入 Alembic。
+所有时间使用 `TIMESTAMPTZ`，所有状态使用 CHECK 约束，所有写操作使用参数化 SQL。
+
+### capability_tasks
+
+| 字段 | PostgreSQL 类型 | 可空 | 约束与用途 |
+| --- | --- | --- | --- |
+| `task_id` | UUID | 否 | 主键，服务端 UUIDv4 |
+| `session_id` | UUID | 否 | FK `sessions(session_id)`，所属 Session |
+| `capability_id` | VARCHAR(64) | 否 | Manifest ID 格式 CHECK；不对本地 Registry 建 FK |
+| `state_schema_version` | VARCHAR(64) | 否 | 创建时固化，非空 CHECK |
+| `status` | TEXT | 否 | `active/completed/failed/cancelled` CHECK |
+| `last_run_id` | UUID | 是 | FK `runs(run_id)`；最近执行投影 |
+| `last_invocation_id` | UUID | 是 | 最近 Invocation 投影；无 Invocation 表，不设 FK |
+| `created_at` | TIMESTAMPTZ | 否 | 创建时间 |
+| `updated_at` | TIMESTAMPTZ | 否 | 最近投影更新时间 |
+| `ended_at` | TIMESTAMPTZ | 是 | active 必须为空，终态必须非空 |
+
+约束与索引：
+
+```text
+UNIQUE (task_id, session_id, capability_id)  # 供 Context 复合 FK
+INDEX (session_id, capability_id, status, updated_at DESC)
+INDEX (last_run_id) WHERE last_run_id IS NOT NULL
+CHECK ((status='active' AND ended_at IS NULL)
+    OR (status<>'active' AND ended_at IS NOT NULL))
+```
+
+外键使用 `ON DELETE RESTRICT`；Session 删除服务显式按顺序清理，不依赖隐式级联。
+`last_run_id` 同样使用 RESTRICT，删除任务后才可删除其 Run。Task 不存业务 payload，
+当前不增加 `workflow_id`；未来可直接增加 nullable UUID 列。
+
+### capability_task_contexts
+
+| 字段 | PostgreSQL 类型 | 可空 | 约束与用途 |
+| --- | --- | --- | --- |
+| `session_id` | UUID | 否 | 所属 Session |
+| `capability_id` | VARCHAR(64) | 否 | 所属 Capability |
+| `current_task_id` | UUID | 否 | 当前 active Task |
+| `updated_at` | TIMESTAMPTZ | 否 | 指针更新时间 |
+
+约束与索引：
+
+```text
+PRIMARY KEY (session_id, capability_id)
+UNIQUE (current_task_id)
+FOREIGN KEY (current_task_id, session_id, capability_id)
+  REFERENCES capability_tasks(task_id, session_id, capability_id)
+  ON DELETE RESTRICT
+```
+
+没有 current Task 时不保存空值行，而是删除 Context 行。Repository 在写入时同时
+确认目标 Task 为 active。新建 Task + upsert Context、Task 终态 + delete Context
+均使用单事务和行锁。
+
+### capability_operations
+
+| 字段 | PostgreSQL 类型 | 可空 | 约束与用途 |
+| --- | --- | --- | --- |
+| `operation_id` | UUID | 否 | 主键，服务端 UUIDv4 |
+| `run_id` | UUID | 否 | FK `runs(run_id)` |
+| `invocation_id` | UUID | 否 | 对应 Invocation；无独立 FK |
+| `task_id` | UUID | 否 | FK `capability_tasks(task_id)` |
+| `capability_id` | VARCHAR(64) | 否 | 冗余校验与查询维度 |
+| `operation_key` | TEXT | 否 | Capability 提供的稳定非空业务操作键 |
+| `idempotency_key` | CHAR(64) | 否 | Runtime 生成的小写 SHA-256 |
+| `status` | TEXT | 否 | `pending/succeeded/failed` CHECK |
+| `created_at` | TIMESTAMPTZ | 否 | 首次登记时间 |
+| `updated_at` | TIMESTAMPTZ | 否 | 状态更新时间 |
+
+约束与索引：
+
+```text
+UNIQUE (run_id, invocation_id, operation_key)
+UNIQUE (idempotency_key)
+INDEX (task_id, updated_at DESC)
+INDEX (run_id, invocation_id)
+```
+
+外键使用 RESTRICT。Runtime 通过 Task 复合查询校验 capability_id 一致，不允许
+Capability 直接写表。Ledger 不保存外部响应、异常详情或补偿数据。
+
+### user_capability_permissions
+
+| 字段 | PostgreSQL 类型 | 可空 | 约束与用途 |
+| --- | --- | --- | --- |
+| `user_id` | TEXT | 否 | 固定服务端用户标识，非空 CHECK |
+| `capability_id` | VARCHAR(64) | 否 | Manifest ID；本地 Registry 无数据库 FK |
+| `allowed` | BOOLEAN | 否 | true 允许、false 显式拒绝 |
+| `created_at` | TIMESTAMPTZ | 否 | 创建时间 |
+| `updated_at` | TIMESTAMPTZ | 否 | 最近更新时间 |
+
+约束与索引：
+
+```text
+PRIMARY KEY (user_id, capability_id)
+INDEX (capability_id, allowed)
+```
+
+无用户表和 Capability 表，因此 S3 不增加对应 FK。无记录即 deny；不自动给两个
+演示 Capability 授权。测试通过 Repository fixture 显式写 allow/deny 并清理。
+权限行不属于 Session，删除 Session 时不得删除；只允许由权限 Repository 的显式
+授权、拒绝或撤销操作修改。
+
+### 删除顺序
+
+Session 删除屏障取得并等待活动 Run 终态后：
+
+```text
+收集 run_id / task_id / 全部新旧 Child thread_id
+→ delete capability_task_contexts
+→ delete capability_operations
+→ delete capability_tasks
+→ delete run_interrupts / runtime_events / runs
+→ delete dynamic + legacy Child checkpoints
+→ delete Parent checkpoint / feedback
+→ delete Session last
+```
+
+每一步幂等；失败时 Session 行仍作为重试锚点。Redis Stream 继续 best effort 清理。
+
+## 15.8 Task Service 事务语义
+
+`new`：
+
+```text
+SELECT context FOR UPDATE
+→ INSERT active task
+→ UPSERT current context
+→ 更新 task.last_run_id / last_invocation_id
+→ INSERT internal task events
+→ COMMIT
+```
+
+`continue`：
+
+```text
+SELECT context + task FOR UPDATE
+→ 无 current：按 new 创建并写 continue_degraded_to_new
+→ 有 current：校验 active / capability / state schema compatibility
+→ 更新最近执行投影
+→ COMMIT
+```
+
+Task transition：
+
+```text
+SELECT task/context FOR UPDATE
+→ active 才允许转 completed/failed/cancelled
+→ 写 ended_at
+→ 仅当 context 仍指向该 task 时删除 context
+→ INSERT internal task terminal event
+→ COMMIT
+```
+
+Run failed/cancelled、CapabilityError、Timeout 和 Cancel 默认都不触发 Task transition；
+只有成功校验的 `AgentResult.metadata.task_transition` 可以请求 Runtime 更新 Task。
+
+## 15.9 并发、超时与取消
+
+每个 Registry Entry 拥有进程内并发控制器：
+
+- `unlimited` 不分配 Semaphore
+- `bounded` 使用容量固定的 asyncio Semaphore
+- 等待超过 `acquire_timeout_seconds` 返回 `CAPABILITY_BUSY`
+- 等待取消时立即退出，不泄漏槽位
+
+取得槽位后创建 Task 并执行 Invocation。执行超过 `timeout_seconds`：
+
+```text
+向本 Invocation 的 AgentCancellation 发出 cooperative cancel
+→ 等待 cancel_grace_seconds
+→ 仍运行则 cancel 本地 asyncio Task
+→ durable internal.capability.invocation.failed(CAPABILITY_TIMEOUT)
+→ Runtime 形成非空 incomplete 消息并使 Run failed
+```
+
+显式 Run Cancel 使用 `internal.capability.invocation.cancelled`，不映射为 timeout。Semaphore
+释放放在唯一 finally 路径。所有控制器只保证单进程并发；S3 不宣称跨实例限制。
+
+## 15.10 Operation Ledger 与恢复
+
+确定性幂等键：
+
+```text
+sha256(canonical(run_id, invocation_id, operation_key))
+```
+
+canonical 编码必须固定字段顺序、UTF-8 和分隔方式，并通过测试向量锁定。恢复必须
+先从 durable open Invocation 事件恢复原 invocation_id，再计算幂等键。
+
+`ctx.operation(operation_key)` 返回异步 Context Manager：
+
+```text
+__aenter__
+  → 原子读取或创建 ledger
+  → succeeded：返回 should_execute=false，禁止重复副作用
+  → failed：抛出不可自动重试的 CapabilityError
+  → pending：返回相同 idempotency_key, should_execute=true
+
+normal __aexit__
+  → 本次确实执行、未显式标记 failed 且 Capability 正常返回：标记 succeeded
+  → 已 succeeded 或未执行副作用时保持原状态
+
+exception __aexit__
+  → 默认不改 pending
+  → Capability 已通过 handle.mark_failed() 明确确认失败时保留 failed
+```
+
+Capability 自治决定哪些代码构成一个业务副作用操作。Runtime 不分析工具参数、
+不推断异常是否代表外部失败、不保存业务响应。看到已 succeeded 时，Capability 必须
+从私有 State 或外部系统查询恢复结果，不能重复调用副作用。
+
+恢复决策：
+
+| recovery_policy | side_effect_policy | 行为 |
+| --- | --- | --- |
+| automatic | none | 沿用 S2.5 Checkpoint 自动恢复 |
+| automatic | idempotent | 自动恢复，复用 Invocation 与 Operation 幂等键 |
+| automatic | unsafe | Manifest 加载失败 |
+| manual | 任意 | 崩溃后不重放，Run 安全失败 |
+
+manual 安全失败只在崩溃恢复扫描触发：写非空 incomplete AIMessage，提交
+`run.failed(code=CAPABILITY_MANUAL_RECOVERY_REQUIRED,retryable=false)`，保留 Task
+和 pending Operation。它不影响 automatic 路径，也不替代正常运行中的 Cancel、
+Timeout 或 CapabilityError。
+
+## 15.11 Runtime 错误映射
+
+Capability 内部统一错误：
+
+```text
+CapabilityError
+  code
+  message
+  retryable
+  details
+```
+
+`details` 只允许内部受控 JSON，不直接公开或写业务日志。Runtime 使用白名单映射为
+Run 级错误；未知异常统一映射 `CAPABILITY_EXECUTION_FAILED`。至少支持：
+
+```text
+CAPABILITY_PERMISSION_DENIED
+CAPABILITY_BUSY
+CAPABILITY_TIMEOUT
+CAPABILITY_UNAVAILABLE
+CAPABILITY_STATE_VERSION_INCOMPATIBLE
+CAPABILITY_REGENERATE_UNSUPPORTED
+CAPABILITY_MANUAL_RECOVERY_REQUIRED
+CAPABILITY_EXECUTION_FAILED
+```
+
+权限为空与健康不可用发生在 Capability 业务执行前：前者不可重试，后者可重试；
+所有 Capability 实际返回 OUT_OF_SCOPE 才走 completed/unsupported。
+`CAPABILITY_REGENERATE_UNSUPPORTED` 在 regenerate Run 创建前以 HTTP 409 返回，
+因此不产生 `run.failed`。
+
+## 15.12 RuntimeEvent 边界
+
+Invocation 事件 payload 最小字段：
+
+```text
+invocation_id
+capability_id
+task_id                 # admission 或 busy 阶段允许 null
+requested_task_action
+effective_task_action   # Task 解析前允许 null
+state_scope
+state_schema_version    # Task 解析前允许 null
+outcome / error_code    # 仅终结事件
+```
+
+Task 和 Invocation 事件均为 `visibility=internal`、`durability=durable`、固定内部
+Schema。它们经 Run Sequencer 获得 seq 并持久化 PostgreSQL，但不发布 Redis，
+不进入公开事件 Schema。公开事件仍为 S2.5 白名单。
+
+公开 `capability_id` 从固定 Literal 放宽为 Manifest ID 规则约束的字符串，字段名称、
+null 语义与事件 `schema_version=1` 不变。前端将其作为普通标签展示，不维护能力
+枚举或据此分支业务逻辑。
+
+## 15.13 现有 Capability 迁移
+
+迁移完成后 composition root 不再：
+
+- 构造两个固定 Adapter 并按 ID `if/elif` 分发
+- 在 Parent、Router、历史、恢复或公开 Schema 中维护两个 ID 的硬编码集合
+- 以 `{session_id}:{capability_id}` 作为新 Child thread ID
+- 用固定能力集合判断自动恢复安全性
+
+`general_chat` 与 `en_to_zh` 各自提供 Manifest 和 entrypoint 工厂，继续使用原有
+范围判断与业务实现，但返回 AgentResult。默认测试显式授权两者；权限拒绝测试在
+Router 前和 invoke 前分别修改权限记录。旧 Parent 公共历史继续有效，旧 Child
+Checkpoint 不自动迁移，只在 Session 删除时清理。两个 Manifest 均声明
+`state_scope=invocation` 与 `side_effect_policy=none`，继续支持既有 Regenerate。
+
+## 15.14 Workflow 扩展点
+
+Task 只属于一个 Capability，S3 不增加 `workflow_id`、父子 Task、依赖边或编排
+状态。当前主键和 Repository API 使用 Task 自身 ID，不把 `(session, capability)`
+误作唯一 Task，因此未来可以直接增加 nullable `workflow_id` 及关联表，而无需改变
+已有 Task 标识或 State Scope。
+
+未来 Workflow / Complex Task 仍作为独立 Capability，其内部编排多个 SubAgent；
+Parent Graph 不承担串并联计划。S3 的 Registry、Task、Operation 和权限不能被包装成
+提前实现的 Workflow Engine。
+
+## 15.15 架构调整清单
+
+| 问题 | 采用方案 | 原因 | 是否影响既有架构 |
+| --- | --- | --- | --- |
+| 公开 capability_id 固定两个枚举 | 放宽为受 Manifest ID 规则约束的字符串，事件版本仍为 1 | 否则新增 Manifest 无法通过产品链路 | 向后兼容扩展公开值域，不改字段结构 |
+| 测试 Capability 初始权限 | 不自动授权；测试显式写 allow/deny | 它们不是生产能力，保持默认拒绝 | 不改变权限模型 |
+| 无 Router 候选的终态 | 区分 permission denied、unavailable、全部 OUT_OF_SCOPE | 保留授权、运行故障和业务越界语义 | 新增稳定错误码，不改事件结构 |
+| Ledger 无逐操作完成协议 | 使用 `ctx.operation()`；未知异常保持 pending，确定失败显式标记 | Invocation 终态无法表示多个副作用结果 | 扩展 RunContext，不改变业务所有权 |
+| entrypoint 无依赖注入契约 | 固定为接收 Bootstrap Context 的工厂 | 支持 Fake Model、隔离 Checkpointer 与统一生命周期 | 明确 Manifest 接入契约 |
+| Capability 资源关闭 | 通过 Bootstrap Context 注册幂等清理，逆序执行 | S3 无热卸载，不需要额外 shutdown 方法 | 实现级补全 |
+| manual policy 无人工入口 | 崩溃后安全 failed，保留 Task/Operation | 防止 Run 永久占用 Session | 仅限定 manual 崩溃恢复 |
+| new Task 后 Capability 拒绝 | 回滚 provisional Task 并恢复原 current | 避免错误路由污染任务连续性 | 保持 OUT_OF_SCOPE 零业务副作用 |
+| Invocation 无独立表却需稳定恢复 | 以唯一 open started durable event 恢复 invocation_id | 保证幂等键跨重启稳定 | 使用既有 RuntimeEvent 权威链路 |
+| S3-00 的 Invocation 事件名未带现有内部前缀 | 落库规范化为 `internal.capability.*` | 保持 S2.5 内部事件校验与公开白名单隔离 | 只调整内部命名，不改事件语义或 SSE |
+| 多 active Task 但仅一个 current | S3 只允许继续 current，其他 active Task 暂不可选择 | 已确认不增加任务选择 API | 记录阶段限制，不改模型 |
+| 健康 TTL 放置位置未定 | 使用 Runtime 全局配置，不新增 Manifest 字段 | TTL 是平台刷新策略而非业务声明 | 实现级补全 |
+| Capability 专属 Manifest 扩展未定义 | S3 禁止任意字段，专属配置经 Bootstrap Context 注入 | 保持统一严格 Schema | 不扩大 Manifest 范围 |
+| 数据库迁移工具未规划 | 延续 Repository 幂等 setup，不引入 Alembic | 与现有基线一致，避免阶段外重构 | 实现级选择 |
+| 旧 Child thread 命名不兼容 | 不迁移旧私有状态；删除时兼容清理，输入从 Parent 重建 | 两个演示能力可安全重新派生 | 保留 Parent 权威历史 |
+| Parent Regenerate 不会 fork Child State | S3 只允许 invocation + none，其余提交前 409 | 防止未来私有状态和副作用被错误重放 | 保留两个测试能力的既有行为 |
+
+## 15.16 S3 非目标
+
+S3 不实现热加载、动态 mount/unmount、DRAINING、Remote Capability、多实例 Registry
+同步、多版本实现共存、Workflow、多 Agent 编排、`workflow_id`、RBAC/ABAC、组织或
+租户、State 自动迁移、长期审计、Saga/补偿、分布式并发、Worker Lease、管理 API、
+管理平台、文件或 RAG 产品能力。
+
+---
+
+# 16. Future 边界
+
+S3 只交付启动期静态 Manifest / Registry 和最小用户权限。动态挂载、DRAINING、
+Router confidence 确认、RBAC 和管理平台仍是 Future 候选。多实例 Runtime 必须先
+设计 Worker Lease、任务所有权和故障接管，不能直接复用 S2.5/S3 单进程控制器。
 
 未来复杂任务 Agent 仍不应把串并联逻辑塞入 Parent Graph：
 
@@ -1052,4 +1760,4 @@ Parent Router
 ```
 
 这样 Parent Graph 长期保持轻量稳定。后续阶段的名称、顺序和验收范围必须在
-Stage 2.5 完成后重新裁决。
+Stage 3 完成后重新裁决。
