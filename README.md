@@ -16,8 +16,9 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 当前项目已经验收通过 **Stage 1：最小 Agent Runtime**、
 **Stage 2：完整聊天产品能力与演示页面** 和
 **Stage 2.5：持久化 Run 与可恢复 Runtime**。当前进入
-**Stage 3：Capability Runtime**，S3-01 正在进行架构文档与任务树验收，尚未开始
-S3 功能编码；具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
+**Stage 3：Capability Runtime**。S3-01 架构文档与任务树已经验收并完成双远程同步，
+S3-02 Manifest Schema 与 Local CapabilitySource 已验收；完成本任务双远程同步后
+进入 S3-03。具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
 的 OpenAI 兼容接口接入；自动化测试默认使用 Fake Model，真实模型只用于
@@ -254,12 +255,12 @@ S2.5-11 与 Stage 2.5 整体验收通过：
 - 默认关闭的确定性 Runtime 演示模式通过真实 Run、Event、Redis、SSE 和
   Interrupt/Resume 链路运行，不进入正式 Capability Router
 
-后续计划：
+当前 Stage 3 进度：
 
 - S3-00 架构基线已经确认
-- 当前只验收 S3-01 文档，不进行 S3 功能编码
-- S3-01 验收并完成双远程同步后，建议从 S3-02 Manifest Schema 与 Local
-  CapabilitySource 开始开发
+- S3-01 架构文档与任务树已经验收并同步 GitHub、Gitee
+- S3-02 已实现严格 Manifest Schema、本地 YAML `CapabilitySource` 和两个测试
+  Capability 的静态 Manifest，已经验收但尚未接入 Registry 或执行链路
 
 ### Stage 3：Capability Runtime
 
@@ -510,7 +511,7 @@ npm run test:e2e
 
 当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
 
-S3-01 未经负责人验收、提交并同步 GitHub/Gitee 前，不允许开始 S3-02；任何 S3
+S3-02 未经负责人验收、提交并同步 GitHub/Gitee 前，不允许开始 S3-03；任何 S3
 任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、

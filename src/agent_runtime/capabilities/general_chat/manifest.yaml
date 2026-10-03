@@ -1,0 +1,20 @@
+manifest_schema_version: 1
+capability_id: general_chat
+name: 通用对话
+description: 处理普通聊天、知识问答和简单咨询，不处理任何翻译任务。
+enabled: true
+entrypoint: agent_runtime.capabilities.general_chat.entrypoint:create_capability
+version: 1.0.0
+state_scope: invocation
+state_schema_version: "1"
+compatible_state_schema_versions: []
+allow_degraded: false
+concurrency:
+  mode: unlimited
+  max_concurrency: null
+  acquire_timeout_seconds: 1.0
+execution:
+  timeout_seconds: 120.0
+  cancel_grace_seconds: 2.0
+recovery_policy: automatic
+side_effect_policy: none

@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-01（VERIFIED，等待提交并同步双远程）
-Last Verified Task: S3-01
-Last Verified Commit: S3-01 验收提交（当前提交）
+Current Task: S3-02（VERIFIED，等待提交并同步双远程）
+Last Verified Task: S3-02
+Last Verified Commit: S3-02 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -2154,7 +2154,7 @@ AgentResult、Task、Operation 和 Permission 契约。
 
 ## S3-02 Manifest Schema 与 Local CapabilitySource
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S3-01 VERIFIED
 
@@ -2194,12 +2194,12 @@ LocalYamlCapabilitySource
 
 ### Acceptance
 
-- [ ] 合法 Manifest 可稳定解析为关闭 Schema
-- [ ] 缺失 state_scope、未知字段、非法 ID/entrypoint/版本均拒绝
-- [ ] automatic + unsafe、并发字段非法组合均拒绝
-- [ ] Source 返回全部文档及来源，不因单文件错误提前停止
-- [ ] 扫描结果顺序跨运行稳定
-- [ ] 两个测试 Manifest 声明 invocation + none，但尚不接入执行链路
+- [x] 合法 Manifest 可稳定解析为关闭 Schema
+- [x] 缺失 state_scope、未知字段、非法 ID/entrypoint/版本均拒绝
+- [x] automatic + unsafe、并发字段非法组合均拒绝
+- [x] Source 返回全部文档及来源，不因单文件错误提前停止
+- [x] 扫描结果顺序跨运行稳定
+- [x] 两个测试 Manifest 声明 invocation + none，但尚不接入执行链路
 
 ### Test Requirements
 
@@ -2216,6 +2216,29 @@ LocalYamlCapabilitySource
 
 实现、专项测试、默认回归、Review 和任务文档证据完成，经负责人验收后提交并同步
 GitHub/Gitee 同一提交。
+
+### Verification Notes
+
+- 2026-10-03：新增严格关闭且冻结的 `CapabilityManifest`、`ConcurrencyPolicy`、
+  `ExecutionPolicy`；覆盖 ID、SemVer、entrypoint、State Schema、恢复/副作用和并发
+  组合校验，所有 Pydantic 字段均提供明确中文 `description`。
+- 2026-10-03：新增只负责原始文档收集的 `CapabilitySource` Protocol 与
+  `LocalYamlCapabilitySource`；按规范化相对路径稳定排序，单文件 YAML/读取错误转为
+  带来源的只读错误记录，不导入 entrypoint 或实例化 Capability。
+- 2026-10-03：`general_chat`、`en_to_zh` 已增加 `invocation + none` 标准 Manifest；
+  wheel 构建检查确认两个 YAML 和 Manifest/Source 模块均进入分发包，尚未接入执行链路。
+- 2026-10-03：独立代码复审发现并已修复合法 SemVer 预发布标识误拒、YAML 循环/
+  集合结构破坏完整错误收集，以及时间策略接受无穷值三项问题；均先补失败测试，
+  再完成最小修复。
+- 2026-10-03：修复 `REV-S3-02-001`；解析阶段的极深 YAML `RecursionError` 现在
+  转换为当前来源的 `YAML_STRUCTURE_ERROR`，不会阻止后续合法 Manifest 收集，并以
+  “极深错误文件 + 合法兄弟文件”确定性回归测试锁定。
+- 2026-10-03：专项测试 `70 passed`；默认完整套件 `469 passed, 39 skipped`，跳过项
+  均为需显式环境开关的 PostgreSQL、Redis 或百炼测试。
+- 2026-10-03：`uv lock --check`、`uv pip check`、`compileall`、`uv build` 和
+  `git diff --check` 均通过；本任务无数据库变更，未启动 Docker 外部依赖。
+- 2026-10-03：负责人确认 S3-02 审核通过并要求开始 S3-03，S3-02 验收通过。
+- Result：S3-02 已 VERIFIED；完成提交并同步 GitHub、Gitee 后开始 S3-03。
 
 ---
 
