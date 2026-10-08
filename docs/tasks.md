@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-04（IN_PROGRESS）
-Last Verified Task: S3-03
-Last Verified Commit: S3-03 验收提交（当前提交）
+Current Task: S3-05（IN_PROGRESS）
+Last Verified Task: S3-04
+Last Verified Commit: S3-04 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -2342,7 +2342,7 @@ CapabilityRegistry / CapabilityRegistryEntry / RouterProjection
 
 ## S3-04 Capability Task、Context、Operation 与 Permission 持久化
 
-**Status:** IN_PROGRESS
+**Status:** VERIFIED
 
 **Dependencies:** S3-01 VERIFIED
 
@@ -2382,12 +2382,12 @@ UserCapabilityPermissionRepository
 
 ### Acceptance
 
-- [ ] 建表可重复执行
-- [ ] 非法状态、ended_at 组合和跨 Session/Capability current Task 被数据库拒绝
-- [ ] 同一 current context 唯一
-- [ ] Operation 业务键及 idempotency_key 唯一
-- [ ] 权限无记录与 false/true 可准确区分
-- [ ] Repository 不记录用户正文、外部响应或凭据
+- [x] 建表可重复执行
+- [x] 非法状态、ended_at 组合和跨 Session/Capability current Task 被数据库拒绝
+- [x] 同一 current context 唯一
+- [x] Operation 业务键及 idempotency_key 唯一
+- [x] 权限无记录与 false/true 可准确区分
+- [x] Repository 不记录用户正文、外部响应或凭据
 
 ### Test Requirements
 
@@ -2400,6 +2400,23 @@ UserCapabilityPermissionRepository
 - S2.5 原表、Run/Interrupt/Event 约束不变
 - 现有 Session 删除暂不接入新表
 
+### Verification Notes
+
+- 2026-10-08：新增 `capability_tasks`、`capability_task_contexts`、
+  `capability_operations`、`user_capability_permissions` 四张表及严格 CHECK、复合外键、
+  RESTRICT 外键和查询/唯一索引，延续幂等 `setup()`，未引入 Alembic。
+- 2026-10-08：新增四个 Repository 与不可变领域对象；持久化原子方法覆盖新建 Task
+  与切换 current、Task 终态与清理 current、Operation 双唯一键幂等登记、权限
+  无记录/显式拒绝/显式允许三态，不包含 Task Action、Router 或调用编排。
+- 2026-10-08：单元专项 `10 passed`；真实 PostgreSQL 专项 `3 passed`，覆盖旧数据库
+  增量建表、setup 重入、数据库约束、并发写和事务回滚。
+- 2026-10-08：默认完整套件 `501 passed, 42 skipped`；启用真实 PostgreSQL + Redis
+  的完整套件 `542 passed, 1 skipped`，唯一跳过为显式百炼 smoke test。
+- 2026-10-08：Reviewer 确认 S3-04 审核通过；任务更新为 `VERIFIED`，按工程流程
+  提交并同步 GitHub、Gitee 后进入 S3-05。
+- Result：S3-04 已 `VERIFIED`；持久化层仍未接入现有 Session 删除或 Invocation/
+  Task Service 主链路，完成验收提交与双远程同步后进入 S3-05。
+
 ### Definition of Done
 
 四张表和 Repository 经真实 PostgreSQL 门禁、Review、负责人验收并同步两个远程。
@@ -2408,7 +2425,7 @@ UserCapabilityPermissionRepository
 
 ## S3-05 Invocation、Task Service 与 State Scope
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 
 **Dependencies:** S3-03, S3-04
 

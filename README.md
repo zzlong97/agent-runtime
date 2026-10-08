@@ -18,7 +18,8 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 **Stage 2.5：持久化 Run 与可恢复 Runtime**。当前进入
 **Stage 3：Capability Runtime**。S3-01 架构文档与任务树已经验收并完成双远程同步，
 S3-02 Manifest Schema 与 Local CapabilitySource、S3-03 Capability 协议、Bootstrap
-与静态 Registry 均已验收；当前进入 S3-04 持久化基础设施建设。
+与静态 Registry、S3-04 持久化基础设施均已验收；当前进入 S3-05 Invocation、Task
+Service 与 State Scope 建设。
 具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
@@ -265,7 +266,9 @@ S2.5-11 与 Stage 2.5 整体验收通过：
 - S3-03 已验收关闭结果协议、只读 Bootstrap、同步 entrypoint 校验、静态 Registry、
   局部故障隔离、启动健康结果、逆序幂等 cleanup 和四字段 Router Projection；当前
   保持为独立组件，尚未接入 Parent、Router 或 Run 执行主链路
-- S3-04 开始建设 Capability Task、Task Context、Operation 与 Permission 的持久化基础
+- S3-04 已实现 Capability Task、Task Context、Operation 与 Permission 四张表、不可变
+  领域对象和 PostgreSQL Repository；保持独立持久化边界，尚未接入调用编排
+- S3-05 开始建设 Invocation 生命周期、Task Service、三种 State Scope 与版本兼容边界
 
 ### Stage 3：Capability Runtime
 
@@ -514,7 +517,7 @@ npm run test:e2e
 
 当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
 
-S3-04 未经 Reviewer 与负责人验收、提交并同步 GitHub/Gitee 前，不允许开始 S3-05；
+S3-05 未经 Reviewer 与负责人验收、提交并同步 GitHub/Gitee 前，不允许开始 S3-06；
 任何 S3 任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、

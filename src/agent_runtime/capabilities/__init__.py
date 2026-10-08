@@ -14,6 +14,19 @@ from agent_runtime.capabilities.registry import (
     CapabilityRegistryEntry,
     RouterProjection,
 )
+from agent_runtime.capabilities.persistence import (
+    CapabilityOperationCreateResult,
+    CapabilityOperationRepository,
+    CapabilityTaskContextRepository,
+    CapabilityTaskRepository,
+    UserCapabilityPermissionRepository,
+)
+from agent_runtime.capabilities.persistence_models import (
+    CapabilityOperation,
+    CapabilityTask,
+    CapabilityTaskContext,
+    UserCapabilityPermission,
+)
 
 __all__ = [
     "AgentResult",
@@ -22,8 +35,17 @@ __all__ = [
     "CapabilityBootstrapContext",
     "CapabilityError",
     "CapabilityFactory",
+    "CapabilityOperation",
+    "CapabilityOperationCreateResult",
+    "CapabilityOperationRepository",
     "CapabilityRegistry",
     "CapabilityRegistryEntry",
+    "CapabilityTask",
+    "CapabilityTaskContext",
+    "CapabilityTaskContextRepository",
+    "CapabilityTaskRepository",
     "HealthResult",
     "RouterProjection",
+    "UserCapabilityPermission",
+    "UserCapabilityPermissionRepository",
 ]
