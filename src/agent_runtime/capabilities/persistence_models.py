@@ -7,6 +7,8 @@ from typing import Literal, cast
 from uuid import UUID
 
 CapabilityTaskStatus = Literal["active", "completed", "failed", "cancelled"]
+CapabilityTaskAction = Literal["continue", "new"]
+CapabilityStateScope = Literal["invocation", "run", "session"]
 CapabilityOperationStatus = Literal["pending", "succeeded", "failed"]
 
 CAPABILITY_TASK_STATUSES = frozenset(
@@ -72,6 +74,32 @@ class CapabilityTaskContext:
         """验证 Context 使用合法 Capability ID。"""
 
         _validate_capability_id(self.capability_id)
+
+
+@dataclass(frozen=True, slots=True)
+class CapabilityTaskResolution:
+    """Task Service 在单事务内解析出的调用关联结果。"""
+
+    task: CapabilityTask
+    requested_action: CapabilityTaskAction
+    resolved_action: CapabilityTaskAction
+    previous_task_id: UUID | None
+    provisional: bool
+    state_scope: CapabilityStateScope
+
+    def __post_init__(self) -> None:
+        """保证降级和 provisional 标记只表达已确认的 Task 语义。"""
+
+        if self.task.status != "active":
+            raise ValueError("Invocation 只能解析到 active Capability Task")
+        if self.requested_action not in {"continue", "new"}:
+            raise ValueError("requested_action 只允许 continue 或 new")
+        if self.resolved_action not in {"continue", "new"}:
+            raise ValueError("resolved_action 只允许 continue 或 new")
+        if self.provisional != (self.resolved_action == "new"):
+            raise ValueError("只有新建 Task 才能标记为 provisional")
+        if self.state_scope not in {"invocation", "run", "session"}:
+            raise ValueError("state_scope 只允许 invocation、run 或 session")
 
 
 @dataclass(frozen=True, slots=True)

@@ -18,8 +18,8 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 **Stage 2.5：持久化 Run 与可恢复 Runtime**。当前进入
 **Stage 3：Capability Runtime**。S3-01 架构文档与任务树已经验收并完成双远程同步，
 S3-02 Manifest Schema 与 Local CapabilitySource、S3-03 Capability 协议、Bootstrap
-与静态 Registry、S3-04 持久化基础设施均已验收；当前进入 S3-05 Invocation、Task
-Service 与 State Scope 建设。
+与静态 Registry、S3-04 持久化基础设施均已验收；S3-05 Invocation、Task Service
+与 State Scope 已通过审核，提交并同步双远程后进入 S3-06。
 具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
@@ -268,7 +268,10 @@ S2.5-11 与 Stage 2.5 整体验收通过：
   保持为独立组件，尚未接入 Parent、Router 或 Run 执行主链路
 - S3-04 已实现 Capability Task、Task Context、Operation 与 Permission 四张表、不可变
   领域对象和 PostgreSQL Repository；保持独立持久化边界，尚未接入调用编排
-- S3-05 开始建设 Invocation 生命周期、Task Service、三种 State Scope 与版本兼容边界
+- S3-05 已完成唯一 open Invocation 生命周期、Task Service 原子事务、provisional Task
+  拒绝回滚、完整 Invocation durable event 关联字段、三种确定性 State Scope thread_id
+  和基于 Task 固化版本的 State Schema 兼容边界；当前保持独立 Runtime 组件，尚未接入
+  Parent、Router 或后续权限/健康/并发治理链路
 
 ### Stage 3：Capability Runtime
 

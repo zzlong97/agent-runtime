@@ -1,6 +1,9 @@
 """公开 RuntimeEvent 白名单 Schema、校验与投影。"""
 
+from __future__ import annotations
+
 from datetime import datetime
+import re
 from typing import Annotated, Literal, TypeAlias, cast
 from uuid import UUID
 
@@ -11,11 +14,14 @@ from pydantic import (
     TypeAdapter,
     UUID4,
     ValidationError,
+    model_validator,
 )
 
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.runtime.event_models import RuntimeEvent, RuntimeEventDraft
 from agent_runtime.runtime.models import JsonValue
+
+_INTERNAL_ERROR_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,127}$")
 
 PublicEventType: TypeAlias = Literal[
     "run.started",
@@ -72,7 +78,7 @@ class PublicEventProjectionError(ApplicationError):
 class _ClosedPayload(BaseModel):
     """拒绝未声明字段的公开事件 payload 基类。"""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class RunStartedPayload(_ClosedPayload):
@@ -126,14 +132,276 @@ class RunRecoveryActivatedPayload(_ClosedPayload):
     )
 
 
+class _InvocationPayloadBase(_ClosedPayload):
+    """所有 Invocation durable event 共享的最小关联事实。"""
+
+    invocation_id: UUID4 = Field(
+        description="Runtime 为本次调用分配并在完整生命周期内保持稳定的 UUIDv4。"
+    )
+    capability_id: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="本次 Invocation 调用的严格 Manifest Capability ID。",
+    )
+    task_id: UUID | None = Field(
+        description=(
+            "Task 解析后关联的 Capability Task UUID；Task 解析前的 started、失败或"
+            "取消事件允许为 null。"
+        )
+    )
+    requested_task_action: Literal["continue", "new"] = Field(
+        description="Router 原始请求的 Task 动作，只允许 continue 或 new。"
+    )
+    effective_task_action: Literal["continue", "new"] | None = Field(
+        description=(
+            "Task 事务实际采用的动作，只允许 continue 或 new；Task 解析完成前为 null，"
+            "并可明确记录 continue 降级为 new。"
+        )
+    )
+    state_scope: Literal["invocation", "run", "session"] = Field(
+        description=(
+            "本次调用采用的私有状态共享范围，只允许 invocation、run 或 session；"
+            "该值来自启动期 Manifest。"
+        )
+    )
+    state_schema_version: str | None = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+        description=(
+            "Task 解析后实际固化并用于 Child namespace 的 State Schema 版本；"
+            "Task 解析完成前为 null。"
+        ),
+    )
+
+
+class InvocationStartedPayload(_InvocationPayloadBase):
+    """Capability Invocation 已进入唯一 open 生命周期的内部数据。"""
+
+    @model_validator(mode="after")
+    def validate_before_task_resolution(self) -> InvocationStartedPayload:
+        """started 必须准确表达 Task 尚未解析的时间点。"""
+
+        if any(
+            value is not None
+            for value in (
+                self.task_id,
+                self.effective_task_action,
+                self.state_schema_version,
+            )
+        ):
+            raise ValueError("Invocation started 事件不得包含 Task 解析结果")
+        return self
+
+
+class InvocationCompletedPayload(_InvocationPayloadBase):
+    """Capability Invocation 已正常完成或合法拒绝的内部数据。"""
+
+    outcome: Literal["completed", "rejected"] = Field(
+        description="调用结果，只允许正常完成 completed 或合法范围拒绝 rejected。"
+    )
+
+    @model_validator(mode="after")
+    def validate_resolved_task_context(self) -> InvocationCompletedPayload:
+        """正常完成和合法拒绝都必须带完整 Task 解析事实。"""
+
+        if any(
+            value is None
+            for value in (
+                self.task_id,
+                self.effective_task_action,
+                self.state_schema_version,
+            )
+        ):
+            raise ValueError("Invocation completed 事件必须包含完整 Task 解析结果")
+        return self
+
+
+class InvocationFailedPayload(_InvocationPayloadBase):
+    """Capability Invocation 因受控执行错误结束的内部数据。"""
+
+    error_code: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=_INTERNAL_ERROR_CODE_PATTERN,
+        description="不含异常详情或业务正文的稳定内部失败码。",
+    )
+
+    @model_validator(mode="after")
+    def validate_optional_task_context(self) -> InvocationFailedPayload:
+        """失败事件的 Task 解析字段只能全部为空或全部存在。"""
+
+        _validate_invocation_task_context(
+            task_id=self.task_id,
+            effective_task_action=self.effective_task_action,
+            state_schema_version=self.state_schema_version,
+        )
+        return self
+
+
+class InvocationCancelledPayload(_InvocationPayloadBase):
+    """Capability Invocation 因显式 Run Cancel 结束的内部数据。"""
+
+    outcome: Literal["cancelled"] = Field(
+        description="调用终态结果；显式取消事件在 Stage 3 固定为 cancelled。"
+    )
+
+    @model_validator(mode="after")
+    def validate_optional_task_context(self) -> InvocationCancelledPayload:
+        """取消事件的 Task 解析字段只能全部为空或全部存在。"""
+
+        _validate_invocation_task_context(
+            task_id=self.task_id,
+            effective_task_action=self.effective_task_action,
+            state_schema_version=self.state_schema_version,
+        )
+        return self
+
+
+def _validate_invocation_task_context(
+    *,
+    task_id: UUID | None,
+    effective_task_action: Literal["continue", "new"] | None,
+    state_schema_version: str | None,
+) -> None:
+    """拒绝只写入部分 Task 解析事实的 Invocation 终态事件。"""
+
+    present = (
+        task_id is not None,
+        effective_task_action is not None,
+        state_schema_version is not None,
+    )
+    if any(present) and not all(present):
+        raise ValueError("Invocation 终态的 Task 解析字段必须同时为空或同时存在")
+
+
+class CapabilityTaskCreatedPayload(_ClosedPayload):
+    """Capability Task 已创建的内部数据。"""
+
+    task_id: UUID4 = Field(description="本次创建的 Capability Task UUIDv4。")
+    capability_id: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="新 Task 所属的严格 Manifest Capability ID。",
+    )
+    state_schema_version: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+        description="创建 Task 时固化的 Capability 私有 State Schema 版本。",
+    )
+
+
+class CapabilityTaskCurrentChangedPayload(_ClosedPayload):
+    """Capability current Task 指针已切换的内部数据。"""
+
+    task_id: UUID4 = Field(description="切换后的 current Capability Task UUIDv4。")
+    capability_id: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="发生 current Task 切换的严格 Manifest Capability ID。",
+    )
+    previous_task_id: UUID | None = Field(
+        description=(
+            "切换前的 current Task UUID；原本没有 current Task 时为 null，用于"
+            "崩溃恢复后安全还原 provisional Task 之前的指针。"
+        ),
+    )
+
+
+class CapabilityTaskTerminalPayload(_ClosedPayload):
+    """Capability Task 已进入唯一终态的内部数据。"""
+
+    task_id: UUID4 = Field(description="进入终态的 Capability Task UUIDv4。")
+    capability_id: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="终态 Task 所属的严格 Manifest Capability ID。",
+    )
+    status: Literal["completed", "failed", "cancelled"] = Field(
+        description="Task 唯一终态，只允许 completed、failed 或 cancelled。"
+    )
+
+
+class CapabilityTaskContinueDegradedPayload(_ClosedPayload):
+    """continue 因缺少 current Task 原子降级为 new 的内部诊断。"""
+
+    task_id: UUID4 = Field(description="降级后新建的 Capability Task UUIDv4。")
+    capability_id: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="发生 continue 降级的严格 Manifest Capability ID。",
+    )
+
+
+class CapabilityTaskRejectedRolledBackPayload(_ClosedPayload):
+    """未被接受的 provisional Task 已完成无副作用回滚的内部诊断。"""
+
+    task_id: UUID4 = Field(
+        description="已删除但保留内部诊断关联的 provisional Task UUIDv4。"
+    )
+    capability_id: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="发生 provisional Task 回滚的严格 Manifest Capability ID。",
+    )
+
+
 INTERNAL_STATE_PAYLOAD_SCHEMA_BY_TYPE: dict[str, type[BaseModel]] = {
     "internal.run.cancel_requested": RunCancelRequestedPayload,
     "internal.run.recovery_claimed": RunRecoveryClaimedPayload,
     "internal.run.recovery_activated": RunRecoveryActivatedPayload,
 }
 
+INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_BY_TYPE: dict[str, type[BaseModel]] = {
+    "internal.capability.invocation.started": InvocationStartedPayload,
+    "internal.capability.invocation.completed": InvocationCompletedPayload,
+    "internal.capability.invocation.failed": InvocationFailedPayload,
+    "internal.capability.invocation.cancelled": InvocationCancelledPayload,
+    "internal.capability.task.created": CapabilityTaskCreatedPayload,
+    "internal.capability.task.current_changed": (
+        CapabilityTaskCurrentChangedPayload
+    ),
+    "internal.capability.task.completed": CapabilityTaskTerminalPayload,
+    "internal.capability.task.failed": CapabilityTaskTerminalPayload,
+    "internal.capability.task.cancelled": CapabilityTaskTerminalPayload,
+    "internal.capability.task.continue_degraded_to_new": (
+        CapabilityTaskContinueDegradedPayload
+    ),
+    "internal.capability.task.rejected_rolled_back": (
+        CapabilityTaskRejectedRolledBackPayload
+    ),
+}
+
+CAPABILITY_INVOCATION_EVENT_TYPES = frozenset(
+    event_type
+    for event_type in INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_BY_TYPE
+    if event_type.startswith("internal.capability.invocation.")
+)
+
+CAPABILITY_TASK_EVENT_TYPES = frozenset(
+    event_type
+    for event_type in INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_BY_TYPE
+    if event_type.startswith("internal.capability.task.")
+)
+
+INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_TYPES = tuple(
+    dict.fromkeys(INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_BY_TYPE.values())
+)
+
+INTERNAL_PAYLOAD_SCHEMA_BY_TYPE = {
+    **INTERNAL_STATE_PAYLOAD_SCHEMA_BY_TYPE,
+    **INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_BY_TYPE,
+}
+
 INTERNAL_STATE_PAYLOAD_SCHEMA_TYPES = tuple(
-    INTERNAL_STATE_PAYLOAD_SCHEMA_BY_TYPE.values()
+    dict.fromkeys(INTERNAL_PAYLOAD_SCHEMA_BY_TYPE.values())
 )
 
 
@@ -385,7 +653,7 @@ def serialize_event_draft_payload(
     if draft.visibility == "internal":
         if not draft.event_type.startswith("internal."):
             raise _schema_error("内部事件类型必须使用 internal. 前缀")
-        schema_type = INTERNAL_STATE_PAYLOAD_SCHEMA_BY_TYPE.get(
+        schema_type = INTERNAL_PAYLOAD_SCHEMA_BY_TYPE.get(
             draft.event_type
         )
         if schema_type is not None:
@@ -395,7 +663,7 @@ def serialize_event_draft_payload(
                 )
             except ValidationError as error:
                 raise _schema_error(
-                    "内部 Run 状态事件 payload 不符合固定 Schema"
+                    "内部 RuntimeEvent payload 不符合固定 Schema"
                 ) from error
             return cast(
                 dict[str, JsonValue],
@@ -419,6 +687,23 @@ def serialize_event_draft_payload(
     except ValidationError as error:
         raise _schema_error("公开事件 payload 不符合固定 Schema") from error
     return cast(dict[str, JsonValue], payload.model_dump(mode="json"))
+
+
+def validate_internal_event_payload(
+    *,
+    event_type: str,
+    payload: dict[str, JsonValue],
+) -> dict[str, JsonValue]:
+    """重新校验已构造内部事件，防止绕过草稿 Schema 直接落库。"""
+
+    schema_type = INTERNAL_PAYLOAD_SCHEMA_BY_TYPE.get(event_type)
+    if schema_type is None:
+        return payload
+    try:
+        validated = schema_type.model_validate(payload)
+    except ValidationError as error:
+        raise _schema_error("内部 RuntimeEvent payload 不符合固定 Schema") from error
+    return cast(dict[str, JsonValue], validated.model_dump(mode="json"))
 
 
 def project_public_event(event: RuntimeEvent) -> PublicRuntimeEvent:

@@ -285,6 +285,10 @@ control_signal
 `agent-runtime-postgres` 的 Docker 命名卷持久化；除非负责人明确要求重置，
 不得删除该卷。
 
+如果 Docker Desktop 未启动或启动异常，只报告具体错误并通知负责人启动或恢复；
+Agent 不得自行修复、重置 Docker Desktop，也不得移动或删除 Docker 内部 socket、
+配置、虚拟磁盘或其他运行时文件。
+
 Stage 1：
 
 - Parent 使用持久化 Checkpointer

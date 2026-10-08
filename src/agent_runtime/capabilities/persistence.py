@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from time import perf_counter
 from typing import Any
@@ -12,17 +12,30 @@ from agent_runtime.capabilities.persistence_models import (
     CAPABILITY_TERMINAL_TASK_STATUSES,
     CapabilityOperation,
     CapabilityOperationStatus,
+    CapabilityStateScope,
     CapabilityTask,
+    CapabilityTaskAction,
     CapabilityTaskContext,
+    CapabilityTaskResolution,
     CapabilityTaskStatus,
     UserCapabilityPermission,
     as_operation_status,
     as_task_status,
 )
+from agent_runtime.capabilities.state_scope import (
+    CapabilityStateVersionIncompatibleError,
+)
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.persistence.database import open_database_connection
+from agent_runtime.runtime.event_models import RuntimeEvent
+from agent_runtime.runtime.event_repository import (
+    RuntimeEventPersistenceError,
+    insert_capability_invocation_terminal,
+    insert_capability_task_events,
+    select_open_capability_invocation_in_transaction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -165,10 +178,46 @@ WHERE task_id = %s
 FOR UPDATE
 """
 
+_SELECT_TASK_BY_INVOCATION_FOR_UPDATE = f"""
+SELECT {_TASK_COLUMNS}
+FROM capability_tasks
+WHERE last_run_id = %s AND last_invocation_id = %s
+FOR UPDATE
+"""
+
+_SELECT_TASK_RESOLUTION_EVENTS = """
+SELECT event_type, payload
+FROM runtime_events
+WHERE run_id = %s
+  AND event_type IN (
+      'internal.capability.task.created',
+      'internal.capability.task.current_changed'
+  )
+  AND payload ->> 'task_id' = %s
+ORDER BY seq ASC
+"""
+
+_SELECT_TASK_TERMINAL_EVENT = """
+SELECT event_id
+FROM runtime_events
+WHERE run_id = %s
+  AND event_type = %s
+  AND payload ->> 'task_id' = %s
+  AND payload ->> 'status' = %s
+LIMIT 1
+"""
+
 _LOCK_SESSION = """
 SELECT session_id
 FROM sessions
 WHERE session_id = %s
+FOR UPDATE
+"""
+
+_LOCK_RUN_SESSION = """
+SELECT session_id
+FROM runs
+WHERE run_id = %s
 FOR UPDATE
 """
 
@@ -199,6 +248,13 @@ FROM capability_task_contexts
 WHERE session_id = %s AND capability_id = %s
 """
 
+_SELECT_CONTEXT_FOR_UPDATE = f"""
+SELECT {_CONTEXT_COLUMNS}
+FROM capability_task_contexts
+WHERE session_id = %s AND capability_id = %s
+FOR UPDATE
+"""
+
 _DELETE_CONTEXT = """
 DELETE FROM capability_task_contexts
 WHERE session_id = %s AND capability_id = %s
@@ -207,6 +263,13 @@ WHERE session_id = %s AND capability_id = %s
 _DELETE_CONTEXT_BY_TASK = """
 DELETE FROM capability_task_contexts
 WHERE current_task_id = %s
+"""
+
+_DELETE_CONTEXT_IF_CURRENT = """
+DELETE FROM capability_task_contexts
+WHERE session_id = %s
+  AND capability_id = %s
+  AND current_task_id = %s
 """
 
 _UPDATE_TASK_PROJECTION = f"""
@@ -232,6 +295,14 @@ RETURNING {_TASK_COLUMNS}
 _DELETE_TASK = """
 DELETE FROM capability_tasks
 WHERE task_id = %s
+"""
+
+_SELECT_OPERATION_FOR_INVOCATION_EXISTS = """
+SELECT EXISTS (
+    SELECT 1
+    FROM capability_operations
+    WHERE run_id = %s AND invocation_id = %s
+) AS operation_exists
 """
 
 _INSERT_OPERATION = f"""
@@ -312,6 +383,10 @@ class CapabilityTaskNotFoundError(ApplicationError):
 
 class CapabilityOperationNotFoundError(ApplicationError):
     """指定 Capability Operation 不存在。"""
+
+
+class CapabilityTaskContractViolationError(ApplicationError):
+    """Capability 在合法范围拒绝前已经产生了不可回滚业务事实。"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -504,6 +579,452 @@ class CapabilityTaskRepository:
             duration_ms=_elapsed_ms(started_at),
         )
         return result
+
+    async def resolve_for_invocation(
+        self,
+        *,
+        session_id: UUID,
+        capability_id: str,
+        requested_action: CapabilityTaskAction,
+        state_scope: CapabilityStateScope,
+        state_schema_version: str,
+        compatible_state_schema_versions: frozenset[str],
+        run_id: UUID,
+        invocation_id: UUID,
+        candidate_task_id: UUID,
+        updated_at: datetime,
+        events: tuple[RuntimeEvent, ...],
+    ) -> CapabilityTaskResolution:
+        """锁定 Run、Session 和 current，在一个事务解析 continue/new。"""
+
+        if requested_action not in {"continue", "new"}:
+            raise ValueError("Task action 只允许 continue 或 new")
+        started_at = perf_counter()
+        log_business_event(
+            logger,
+            "Capability Task解析开始",
+            session_id=session_id,
+            capability_id=capability_id,
+            run_id=run_id,
+            invocation_id=invocation_id,
+            task_action=requested_action,
+            state_scope=state_scope,
+            state_schema_version=state_schema_version,
+        )
+        try:
+            async with open_database_connection(self._settings) as connection:
+                await _validate_run_session_and_open_invocation(
+                    connection=connection,
+                    run_id=run_id,
+                    session_id=session_id,
+                    invocation_id=invocation_id,
+                    capability_id=capability_id,
+                    task_action=requested_action,
+                    state_scope=state_scope,
+                )
+                session_cursor = await connection.execute(
+                    _LOCK_SESSION,
+                    (session_id,),
+                )
+                if await session_cursor.fetchone() is None:
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_TASK_SESSION_CONFLICT",
+                        message="Capability Task 所属 Session 不存在",
+                        status_code=409,
+                    )
+                context_cursor = await connection.execute(
+                    _SELECT_CONTEXT_FOR_UPDATE,
+                    (session_id, capability_id),
+                )
+                context_row = await context_cursor.fetchone()
+                previous_task_id = (
+                    UUID(str(context_row["current_task_id"]))
+                    if context_row is not None
+                    else None
+                )
+                recovered_resolution = await _recover_task_resolution(
+                    connection=connection,
+                    run_id=run_id,
+                    invocation_id=invocation_id,
+                    session_id=session_id,
+                    capability_id=capability_id,
+                    requested_action=requested_action,
+                    state_scope=state_scope,
+                    allowed_versions=compatible_state_schema_versions,
+                    current_task_id=previous_task_id,
+                )
+
+                if recovered_resolution is not None:
+                    result = recovered_resolution
+                elif requested_action == "continue" and previous_task_id is not None:
+                    task_cursor = await connection.execute(
+                        _SELECT_TASK_FOR_UPDATE,
+                        (previous_task_id,),
+                    )
+                    task_row = await task_cursor.fetchone()
+                    if task_row is None:
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+                            message="current Task 关联记录不存在",
+                            status_code=409,
+                        )
+                    current_task = _task_from_row(task_row)
+                    _validate_continue_task(
+                        task=current_task,
+                        session_id=session_id,
+                        capability_id=capability_id,
+                        allowed_versions=compatible_state_schema_versions,
+                    )
+                    updated_cursor = await connection.execute(
+                        _UPDATE_TASK_PROJECTION,
+                        (run_id, invocation_id, updated_at, current_task.task_id),
+                    )
+                    updated_row = await updated_cursor.fetchone()
+                    if updated_row is None:
+                        raise _task_not_found()
+                    result = CapabilityTaskResolution(
+                        task=_task_from_row(updated_row),
+                        requested_action=requested_action,
+                        resolved_action="continue",
+                        previous_task_id=previous_task_id,
+                        provisional=False,
+                        state_scope=state_scope,
+                    )
+                else:
+                    task = CapabilityTask(
+                        task_id=candidate_task_id,
+                        session_id=session_id,
+                        capability_id=capability_id,
+                        state_schema_version=state_schema_version,
+                        status="active",
+                        last_run_id=run_id,
+                        last_invocation_id=invocation_id,
+                        created_at=updated_at,
+                        updated_at=updated_at,
+                        ended_at=None,
+                    )
+                    task_cursor = await connection.execute(
+                        _INSERT_TASK,
+                        _task_params(task),
+                    )
+                    task_row = await task_cursor.fetchone()
+                    context_cursor = await connection.execute(
+                        _UPSERT_CONTEXT,
+                        (
+                            task.task_id,
+                            session_id,
+                            capability_id,
+                            session_id,
+                            capability_id,
+                            task.task_id,
+                            updated_at,
+                        ),
+                    )
+                    if await context_cursor.fetchone() is None:
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+                            message="current Task 关联关系非法",
+                            status_code=409,
+                        )
+                    selected_events = _select_task_resolution_events(
+                        events=events,
+                        candidate_task_id=candidate_task_id,
+                        capability_id=capability_id,
+                        previous_task_id=previous_task_id,
+                        degraded=requested_action == "continue",
+                    )
+                    await insert_capability_task_events(
+                        connection=connection,
+                        events=selected_events,
+                    )
+                    result = CapabilityTaskResolution(
+                        task=_task_from_row(task_row),
+                        requested_action=requested_action,
+                        resolved_action="new",
+                        previous_task_id=previous_task_id,
+                        provisional=True,
+                        state_scope=state_scope,
+                    )
+                await connection.commit()
+        except ApplicationError:
+            raise
+        except Exception as error:
+            raise _persistence_error("Capability Task 解析失败", error) from error
+        log_business_event(
+            logger,
+            "Capability Task解析完成",
+            session_id=session_id,
+            task_id=result.task.task_id,
+            capability_id=capability_id,
+            run_id=run_id,
+            invocation_id=invocation_id,
+            requested_action=requested_action,
+            resolved_action=result.resolved_action,
+            state_scope=result.state_scope,
+            state_schema_version=result.task.state_schema_version,
+            duration_ms=_elapsed_ms(started_at),
+        )
+        return result
+
+    async def transition_for_invocation(
+        self,
+        *,
+        task_id: UUID,
+        status: CapabilityTaskStatus,
+        run_id: UUID,
+        invocation_id: UUID,
+        updated_at: datetime,
+        event: RuntimeEvent,
+    ) -> CapabilityTask:
+        """仅按已校验 AgentResult 意图原子写 Task 终态和内部事件。"""
+
+        if status not in CAPABILITY_TERMINAL_TASK_STATUSES:
+            raise ValueError("Task 终态只允许 completed、failed 或 cancelled")
+        try:
+            async with open_database_connection(self._settings) as connection:
+                lookup_cursor = await connection.execute(_SELECT_TASK, (task_id,))
+                lookup_row = await lookup_cursor.fetchone()
+                if lookup_row is None:
+                    raise _task_not_found()
+                existing = _task_from_row(lookup_row)
+                await _validate_run_session_and_open_invocation(
+                    connection=connection,
+                    run_id=run_id,
+                    session_id=existing.session_id,
+                    invocation_id=invocation_id,
+                    capability_id=existing.capability_id,
+                )
+                await connection.execute(_LOCK_SESSION, (existing.session_id,))
+                task_cursor = await connection.execute(
+                    _SELECT_TASK_FOR_UPDATE,
+                    (task_id,),
+                )
+                task_row = await task_cursor.fetchone()
+                if task_row is None:
+                    raise _task_not_found()
+                current = _task_from_row(task_row)
+                _validate_task_terminal_event(
+                    event=event,
+                    task=current,
+                    status=status,
+                    run_id=run_id,
+                )
+                if current.status == status:
+                    if (
+                        current.last_run_id != run_id
+                        or current.last_invocation_id != invocation_id
+                    ):
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_TASK_INVOCATION_CONFLICT",
+                            message="Capability Task 终态属于其他 Invocation",
+                            status_code=409,
+                        )
+                    existing_event_cursor = await connection.execute(
+                        _SELECT_TASK_TERMINAL_EVENT,
+                        (
+                            run_id,
+                            f"internal.capability.task.{status}",
+                            str(task_id),
+                            status,
+                        ),
+                    )
+                    if await existing_event_cursor.fetchone() is None:
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_TASK_STATE_CONFLICT",
+                            message="Capability Task 终态缺少对应内部事件",
+                            status_code=409,
+                        )
+                    await connection.commit()
+                    return current
+                if current.status != "active":
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_TASK_STATE_CONFLICT",
+                        message="Capability Task 已不是 active 状态",
+                        status_code=409,
+                    )
+                if (
+                    current.last_run_id != run_id
+                    or current.last_invocation_id != invocation_id
+                ):
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_TASK_INVOCATION_CONFLICT",
+                        message="Capability Task 不属于当前 Invocation",
+                        status_code=409,
+                    )
+                await connection.execute(
+                    _DELETE_CONTEXT_IF_CURRENT,
+                    (current.session_id, current.capability_id, task_id),
+                )
+                finish_cursor = await connection.execute(
+                    _FINISH_TASK,
+                    (
+                        status,
+                        run_id,
+                        invocation_id,
+                        updated_at,
+                        updated_at,
+                        task_id,
+                    ),
+                )
+                finished_row = await finish_cursor.fetchone()
+                if finished_row is None:
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_TASK_STATE_CONFLICT",
+                        message="Capability Task 已不是 active 状态",
+                        status_code=409,
+                    )
+                await insert_capability_task_events(
+                    connection=connection,
+                    events=(event,),
+                )
+                await connection.commit()
+        except ApplicationError:
+            raise
+        except Exception as error:
+            raise _persistence_error("Capability Task 终态写入失败", error) from error
+        return _task_from_row(finished_row)
+
+    async def rollback_rejected_new(
+        self,
+        *,
+        resolution: CapabilityTaskResolution,
+        run_id: UUID,
+        invocation_id: UUID,
+        task_event: RuntimeEvent,
+        invocation_event: RuntimeEvent,
+        updated_at: datetime,
+    ) -> tuple[RuntimeEvent, RuntimeEvent]:
+        """无 Operation 时删除 provisional Task、恢复 current 并关闭 Invocation。"""
+
+        if not resolution.provisional:
+            raise CapabilityPersistenceConflictError(
+                code="CAPABILITY_TASK_NOT_PROVISIONAL",
+                message="只有 provisional Task 可以执行拒绝回滚",
+                status_code=409,
+            )
+        task = resolution.task
+        try:
+            async with open_database_connection(self._settings) as connection:
+                await _validate_run_session_and_open_invocation(
+                    connection=connection,
+                    run_id=run_id,
+                    session_id=task.session_id,
+                    invocation_id=invocation_id,
+                    capability_id=task.capability_id,
+                    task_action=resolution.requested_action,
+                    state_scope=resolution.state_scope,
+                )
+                await connection.execute(_LOCK_SESSION, (task.session_id,))
+                context_cursor = await connection.execute(
+                    _SELECT_CONTEXT_FOR_UPDATE,
+                    (task.session_id, task.capability_id),
+                )
+                context_row = await context_cursor.fetchone()
+                if (
+                    context_row is None
+                    or UUID(str(context_row["current_task_id"])) != task.task_id
+                ):
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+                        message="provisional Task 已不是 current Task",
+                        status_code=409,
+                    )
+                task_cursor = await connection.execute(
+                    _SELECT_TASK_FOR_UPDATE,
+                    (task.task_id,),
+                )
+                task_row = await task_cursor.fetchone()
+                if task_row is None or _task_from_row(task_row).status != "active":
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_TASK_STATE_CONFLICT",
+                        message="provisional Task 已不是 active 状态",
+                        status_code=409,
+                    )
+                operation_cursor = await connection.execute(
+                    _SELECT_OPERATION_FOR_INVOCATION_EXISTS,
+                    (run_id, invocation_id),
+                )
+                operation_row = await operation_cursor.fetchone()
+                if operation_row and bool(operation_row["operation_exists"]):
+                    raise CapabilityTaskContractViolationError(
+                        code="CAPABILITY_EXECUTION_FAILED",
+                        message="Capability 拒绝前已经登记 Operation，禁止回滚 Task",
+                        status_code=409,
+                        retryable=False,
+                    )
+                _validate_rejected_rollback_events(
+                    task_event=task_event,
+                    invocation_event=invocation_event,
+                    task=task,
+                    resolution=resolution,
+                    run_id=run_id,
+                    invocation_id=invocation_id,
+                )
+                if resolution.previous_task_id is None:
+                    await connection.execute(
+                        _DELETE_CONTEXT_IF_CURRENT,
+                        (task.session_id, task.capability_id, task.task_id),
+                    )
+                else:
+                    previous_cursor = await connection.execute(
+                        _SELECT_TASK_FOR_UPDATE,
+                        (resolution.previous_task_id,),
+                    )
+                    previous_row = await previous_cursor.fetchone()
+                    if previous_row is None:
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+                            message="原 current Task 不存在，无法安全回滚",
+                            status_code=409,
+                        )
+                    previous = _task_from_row(previous_row)
+                    if (
+                        previous.status != "active"
+                        or previous.session_id != task.session_id
+                        or previous.capability_id != task.capability_id
+                    ):
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+                            message="原 current Task 已不可恢复",
+                            status_code=409,
+                        )
+                    restored_cursor = await connection.execute(
+                        _UPSERT_CONTEXT,
+                        (
+                            previous.task_id,
+                            previous.session_id,
+                            previous.capability_id,
+                            previous.session_id,
+                            previous.capability_id,
+                            previous.task_id,
+                            updated_at,
+                        ),
+                    )
+                    if await restored_cursor.fetchone() is None:
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+                            message="原 current Task 恢复失败",
+                            status_code=409,
+                        )
+                await connection.execute(_DELETE_TASK, (task.task_id,))
+                stored_task_event = (
+                    await insert_capability_task_events(
+                        connection=connection,
+                        events=(task_event,),
+                    )
+                )[0]
+                stored_invocation_event = (
+                    await insert_capability_invocation_terminal(
+                        connection=connection,
+                        event=invocation_event,
+                    )
+                )
+                await connection.commit()
+        except ApplicationError:
+            raise
+        except Exception as error:
+            raise _persistence_error("Capability Task 拒绝回滚失败", error) from error
+        return stored_task_event, stored_invocation_event
 
     async def delete(self, task_id: UUID) -> None:
         """幂等删除没有 Context 或 Operation 引用的 Task。"""
@@ -1031,6 +1552,276 @@ class UserCapabilityPermissionRepository:
             "Capability权限撤销完成",
             capability_id=capability_id,
             duration_ms=_elapsed_ms(started_at),
+        )
+
+
+async def _validate_run_session_and_open_invocation(
+    *,
+    connection,
+    run_id: UUID,
+    session_id: UUID,
+    invocation_id: UUID,
+    capability_id: str,
+    task_action: CapabilityTaskAction | None = None,
+    state_scope: CapabilityStateScope | None = None,
+) -> None:
+    """锁定 Run 并确认 Task 操作属于当前唯一 open Invocation。"""
+
+    run_cursor = await connection.execute(_LOCK_RUN_SESSION, (run_id,))
+    run_row = await run_cursor.fetchone()
+    if run_row is None:
+        raise CapabilityPersistenceConflictError(
+            code="RUN_NOT_FOUND",
+            message="Run 不存在",
+            status_code=404,
+        )
+    if UUID(str(run_row["session_id"])) != session_id:
+        raise CapabilityPersistenceConflictError(
+            code="CAPABILITY_TASK_RUN_CONFLICT",
+            message="Capability Task 与 Run 不属于同一 Session",
+            status_code=409,
+        )
+    open_event = await select_open_capability_invocation_in_transaction(
+        connection=connection,
+        run_id=run_id,
+    )
+    if open_event is None:
+        raise RuntimeEventPersistenceError(
+            code="CAPABILITY_INVOCATION_NOT_OPEN",
+            message="Capability Invocation 已结束或尚未开始",
+            status_code=409,
+        )
+    if (
+        open_event.payload["invocation_id"] != str(invocation_id)
+        or open_event.payload["capability_id"] != capability_id
+        or (
+            task_action is not None
+            and open_event.payload["requested_task_action"] != task_action
+        )
+        or (
+            state_scope is not None
+            and open_event.payload["state_scope"] != state_scope
+        )
+    ):
+        raise RuntimeEventPersistenceError(
+            code="CAPABILITY_INVOCATION_MISMATCH",
+            message="Task 操作与当前 open Capability Invocation 不匹配",
+            status_code=409,
+        )
+
+
+async def _recover_task_resolution(
+    *,
+    connection,
+    run_id: UUID,
+    invocation_id: UUID,
+    session_id: UUID,
+    capability_id: str,
+    requested_action: CapabilityTaskAction,
+    state_scope: CapabilityStateScope,
+    allowed_versions: frozenset[str],
+    current_task_id: UUID | None,
+) -> CapabilityTaskResolution | None:
+    """在锁内幂等恢复同一 Invocation 已提交的 Task 解析结果。"""
+
+    cursor = await connection.execute(
+        _SELECT_TASK_BY_INVOCATION_FOR_UPDATE,
+        (run_id, invocation_id),
+    )
+    rows = await cursor.fetchall()
+    if not rows:
+        return None
+    if len(rows) != 1:
+        raise CapabilityPersistenceConflictError(
+            code="CAPABILITY_TASK_INVOCATION_CONFLICT",
+            message="同一 Invocation 关联了多个 Capability Task",
+            status_code=409,
+        )
+    task = _task_from_row(rows[0])
+    _validate_continue_task(
+        task=task,
+        session_id=session_id,
+        capability_id=capability_id,
+        allowed_versions=allowed_versions,
+    )
+    event_cursor = await connection.execute(
+        _SELECT_TASK_RESOLUTION_EVENTS,
+        (run_id, str(task.task_id)),
+    )
+    event_rows = await event_cursor.fetchall()
+    event_by_type = {str(row["event_type"]): row["payload"] for row in event_rows}
+    resolved_new = "internal.capability.task.created" in event_by_type
+    if resolved_new:
+        changed_payload = event_by_type.get(
+            "internal.capability.task.current_changed"
+        )
+        if changed_payload is None or current_task_id != task.task_id:
+            raise CapabilityPersistenceConflictError(
+                code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+                message="已解析 provisional Task 与 current 指针不一致",
+                status_code=409,
+            )
+        previous_value = changed_payload.get("previous_task_id")
+        previous_task_id = (
+            UUID(str(previous_value)) if previous_value is not None else None
+        )
+        resolved_action: CapabilityTaskAction = "new"
+    else:
+        previous_task_id = task.task_id
+        resolved_action = "continue"
+    return CapabilityTaskResolution(
+        task=task,
+        requested_action=requested_action,
+        resolved_action=resolved_action,
+        previous_task_id=previous_task_id,
+        provisional=resolved_new,
+        state_scope=state_scope,
+    )
+
+
+def _validate_continue_task(
+    *,
+    task: CapabilityTask,
+    session_id: UUID,
+    capability_id: str,
+    allowed_versions: frozenset[str],
+) -> None:
+    """持有 Task 行锁时校验 active、归属和 State Schema 兼容性。"""
+
+    if (
+        task.status != "active"
+        or task.session_id != session_id
+        or task.capability_id != capability_id
+    ):
+        raise CapabilityPersistenceConflictError(
+            code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+            message="current Task 不是同 Session、同 Capability 的 active Task",
+            status_code=409,
+        )
+    if task.state_schema_version not in allowed_versions:
+        raise CapabilityStateVersionIncompatibleError(
+            code="CAPABILITY_STATE_VERSION_INCOMPATIBLE",
+            message="当前 Capability 无法继续读取该 Task 的状态版本",
+            status_code=409,
+            retryable=False,
+        )
+
+
+def _select_task_resolution_events(
+    *,
+    events: tuple[RuntimeEvent, ...],
+    candidate_task_id: UUID,
+    capability_id: str,
+    previous_task_id: UUID | None,
+    degraded: bool,
+) -> tuple[RuntimeEvent, ...]:
+    """从预分配事件中选择本次新建 Task 事务实际需要的固定事件。"""
+
+    expected_types = [
+        "internal.capability.task.created",
+        "internal.capability.task.current_changed",
+    ]
+    if degraded:
+        expected_types.append(
+            "internal.capability.task.continue_degraded_to_new"
+        )
+    by_type = {event.event_type: event for event in events}
+    if len(by_type) != len(events) or any(
+        event_type not in by_type for event_type in expected_types
+    ):
+        raise RuntimeEventPersistenceError(
+            code="CAPABILITY_TASK_EVENT_INVALID",
+            message="Capability Task 解析事件集合不完整或重复",
+            status_code=409,
+        )
+    current_changed = by_type[
+        "internal.capability.task.current_changed"
+    ]
+    by_type["internal.capability.task.current_changed"] = replace(
+        current_changed,
+        payload={
+            **current_changed.payload,
+            "previous_task_id": (
+                str(previous_task_id) if previous_task_id is not None else None
+            ),
+        },
+    )
+    selected = tuple(by_type[event_type] for event_type in expected_types)
+    for event in selected:
+        if (
+            event.payload.get("task_id") != str(candidate_task_id)
+            or event.payload.get("capability_id") != capability_id
+        ):
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_TASK_EVENT_INVALID",
+                message="Capability Task 事件与待创建 Task 不匹配",
+                status_code=409,
+            )
+    return selected
+
+
+def _validate_task_terminal_event(
+    *,
+    event: RuntimeEvent,
+    task: CapabilityTask,
+    status: CapabilityTaskStatus,
+    run_id: UUID,
+) -> None:
+    """校验 Task 终态事件类型、关联标识和固定状态。"""
+
+    if (
+        event.run_id != run_id
+        or event.event_type != f"internal.capability.task.{status}"
+        or event.payload.get("task_id") != str(task.task_id)
+        or event.payload.get("capability_id") != task.capability_id
+        or event.payload.get("status") != status
+    ):
+        raise RuntimeEventPersistenceError(
+            code="CAPABILITY_TASK_EVENT_INVALID",
+            message="Capability Task 终态事件与状态转换不匹配",
+            status_code=409,
+        )
+
+
+def _validate_rejected_rollback_events(
+    *,
+    task_event: RuntimeEvent,
+    invocation_event: RuntimeEvent,
+    task: CapabilityTask,
+    resolution: CapabilityTaskResolution,
+    run_id: UUID,
+    invocation_id: UUID,
+) -> None:
+    """保证拒绝回滚诊断和 Invocation 正常终态引用同一调用。"""
+
+    if (
+        task_event.run_id != run_id
+        or task_event.event_type
+        != "internal.capability.task.rejected_rolled_back"
+        or task_event.payload.get("task_id") != str(task.task_id)
+        or task_event.payload.get("capability_id") != task.capability_id
+        or invocation_event.run_id != run_id
+        or invocation_event.event_type
+        != "internal.capability.invocation.completed"
+        or invocation_event.payload.get("invocation_id")
+        != str(invocation_id)
+        or invocation_event.payload.get("capability_id")
+        != task.capability_id
+        or invocation_event.payload.get("task_id") != str(task.task_id)
+        or invocation_event.payload.get("requested_task_action")
+        != resolution.requested_action
+        or invocation_event.payload.get("effective_task_action")
+        != resolution.resolved_action
+        or invocation_event.payload.get("state_scope")
+        != resolution.state_scope
+        or invocation_event.payload.get("state_schema_version")
+        != task.state_schema_version
+        or invocation_event.payload.get("outcome") != "rejected"
+    ):
+        raise RuntimeEventPersistenceError(
+            code="CAPABILITY_TASK_EVENT_INVALID",
+            message="Capability 拒绝回滚事件关联不一致",
+            status_code=409,
         )
 
 

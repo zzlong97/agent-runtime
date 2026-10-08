@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-05（IN_PROGRESS）
-Last Verified Task: S3-04
-Last Verified Commit: S3-04 验收提交（当前提交）
+Current Task: S3-05（VERIFIED）
+Last Verified Task: S3-05
+Last Verified Commit: S3-05 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -2425,7 +2425,7 @@ UserCapabilityPermissionRepository
 
 ## S3-05 Invocation、Task Service 与 State Scope
 
-**Status:** IN_PROGRESS
+**Status:** VERIFIED
 
 **Dependencies:** S3-03, S3-04
 
@@ -2465,14 +2465,14 @@ InvocationStarted/Completed/Failed/CancelledPayload
 
 ### Acceptance
 
-- [ ] 同一 Run 同时最多一个 open Invocation
-- [ ] new 与 current 切换原子，continue 正确锁定 current
-- [ ] continue 无 current 时原子降级 new 并写 diagnostic
-- [ ] rejected new 恢复原 current，清理 provisional Task/thread
-- [ ] 拒绝前已有输出、Operation 或业务 State 时不执行回滚并失败
-- [ ] 三种 scope 的 thread_id 确定、互不串线
-- [ ] 不兼容 Task 拒绝 continue 且 Task/Context 不变
-- [ ] Run 失败/取消不自动改变 Task 状态
+- [x] 同一 Run 同时最多一个 open Invocation
+- [x] new 与 current 切换原子，continue 正确锁定 current
+- [x] continue 无 current 时原子降级 new 并写 diagnostic
+- [x] rejected new 恢复原 current，清理 provisional Task/thread
+- [x] 拒绝前已有输出、Operation 或业务 State 时不执行回滚并失败
+- [x] 三种 scope 的 thread_id 确定、互不串线
+- [x] 不兼容 Task 拒绝 continue 且 Task/Context 不变
+- [x] Run 失败/取消不自动改变 Task 状态
 
 ### Test Requirements
 
@@ -2485,6 +2485,41 @@ InvocationStarted/Completed/Failed/CancelledPayload
 
 - Parent 公共 messages 与 10/5 Context Builder 不变
 - 既有有限回流语义不变
+
+### Verification Notes
+
+- 2026-10-08：新增关闭且带中文字段说明的 Invocation/Task internal durable
+  RuntimeEvent Schema；所有 Invocation 事件固定携带 `invocation_id`、`capability_id`、
+  `task_id`、请求/有效 Task Action、`state_scope` 与实际 `state_schema_version`，终态再携带
+  `outcome` 或 `error_code`。`started` 与终态事件在 PostgreSQL Run 行锁内配对，恢复复用
+  唯一 open `invocation_id`，普通事件写入入口不能绕过该约束。
+- 2026-10-08：新增 `CapabilityTaskService`，在 Run/Session/Task 行锁和单事务内完成
+  `new`、`continue`、缺失 current 降级、最近执行投影、Task 终态与内部事件写入；同一
+  Invocation 的重复解析幂等复用同一个 Task。
+- 2026-10-08：实现 provisional Task 的 OUT_OF_SCOPE 回滚；零公开输出、零 Operation、
+  零 Child Checkpoint 时恢复原 current、删除 provisional Task、原子关闭 Invocation 并
+  清理临时 thread，任一业务事实已存在时保持 Task 并以
+  `CAPABILITY_EXECUTION_FAILED` 关闭 Invocation。
+- 2026-10-08：新增固定 `capability:v1` Child thread_id 工厂和 State Schema 兼容策略；
+  invocation/run/session 分别按 invocation_id、run_id、task_id 隔离或共享。兼容旧 Task
+  时使用 Task 已固化的 State Schema 版本生成 namespace，不会切换到当前 Manifest 新版本；
+  不兼容 continue 返回 `CAPABILITY_STATE_VERSION_INCOMPATIBLE` 且 Task/Context 不变。
+- 2026-10-08：初次编码验证中，S3-05 单元专项 `42 passed`、真实 PostgreSQL/
+  Checkpointer 专项 `3 passed`；默认完整套件 `516 passed, 45 skipped`，启用真实
+  PostgreSQL + Redis 的完整套件 `560 passed, 1 skipped`。
+- 2026-10-08：按 `REV-S3-05-001` 补齐 Invocation 事件最小关联字段、nullable 组合约束和
+  `continue → new` durable event 精确断言；按 `REV-S3-05-002` 改为使用已解析 Task
+  固化版本生成 Child thread_id，并增加跨 Run 读取旧版本真实 Checkpoint 的测试。
+- 2026-10-08：修复后定向测试 `17 passed, 3 skipped`，Capability/Runtime 回归
+  `229 passed, 20 skipped`，默认完整套件 `518 passed, 45 skipped`；`uv lock --check`、
+  `uv pip check`、`compileall`、`uv build`、Compose 配置和 `git diff --check` 均通过。
+- 2026-10-08：Docker Desktop 由负责人恢复后，修复后的真实 PostgreSQL/Checkpointer
+  专项 `3 passed`；启用真实 PostgreSQL + Redis 的完整套件 `562 passed, 1 skipped`，
+  唯一跳过为显式百炼 smoke test。
+- 2026-10-08：Reviewer 确认 `REV-S3-05-001/002` 均已关闭，S3-05 审核通过；任务更新
+  为 `VERIFIED`，按工程流程提交并同步 GitHub、Gitee 后进入 S3-06。
+- Result：S3-05 已 `VERIFIED`；未接入 Parent/Router 主链路，未实现 S3-06 权限、
+  动态候选或其他后续能力，完成验收提交与双远程同步后进入 S3-06。
 
 ### Definition of Done
 

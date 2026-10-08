@@ -4,12 +4,14 @@ import asyncio
 import logging
 from datetime import datetime
 from threading import Lock
-from typing import Protocol
+from collections.abc import Awaitable, Callable, Sequence
+from typing import Protocol, TypeVar
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.runtime.event_models import (
+    CapabilityInvocationEventCommit,
     RuntimeEvent,
     RuntimeEventDraft,
     RunEventCommit,
@@ -31,6 +33,7 @@ _SEQUENCER_REGISTRY_LOCK = Lock()
 _LIVE_SEQUENCERS: WeakValueDictionary[UUID, "RunSequencer"] = (
     WeakValueDictionary()
 )
+_CommitResult = TypeVar("_CommitResult")
 
 
 class RuntimeEventPublisher(Protocol):
@@ -115,6 +118,56 @@ class RunSequencer:
                 return stored
             await self._publish_best_effort(event)
             return event
+
+    async def begin_capability_invocation(
+        self,
+        draft: RuntimeEventDraft,
+    ) -> CapabilityInvocationEventCommit:
+        """分配 started 序号，并由数据库原子新建或复用 open Invocation。"""
+
+        async with self._lock:
+            event = await self._build_event(draft)
+            return await self._repository.begin_capability_invocation(event)
+
+    async def finish_capability_invocation(
+        self,
+        draft: RuntimeEventDraft,
+    ) -> RuntimeEvent:
+        """分配终态序号，并由数据库与唯一 open Invocation 严格配对。"""
+
+        async with self._lock:
+            event = await self._build_event(draft)
+            return await self._repository.finish_capability_invocation(event)
+
+    async def get_open_capability_invocation(self) -> RuntimeEvent | None:
+        """读取数据库中的唯一 open Invocation，供恢复诊断使用。"""
+
+        return await self._repository.get_open_capability_invocation(
+            run_id=self._run_id
+        )
+
+    async def commit_durable_internal_batch(
+        self,
+        *,
+        drafts: Sequence[RuntimeEventDraft],
+        commit: Callable[
+            [tuple[RuntimeEvent, ...]],
+            Awaitable[_CommitResult],
+        ],
+    ) -> _CommitResult:
+        """在单 Run 锁内预分配内部 durable 事件，并交给业务事务原子写入。"""
+
+        async with self._lock:
+            events: list[RuntimeEvent] = []
+            for draft in drafts:
+                if draft.visibility != "internal" or draft.durability != "durable":
+                    raise RuntimeEventSchemaError(
+                        code="RUNTIME_EVENT_SCHEMA_INVALID",
+                        message="事务批次只接受内部 durable RuntimeEvent",
+                        status_code=409,
+                    )
+                events.append(await self._build_event(draft))
+            return await commit(tuple(events))
 
     async def transition_run(
         self,

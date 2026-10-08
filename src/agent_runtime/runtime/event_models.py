@@ -93,3 +93,11 @@ class RunEventCommit:
     run: Run
     event: RuntimeEvent | None
     changed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CapabilityInvocationEventCommit:
+    """Invocation started 的新建或崩溃恢复复用结果。"""
+
+    event: RuntimeEvent
+    recovered: bool

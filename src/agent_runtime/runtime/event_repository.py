@@ -15,6 +15,7 @@ from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.persistence.database import open_database_connection
 from agent_runtime.runtime.event_models import (
+    CapabilityInvocationEventCommit,
     EventDurability,
     EventVisibility,
     RuntimeEvent,
@@ -22,9 +23,12 @@ from agent_runtime.runtime.event_models import (
     SequenceBlock,
 )
 from agent_runtime.runtime.event_schemas import (
+    CAPABILITY_INVOCATION_EVENT_TYPES,
+    CAPABILITY_TASK_EVENT_TYPES,
     STATEFUL_INTERNAL_EVENT_TYPES,
     STATEFUL_PUBLIC_EVENT_TYPES,
     project_public_event,
+    validate_internal_event_payload,
 )
 from agent_runtime.runtime.models import (
     TERMINAL_RUN_STATUSES,
@@ -276,6 +280,24 @@ SELECT EXISTS (
 ) AS event_exists
 """
 
+_SELECT_CAPABILITY_INVOCATION_EVENTS = f"""
+SELECT {_EVENT_COLUMNS}
+FROM runtime_events
+WHERE run_id = %s
+  AND event_type = ANY(%s)
+ORDER BY seq ASC
+"""
+
+_SELECT_CAPABILITY_INVOCATION_TERMINAL = f"""
+SELECT {_EVENT_COLUMNS}
+FROM runtime_events
+WHERE run_id = %s
+  AND event_type = %s
+  AND payload ->> 'invocation_id' = %s
+ORDER BY seq ASC
+LIMIT 1
+"""
+
 _INTERRUPT_COLUMNS = """
 run_id,
 interrupt_id,
@@ -496,6 +518,110 @@ class PostgresRuntimeEventRepository:
             duration_ms=_elapsed_ms(started_at),
         )
         return stored
+
+    async def begin_capability_invocation(
+        self,
+        event: RuntimeEvent,
+    ) -> CapabilityInvocationEventCommit:
+        """在 Run 行锁内新建 started，或复用唯一 open Invocation。"""
+
+        self._validate_capability_invocation_event(
+            event,
+            expected_type="internal.capability.invocation.started",
+        )
+        started_at = perf_counter()
+        try:
+            async with open_database_connection(self._settings) as connection:
+                await _lock_run_for_capability_event(
+                    connection=connection,
+                    run_id=event.run_id,
+                )
+                open_event = await select_open_capability_invocation_in_transaction(
+                    connection=connection,
+                    run_id=event.run_id,
+                )
+                if open_event is not None:
+                    await connection.commit()
+                    return CapabilityInvocationEventCommit(
+                        event=open_event,
+                        recovered=True,
+                    )
+                stored = await self._insert_event(connection, event)
+                await connection.commit()
+        except ApplicationError:
+            raise
+        except Exception as error:
+            self._log_persistence_failure(
+                event_name="Capability Invocation开始事件写入失败",
+                error_code="CAPABILITY_INVOCATION_EVENT_FAILED",
+                error=error,
+                started_at=started_at,
+                run_id=event.run_id,
+                event_id=event.event_id,
+                event_type=event.event_type,
+            )
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_INVOCATION_EVENT_FAILED",
+                message="Capability Invocation 开始事件保存失败",
+                retryable=True,
+            ) from error
+        return CapabilityInvocationEventCommit(event=stored, recovered=False)
+
+    async def finish_capability_invocation(
+        self,
+        event: RuntimeEvent,
+    ) -> RuntimeEvent:
+        """在 Run 行锁内让终态事件与唯一 open Invocation 严格配对。"""
+
+        if event.event_type == "internal.capability.invocation.started":
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_INVOCATION_EVENT_INVALID",
+                message="Invocation 终态入口不接受 started 事件",
+                status_code=409,
+            )
+        self._validate_capability_invocation_event(event)
+        try:
+            async with open_database_connection(self._settings) as connection:
+                await _lock_run_for_capability_event(
+                    connection=connection,
+                    run_id=event.run_id,
+                )
+                stored = await insert_capability_invocation_terminal(
+                    connection=connection,
+                    event=event,
+                )
+                await connection.commit()
+        except ApplicationError:
+            raise
+        except Exception as error:
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_INVOCATION_EVENT_FAILED",
+                message="Capability Invocation 终态事件保存失败",
+                retryable=True,
+            ) from error
+        return stored
+
+    async def get_open_capability_invocation(
+        self,
+        *,
+        run_id: UUID,
+    ) -> RuntimeEvent | None:
+        """读取当前唯一 open Invocation，供恢复扫描复用原标识。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                return await select_open_capability_invocation_in_transaction(
+                    connection=connection,
+                    run_id=run_id,
+                )
+        except ApplicationError:
+            raise
+        except Exception as error:
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_INVOCATION_EVENT_READ_FAILED",
+                message="Capability Invocation 生命周期读取失败",
+                retryable=True,
+            ) from error
 
     async def transition_run(
         self,
@@ -1291,6 +1417,7 @@ class PostgresRuntimeEventRepository:
         event: RuntimeEvent,
         *,
         allow_stateful: bool,
+        allow_capability_controlled: bool = False,
     ) -> None:
         if event.durability != "durable":
             raise RuntimeEventPersistenceError(
@@ -1313,6 +1440,48 @@ class PostgresRuntimeEventRepository:
             raise RuntimeEventPersistenceError(
                 code="RUNTIME_EVENT_SCHEMA_INVALID",
                 message="内部事件类型必须使用 internal. 前缀",
+                status_code=409,
+            )
+        else:
+            if (
+                event.event_type
+                in CAPABILITY_INVOCATION_EVENT_TYPES | CAPABILITY_TASK_EVENT_TYPES
+                and not allow_capability_controlled
+            ):
+                raise RuntimeEventPersistenceError(
+                    code="RUNTIME_EVENT_REQUIRES_CAPABILITY_TRANSACTION",
+                    message="Capability 生命周期事件必须通过专用事务入口写入",
+                    status_code=409,
+                )
+            validate_internal_event_payload(
+                event_type=event.event_type,
+                payload=event.payload,
+            )
+
+    @classmethod
+    def _validate_capability_invocation_event(
+        cls,
+        event: RuntimeEvent,
+        *,
+        expected_type: str | None = None,
+    ) -> None:
+        """校验 Invocation 生命周期事件只能经专用事务入口落库。"""
+
+        cls._validate_durable_event(
+            event,
+            allow_stateful=False,
+            allow_capability_controlled=True,
+        )
+        if event.event_type not in CAPABILITY_INVOCATION_EVENT_TYPES:
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_INVOCATION_EVENT_INVALID",
+                message="事件不是固定 Capability Invocation 生命周期事件",
+                status_code=409,
+            )
+        if expected_type is not None and event.event_type != expected_type:
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_INVOCATION_EVENT_INVALID",
+                message="Capability Invocation 事件类型与事务入口不匹配",
                 status_code=409,
             )
 
@@ -1370,6 +1539,152 @@ class PostgresRuntimeEventRepository:
             duration_ms=_elapsed_ms(started_at),
             **fields,
         )
+
+
+async def _lock_run_for_capability_event(*, connection, run_id: UUID) -> None:
+    """锁定 Run 行，使 Invocation open 检查与事件写入不可交错。"""
+
+    cursor = await connection.execute(
+        _SELECT_RUN_MESSAGE_ID_FOR_UPDATE,
+        (run_id,),
+    )
+    if await cursor.fetchone() is None:
+        raise RunNotFoundError(
+            code="RUN_NOT_FOUND",
+            message="Run 不存在",
+            status_code=404,
+        )
+
+
+async def select_open_capability_invocation_in_transaction(
+    *,
+    connection,
+    run_id: UUID,
+) -> RuntimeEvent | None:
+    """按 seq 重放内部事件并返回唯一未配对的 started 事件。"""
+
+    cursor = await connection.execute(
+        _SELECT_CAPABILITY_INVOCATION_EVENTS,
+        (run_id, list(CAPABILITY_INVOCATION_EVENT_TYPES)),
+    )
+    rows = await cursor.fetchall()
+    open_event: RuntimeEvent | None = None
+    for row in rows:
+        event = _event_from_row(row)
+        validate_internal_event_payload(
+            event_type=event.event_type,
+            payload=event.payload,
+        )
+        if event.event_type == "internal.capability.invocation.started":
+            if open_event is not None:
+                raise RuntimeEventPersistenceError(
+                    code="CAPABILITY_INVOCATION_LIFECYCLE_CORRUPTED",
+                    message="同一 Run 存在多个 open Capability Invocation",
+                    status_code=409,
+                )
+            open_event = event
+            continue
+        if open_event is None:
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_INVOCATION_LIFECYCLE_CORRUPTED",
+                message="Capability Invocation 终态事件缺少 started 事件",
+                status_code=409,
+            )
+        if (
+            event.payload["invocation_id"]
+            != open_event.payload["invocation_id"]
+            or event.payload["capability_id"]
+            != open_event.payload["capability_id"]
+            or event.payload["requested_task_action"]
+            != open_event.payload["requested_task_action"]
+            or event.payload["state_scope"]
+            != open_event.payload["state_scope"]
+        ):
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_INVOCATION_LIFECYCLE_CORRUPTED",
+                message="Capability Invocation 生命周期事件关联不一致",
+                status_code=409,
+            )
+        open_event = None
+    return open_event
+
+
+async def insert_capability_invocation_terminal(
+    *,
+    connection,
+    event: RuntimeEvent,
+) -> RuntimeEvent:
+    """在已持有 Run 行锁的事务中校验并写入 Invocation 终态。"""
+
+    PostgresRuntimeEventRepository._validate_capability_invocation_event(event)
+    open_event = await select_open_capability_invocation_in_transaction(
+        connection=connection,
+        run_id=event.run_id,
+    )
+    if open_event is None:
+        cursor = await connection.execute(
+            _SELECT_CAPABILITY_INVOCATION_TERMINAL,
+            (
+                event.run_id,
+                event.event_type,
+                str(event.payload["invocation_id"]),
+            ),
+        )
+        row = await cursor.fetchone()
+        if row is not None:
+            existing = _event_from_row(row)
+            if existing.payload == event.payload:
+                return existing
+        raise RuntimeEventPersistenceError(
+            code="CAPABILITY_INVOCATION_NOT_OPEN",
+            message="Capability Invocation 已结束或尚未开始",
+            status_code=409,
+        )
+    if (
+        event.payload["invocation_id"]
+        != open_event.payload["invocation_id"]
+        or event.payload["capability_id"]
+        != open_event.payload["capability_id"]
+        or event.payload["requested_task_action"]
+        != open_event.payload["requested_task_action"]
+        or event.payload["state_scope"]
+        != open_event.payload["state_scope"]
+    ):
+        raise RuntimeEventPersistenceError(
+            code="CAPABILITY_INVOCATION_MISMATCH",
+            message="终态事件与当前 open Capability Invocation 不匹配",
+            status_code=409,
+        )
+    return await PostgresRuntimeEventRepository._insert_event(connection, event)
+
+
+async def insert_capability_task_events(
+    *,
+    connection,
+    events: tuple[RuntimeEvent, ...],
+) -> tuple[RuntimeEvent, ...]:
+    """在调用方 Task 事务内校验并写入固定内部 Task 事件。"""
+
+    stored: list[RuntimeEvent] = []
+    for event in events:
+        PostgresRuntimeEventRepository._validate_durable_event(
+            event,
+            allow_stateful=False,
+            allow_capability_controlled=True,
+        )
+        if event.event_type not in CAPABILITY_TASK_EVENT_TYPES:
+            raise RuntimeEventPersistenceError(
+                code="CAPABILITY_TASK_EVENT_INVALID",
+                message="事件不是固定 Capability Task 生命周期事件",
+                status_code=409,
+            )
+        stored.append(
+            await PostgresRuntimeEventRepository._insert_event(
+                connection,
+                event,
+            )
+        )
+    return tuple(stored)
 
 
 def _event_from_row(row: Mapping[str, Any]) -> RuntimeEvent:
