@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-02（VERIFIED，等待提交并同步双远程）
-Last Verified Task: S3-02
-Last Verified Commit: S3-02 验收提交（当前提交）
+Current Task: S3-04（IN_PROGRESS）
+Last Verified Task: S3-03
+Last Verified Commit: S3-03 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -2244,7 +2244,7 @@ GitHub/Gitee 同一提交。
 
 ## S3-03 Capability 协议、Bootstrap 与静态 Registry
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S3-02
 
@@ -2285,12 +2285,12 @@ CapabilityRegistry / CapabilityRegistryEntry / RouterProjection
 
 ### Acceptance
 
-- [ ] entrypoint 只能加载合法工厂，错误对象被隔离
-- [ ] 重复 ID 的全部来源不进入 Snapshot
-- [ ] 单个 import/initialize/health 失败不影响其他能力
-- [ ] Capability 看不到 SSE、Redis、Session 或 Run Repository
-- [ ] cleanup 对部分初始化失败和正常关机均幂等逆序执行
-- [ ] Router Projection 只有四个允许字段
+- [x] entrypoint 只能加载合法工厂，错误对象被隔离
+- [x] 重复 ID 的全部来源不进入 Snapshot
+- [x] 单个 import/initialize/health 失败不影响其他能力
+- [x] Capability 看不到 SSE、Redis、Session 或 Run Repository
+- [x] cleanup 对部分初始化失败和正常关机均幂等逆序执行
+- [x] Router Projection 只有四个允许字段
 
 ### Test Requirements
 
@@ -2303,6 +2303,36 @@ CapabilityRegistry / CapabilityRegistryEntry / RouterProjection
 - 应用主链路尚不切换 Registry
 - S2.5 测试继续通过
 
+### Verification Notes
+
+- 2026-10-03：完成关闭的 `AgentResult` / `AgentResultMetadata` / `HealthResult`、
+  不可变关闭 `CapabilityError`、五字段只读 `CapabilityBootstrapContext` 和异步
+  `Capability` 协议；Registry 会严格复验 Manifest、在完整校验前收集全部合法声明
+  ID、整组隔离重复来源，并校验同步工厂及三个 bound async 方法的精确签名。
+- 2026-10-03：完成 import、协议、初始化和启动健康检查的局部故障隔离；静态
+  Snapshot 不可热变更，可服务 Router Projection 严格只含
+  `capability_id / name / description / enabled`。
+- 2026-10-03：完成部分初始化和正常关闭的逆序幂等 cleanup；单个 cleanup 失败不
+  阻止其余资源释放，构建或关闭取消会继续清理并允许未完成回调安全重试。
+- 2026-10-03：首轮代码复核发现并关闭 `REV-S3-03-001/002/003`；正式审核随后发现
+  `REV-S3-03-004/005`。`REV-S3-03-005` 已通过 CapabilityError 根类型、构造后
+  篡改、额外属性、`__dict__` 和标量子类对抗测试。
+- 2026-10-03：`REV-S3-03-004` 首次修复后，Reviewer 进一步发现无效来源声明的
+  Capability ID 未完全复用正式 Manifest 的空白归一化语义。最终将 ID 约束提取为
+  共享 Pydantic `CapabilityId` 类型，并由 Registry 预提取与正式 Schema 共用同一个
+  `TypeAdapter`，不再手写字符串归一化。
+- 2026-10-03：新增两组互补回归：带普通首尾空白的同 ID 无效来源必须与合法来源
+  整组标记为 `duplicate_id`；正式 Schema 不会裁剪的控制分隔符不得造成虚假冲突。
+  最终独立复核未发现新的 Critical、Important 或 Minor 问题。
+- 2026-10-03：默认完整套件 `491 passed, 39 skipped`；启用真实 PostgreSQL +
+  Redis 的完整套件 `529 passed, 1 skipped`，唯一跳过为显式百炼 smoke test。
+- 2026-10-03：`uv lock --check`、`compileall`、`uv pip check`、`uv build`、
+  `docker compose config --quiet` 和 `git diff --check` 通过。
+- 2026-10-08：Reviewer 确认 S3-03 审核通过；任务更新为 `VERIFIED`，按工程流程
+  提交并同步 GitHub、Gitee 后进入 S3-04。
+- Result：S3-03 已 `VERIFIED`；静态 Registry 保持独立组件边界，未提前接入应用
+  主链路。完成验收提交与双远程同步后进入 S3-04。
+
 ### Definition of Done
 
 静态 Registry 可独立构建和关闭，未接入业务链路；测试、Review、负责人验收、双远程
@@ -2312,7 +2342,7 @@ CapabilityRegistry / CapabilityRegistryEntry / RouterProjection
 
 ## S3-04 Capability Task、Context、Operation 与 Permission 持久化
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 
 **Dependencies:** S3-01 VERIFIED
 

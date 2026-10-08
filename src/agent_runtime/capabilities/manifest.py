@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -13,6 +13,8 @@ from pydantic import (
     StrictFloat,
     StrictInt,
     StrictStr,
+    StringConstraints,
+    TypeAdapter,
     field_validator,
     model_validator,
 )
@@ -32,6 +34,25 @@ SEMVER_PATTERN = re.compile(
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 STATE_SCHEMA_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+type CapabilityId = Annotated[
+    str,
+    StringConstraints(
+        strict=True,
+        strip_whitespace=True,
+        min_length=1,
+        max_length=64,
+        pattern=CAPABILITY_ID_PATTERN,
+    ),
+]
+
+_CAPABILITY_ID_ADAPTER = TypeAdapter(CapabilityId)
+
+
+def validate_capability_id(value: object) -> str:
+    """使用与正式 Manifest 字段完全相同的规则校验并归一化能力 ID。"""
+
+    return _CAPABILITY_ID_ADAPTER.validate_python(value)
 
 
 class _ClosedManifestModel(BaseModel):
@@ -111,10 +132,7 @@ class CapabilityManifest(_ClosedManifestModel):
             "由加载器自动降级或猜测。"
         ),
     )
-    capability_id: StrictStr = Field(
-        min_length=1,
-        max_length=64,
-        pattern=CAPABILITY_ID_PATTERN,
+    capability_id: CapabilityId = Field(
         description=(
             "稳定 Capability 标识，必须匹配 ^[a-z][a-z0-9_]{0,63}$；该值可进入"
             "Router、公共消息和 RuntimeEvent，不得使用展示名称替代。"
