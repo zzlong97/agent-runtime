@@ -33,8 +33,10 @@ class RegistryProjectionSource(Protocol):
     def active_router_projections(self) -> tuple[RouterProjection, ...]:
         """返回忽略健康结果的 active 最小投影。"""
 
-    def router_projections(self) -> tuple[RouterProjection, ...]:
-        """返回当前健康可服务的最小投影。"""
+    async def serviceable_router_projections(
+        self,
+    ) -> tuple[RouterProjection, ...]:
+        """按需刷新过期健康快照并返回当前可服务的最小投影。"""
 
 
 class CapabilityPermissionDeniedError(ApplicationError):
@@ -191,7 +193,8 @@ class RouterCandidateProvider:
             )
 
         serviceable_ids = {
-            item.capability_id for item in self._registry.router_projections()
+            item.capability_id
+            for item in await self._registry.serviceable_router_projections()
         }
         allowed_serviceable = tuple(
             item for item in allowed if item.capability_id in serviceable_ids

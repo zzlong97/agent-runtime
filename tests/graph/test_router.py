@@ -533,6 +533,9 @@ def test_dynamic_provider_router_parent_all_out_of_scope_becomes_unsupported() -
         def router_projections(self):
             return (projection,)
 
+        async def serviceable_router_projections(self):
+            return (projection,)
+
     class PermissionRepository:
         async def get_allowed(self, *, user_id: str, capability_id: str):
             return True

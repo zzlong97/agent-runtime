@@ -201,7 +201,7 @@ class CapabilityManifest(_ClosedManifestModel):
     allow_degraded: StrictBool = Field(
         description=(
             "健康检查返回 degraded 时是否仍允许 Runtime 提供服务；该布尔值必须"
-            "显式声明，健康检查和候选过滤由后续任务实现。"
+            "显式声明，true 允许降级服务并记录内部告警，false 将该能力排除出候选。"
         ),
     )
     concurrency: ConcurrencyPolicy = Field(

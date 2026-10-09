@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-06（VERIFIED）
-Last Verified Task: S3-06
-Last Verified Commit: S3-06 验收提交（当前提交）
+Current Task: S3-07（VERIFIED）
+Last Verified Task: S3-07
+Last Verified Commit: S3-07 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -2634,7 +2634,7 @@ ManifestCapabilityId public schemas
 
 ## S3-07 Capability Health 与服务准入
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S3-03, S3-06
 
@@ -2671,11 +2671,11 @@ ServiceabilityDecision
 
 ### Acceptance
 
-- [ ] 启动时每个已实例化能力恰好强检一次
-- [ ] TTL 内复用，过期并发请求只刷新一次
-- [ ] degraded 的 allow true/false 行为正确
-- [ ] unhealthy 与检查异常不进入候选
-- [ ] 其他健康 Capability 不受影响
+- [x] 启动时每个已实例化能力恰好强检一次
+- [x] TTL 内复用，过期并发请求只刷新一次
+- [x] degraded 的 allow true/false 行为正确
+- [x] unhealthy 与检查异常不进入候选
+- [x] 其他健康 Capability 不受影响
 
 ### Test Requirements
 
@@ -2687,6 +2687,31 @@ ServiceabilityDecision
 
 - `/health` 现有应用健康语义不擅自扩张为 Capability 明细 API
 - Redis 不可用仍不影响健康准入模块启动
+
+### Verification Notes
+
+- 2026-10-09：新增关闭只读的 `HealthSnapshot` 与 `ServiceabilityDecision`，以及进程内
+  `CapabilityHealthService`；启动阶段对每个 active 实例顺序强检一次，检查异常收敛为
+  `unhealthy / HEALTH_CHECK_FAILED`，只记录 `capability_id`、错误类型和稳定摘要码，
+  不记录异常正文、凭据或业务数据。
+- 2026-10-09：新增默认 30 秒的 Runtime 全局 `CAPABILITY_HEALTH_TTL_SECONDS`；TTL 内
+  复用快照，到达 `expires_at` 边界即在每 Capability 的异步锁内刷新，锁内二次检查保证
+  并发请求只触发一次检查。配置层与服务层均拒绝零、负数、NaN 和无穷值。
+- 2026-10-09：Registry 静态 Entry 只保留启动诊断，动态刷新不修改不可变 Snapshot；
+  Router 候选改用异步 `serviceable_router_projections()`，只得到既有四字段投影。healthy
+  放行，degraded 按 `allow_degraded` 判定并写中文 WARNING，unhealthy 和检查异常只排除
+  对应能力，不影响其他健康能力。
+- 2026-10-09：健康与配置专项 `17 passed`；Capability/Registry/Router/配置聚焦回归
+  `170 passed, 7 skipped`；默认完整后端套件 `544 passed, 46 skipped`；启用真实
+  PostgreSQL + Redis 的完整套件 `589 passed, 1 skipped`，唯一跳过为显式百炼 smoke
+  test；前端完整套件 `26 passed`。
+- 2026-10-09：`uv lock --check`、`uv pip check`、`compileall`、`uv build`、前端生产
+  构建、Compose 配置和 `git diff --check` 均通过；独立代码复审未发现 Critical 或
+  Important 问题，提出的无穷 TTL 配置校验和 degraded 日志断言两个 Minor 已补齐。
+- 2026-10-09：Reviewer 与负责人确认 S3-07 验收通过，任务更新为 `VERIFIED`；按工程
+  流程提交并同步 GitHub、Gitee 后进入 S3-08。
+- Result：S3-07 已 `VERIFIED`；未提前实现 S3-08 并发、超时或错误映射，完成验收提交
+  与双远程同步后进入 S3-08。
 
 ### Definition of Done
 

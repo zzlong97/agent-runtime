@@ -8,7 +8,7 @@ import inspect
 import logging
 from collections import Counter
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Literal
@@ -26,6 +26,10 @@ from agent_runtime.capabilities.manifest import (
     CapabilityManifest,
     ManifestCapabilityId,
     validate_capability_id,
+)
+from agent_runtime.capabilities.health import (
+    CapabilityHealthService,
+    HealthClock,
 )
 from agent_runtime.capabilities.source import (
     CapabilityManifestDocument,
@@ -178,6 +182,7 @@ class CapabilityRegistry:
         self,
         entries: tuple[CapabilityRegistryEntry, ...],
         cleanup_groups: tuple[_CleanupGroup, ...],
+        health_service: CapabilityHealthService,
     ) -> None:
         self._entries = entries
         self._active_entries = MappingProxyType(
@@ -188,6 +193,7 @@ class CapabilityRegistry:
             }
         )
         self._cleanup_groups = cleanup_groups
+        self._health_service = health_service
         self._close_lock = asyncio.Lock()
         self._closed = False
 
@@ -205,6 +211,8 @@ class CapabilityRegistry:
         child_checkpointer_factory: ChildCheckpointerFactory,
         model_factory: object,
         capability_configs: Mapping[str, Mapping[str, object]] | None = None,
+        health_ttl_seconds: float = 30.0,
+        health_clock: HealthClock | None = None,
     ) -> CapabilityRegistry:
         """收集全部来源、隔离冲突并顺序初始化可启用 Capability。"""
 
@@ -297,11 +305,34 @@ class CapabilityRegistry:
                 if retained_cleanup_group is None:
                     removed_group = cleanup_groups.pop()
                     assert removed_group is cleanup_group
+
+            health_service = await CapabilityHealthService.start(
+                capabilities={
+                    entry.manifest.capability_id: (
+                        entry.manifest.allow_degraded,
+                        entry.capability.health_check,
+                    )
+                    for entry in entries
+                    if entry.status == "active"
+                    and entry.manifest is not None
+                    and entry.capability is not None
+                },
+                ttl_seconds=health_ttl_seconds,
+                clock=health_clock,
+            )
+            entries = [
+                _attach_startup_health(entry, health_service)
+                for entry in entries
+            ]
         except BaseException:
             await _close_cleanup_groups(cleanup_groups)
             raise
 
-        registry = cls(tuple(entries), tuple(cleanup_groups))
+        registry = cls(
+            tuple(entries),
+            tuple(cleanup_groups),
+            health_service,
+        )
         log_business_event(
             logger,
             "Capability Registry构建完成",
@@ -319,7 +350,7 @@ class CapabilityRegistry:
         return self._active_entries.get(capability_id)
 
     def router_projections(self) -> tuple[RouterProjection, ...]:
-        """返回当前启动健康检查后可服务的最小四字段 Router 视图。"""
+        """返回基于启动快照的兼容视图；动态调用应使用异步准入接口。"""
 
         projections: list[RouterProjection] = []
         for entry in self._entries:
@@ -335,6 +366,20 @@ class CapabilityRegistry:
                 )
             )
         return tuple(projections)
+
+    async def serviceable_router_projections(self) -> tuple[RouterProjection, ...]:
+        """按需刷新过期健康快照，并仅返回当前可服务的四字段视图。"""
+
+        serviceable_ids = set(
+            await self._health_service.serviceable_capability_ids()
+        )
+        return tuple(
+            _router_projection(entry)
+            for entry in self._entries
+            if entry.status == "active"
+            and entry.manifest is not None
+            and entry.manifest.capability_id in serviceable_ids
+        )
 
     def active_router_projections(self) -> tuple[RouterProjection, ...]:
         """返回忽略健康结果的 active 最小视图，用于区分权限与服务不可用。"""
@@ -510,23 +555,12 @@ async def _load_entry(
             None,
         )
 
-    try:
-        health, diagnostic_code = await _check_initial_health(
-            source,
-            manifest.capability_id,
-            capability,
-        )
-    except asyncio.CancelledError:
-        await cleanup_group.close()
-        raise
     log_business_event(
         logger,
         "Capability初始化完成",
         capability_id=manifest.capability_id,
         source_path=str(source),
         status="active",
-        health_status=health.status,
-        health_summary_code=health.summary_code,
     )
     return (
         CapabilityRegistryEntry(
@@ -534,8 +568,8 @@ async def _load_entry(
             status="active",
             manifest=manifest,
             capability=capability,
-            health=health,
-            diagnostic_code=diagnostic_code,
+            health=None,
+            diagnostic_code=None,
         ),
         cleanup_group,
     )
@@ -620,37 +654,27 @@ async def _close_cleanup_groups(
     return pending_cancellation
 
 
-async def _check_initial_health(
-    source: Path,
-    capability_id: str,
-    capability: Capability,
-) -> tuple[HealthResult, str | None]:
-    """执行启动健康检查，并把异常或协议错误安全收敛为 unhealthy。"""
+def _attach_startup_health(
+    entry: CapabilityRegistryEntry,
+    health_service: CapabilityHealthService,
+) -> CapabilityRegistryEntry:
+    """把启动强检结果保存为静态诊断，不随动态 TTL 刷新修改 Entry。"""
 
-    try:
-        result = await capability.health_check()
-        if not isinstance(result, HealthResult):
-            raise TypeError("Capability health_check 必须返回 HealthResult")
-        return result, None
-    except asyncio.CancelledError:
-        raise
-    except Exception as error:
-        log_business_event(
-            logger,
-            "Capability启动健康检查失败",
-            level=logging.WARNING,
-            capability_id=capability_id,
-            source_path=str(source),
-            error_code="CAPABILITY_HEALTH_CHECK_FAILED",
-            error_type=type(error).__name__,
-        )
-        return (
-            HealthResult(
-                status="unhealthy",
-                summary_code="HEALTH_CHECK_FAILED",
-            ),
-            "CAPABILITY_HEALTH_CHECK_FAILED",
-        )
+    if entry.status != "active" or entry.manifest is None:
+        return entry
+    snapshot = health_service.startup_snapshot(entry.manifest.capability_id)
+    return replace(
+        entry,
+        health=HealthResult(
+            status=snapshot.status,
+            summary_code=snapshot.summary_code,
+        ),
+        diagnostic_code=(
+            "CAPABILITY_HEALTH_CHECK_FAILED"
+            if snapshot.summary_code == "HEALTH_CHECK_FAILED"
+            else None
+        ),
+    )
 
 
 def _entry_without_instance(

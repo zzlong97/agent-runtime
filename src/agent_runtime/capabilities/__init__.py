@@ -10,6 +10,11 @@ from agent_runtime.capabilities.contracts import (
     HealthResult,
 )
 from agent_runtime.capabilities.manifest import ManifestCapabilityId
+from agent_runtime.capabilities.health import (
+    CapabilityHealthService,
+    HealthSnapshot,
+    ServiceabilityDecision,
+)
 from agent_runtime.capabilities.registry import (
     CapabilityRegistry,
     CapabilityRegistryEntry,
@@ -58,6 +63,7 @@ __all__ = [
     "CapabilityBootstrapContext",
     "CapabilityError",
     "CapabilityFactory",
+    "CapabilityHealthService",
     "CapabilityInvocation",
     "CapabilityInvocationService",
     "CapabilityOperation",
@@ -80,9 +86,11 @@ __all__ = [
     "ChildCheckpointStore",
     "ChildThreadIdFactory",
     "HealthResult",
+    "HealthSnapshot",
     "ManifestCapabilityId",
     "RouterProjection",
     "RouterCandidateProvider",
+    "ServiceabilityDecision",
     "StateCompatibilityPolicy",
     "UserCapabilityPermission",
     "UserCapabilityPermissionRepository",

@@ -37,6 +37,9 @@ class FakeRegistry:
     def router_projections(self):
         return self._serviceable
 
+    async def serviceable_router_projections(self):
+        return self._serviceable
+
 
 def test_permission_candidates_require_explicit_true_and_never_auto_authorize() -> None:
     from agent_runtime.capabilities.routing import (
@@ -127,6 +130,41 @@ def test_authorized_but_unserviceable_maps_to_retryable_unavailable() -> None:
 
     assert captured.value.code == "CAPABILITY_UNAVAILABLE"
     assert captured.value.retryable is True
+
+
+def test_router_candidates_use_async_dynamic_health_projection() -> None:
+    from agent_runtime.capabilities.routing import (
+        CapabilityPermissionService,
+        CapabilityUnavailableError,
+        RouterCandidateProvider,
+    )
+
+    projection = _projection("weather_lookup")
+
+    class DynamicRegistry:
+        def active_router_projections(self):
+            return (projection,)
+
+        async def serviceable_router_projections(self):
+            return ()
+
+        def router_projections(self):
+            raise AssertionError("S3-07 Router 不得继续读取启动期同步健康视图")
+
+    provider = RouterCandidateProvider(
+        registry=DynamicRegistry(),
+        permission_service=CapabilityPermissionService(
+            FakePermissionRepository({"weather_lookup": True})
+        ),
+    )
+
+    with pytest.raises(CapabilityUnavailableError):
+        asyncio.run(
+            provider.get_candidates(
+                user_id="runtime-user",
+                rejected_capability_ids=(),
+            )
+        )
 
 
 def test_all_authorized_serviceable_candidates_rejected_returns_empty_for_unsupported() -> None:

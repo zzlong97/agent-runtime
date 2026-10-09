@@ -52,6 +52,9 @@ def test_postgres_permission_change_is_visible_to_invoke_recheck() -> None:
         def router_projections(self):
             return (projection,)
 
+        async def serviceable_router_projections(self):
+            return (projection,)
+
     provider = RouterCandidateProvider(
         registry=TestRegistry(),
         permission_service=service,

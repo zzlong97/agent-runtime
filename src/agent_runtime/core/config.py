@@ -82,6 +82,15 @@ class Settings(BaseSettings):
             "仅强制取消当前进程内对应任务，不承诺回滚已经发生的外部副作用。"
         ),
     )
+    capability_health_ttl_seconds: float = Field(
+        default=30.0,
+        gt=0,
+        allow_inf_nan=False,
+        description=(
+            "Capability 健康快照的全局有效秒数；Stage 3 默认 30 秒，达到过期边界后"
+            "由首个需要服务的请求触发单飞刷新，不用于后台持续探测。"
+        ),
+    )
     runtime_demo_mode: bool = Field(
         default=False,
         description=(

@@ -19,8 +19,8 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 **Stage 3：Capability Runtime**。S3-01 架构文档与任务树已经验收并完成双远程同步，
 S3-02 Manifest Schema 与 Local CapabilitySource、S3-03 Capability 协议、Bootstrap
 与静态 Registry、S3-04 持久化基础设施、S3-05 Invocation、Task Service 与 State
-Scope 均已验收并完成双远程同步；S3-06 权限、动态 Router 候选与公开
-capability_id 已验收通过，完成提交和双远程同步后进入 S3-07。
+Scope、S3-06 权限、动态 Router 候选与公开 capability_id 均已验收并完成双远程同步；
+S3-07 Capability Health 与服务准入已验收通过，完成提交和双远程同步后进入 S3-08。
 具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
@@ -273,22 +273,31 @@ S2.5-11 与 Stage 2.5 整体验收通过：
   拒绝回滚、完整 Invocation durable event 关联字段、三种确定性 State Scope thread_id
   和基于 Task 固化版本的 State Schema 兼容边界；当前保持独立 Runtime 组件，尚未接入
   Parent、Router 或后续权限/健康/并发治理链路
+- S3-06 已验收默认拒绝的用户权限、无缓存权限双检、动态 Router 候选和开放但受约束的
+  公开 `capability_id`，并已同步 GitHub、Gitee
+- S3-07 已验收启动强检、进程内 HealthSnapshot、全局 TTL、过期单飞刷新、degraded
+  准入和单能力异常隔离；完成验收提交和双远程同步后进入 S3-08
 
 ### Stage 3：Capability Runtime
 
-已确认、尚待后续任务逐项实现：
+Stage 3 能力演进范围如下，已完成项和当前门禁以 `docs/tasks.md` 为准：
 
 - Capability Task、Invocation、三种 State Scope 和 State Schema 兼容
 - 仅 `invocation + none` Capability 可使用的安全 Regenerate 门禁
-- HealthSnapshot、进程内并发、两阶段超时取消
+- HealthSnapshot 已实现；进程内并发和两阶段超时取消留待后续任务
 - automatic/manual Recovery Policy 和 Operation Ledger
-- 默认拒绝的用户级 Capability 权限与动态 Router 候选
+- 默认拒绝的用户级 Capability 权限与动态 Router 候选已实现
 - 开放但受约束的公开 `capability_id`
 - `general_chat` / `en_to_zh` 作为非生产测试 Capability 的标准迁移
 - Session 删除覆盖 Task、Operation 和动态 Child Checkpoint
 
 S3 不实现热加载、mount/unmount、DRAINING、Remote Capability、多实例 Registry、
 Workflow、多 Agent、RBAC、State 自动迁移、Saga、Worker Lease、管理平台或文件/RAG。
+
+Capability 健康快照默认有效 30 秒，可通过 `.env` 的
+`CAPABILITY_HEALTH_TTL_SECONDS` 设置有限正数秒值。应用启动时对每个已实例化能力
+强检一次；TTL 内复用快照，到达过期边界后由首个需要服务的请求触发单飞刷新。
+健康详情只进入内部中文业务日志，不会传给 Router、SSE 或客户端。
 
 ### Future：候选方向，不构成阶段承诺
 
@@ -521,7 +530,7 @@ npm run test:e2e
 
 当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
 
-S3-06 已通过 Reviewer 与负责人验收；提交并同步 GitHub/Gitee 后方可开始 S3-07；
+S3-07 已通过 Reviewer 与负责人验收；提交并同步 GitHub/Gitee 后方可开始 S3-08；
 任何 S3 任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、

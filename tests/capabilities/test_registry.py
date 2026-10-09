@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -38,7 +39,7 @@ class FakeCapability:
     def __init__(
         self,
         *,
-        health: HealthResult | Exception | object | None = None,
+        health: HealthResult | BaseException | object | None = None,
         initialize_error: Exception | None = None,
     ) -> None:
         self.health = health or HealthResult(
@@ -56,7 +57,7 @@ class FakeCapability:
 
     async def health_check(self) -> HealthResult:
         self.health_calls += 1
-        if isinstance(self.health, Exception):
+        if isinstance(self.health, BaseException):
             raise self.health
         return self.health  # type: ignore[return-value]
 
@@ -69,6 +70,7 @@ def _raw_manifest(
     *,
     entrypoint: str,
     enabled: bool = True,
+    allow_degraded: bool = False,
 ) -> dict[str, Any]:
     return {
         "manifest_schema_version": 1,
@@ -81,7 +83,7 @@ def _raw_manifest(
         "state_scope": "invocation",
         "state_schema_version": "1",
         "compatible_state_schema_versions": [],
-        "allow_degraded": False,
+        "allow_degraded": allow_degraded,
         "concurrency": {
             "mode": "unlimited",
             "max_concurrency": None,
@@ -124,12 +126,16 @@ async def _build_registry(
     documents: list[CapabilityManifestDocument],
     *,
     capability_configs: Mapping[str, Mapping[str, object]] | None = None,
+    health_ttl_seconds: float = 30.0,
+    health_clock=None,
 ) -> CapabilityRegistry:
     return await CapabilityRegistry.build(
         FakeSource(documents),
         child_checkpointer_factory=lambda manifest: object(),
         model_factory=object(),
         capability_configs=capability_configs,
+        health_ttl_seconds=health_ttl_seconds,
+        health_clock=health_clock,
     )
 
 
@@ -175,6 +181,235 @@ def test_registry_builds_active_entry_and_minimal_router_projection(
         "enabled": True,
     }
     asyncio.run(registry.close())
+
+
+def test_registry_dynamic_projection_refreshes_expired_health_without_mutating_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_time = datetime(2026, 10, 9, 9, 0, tzinfo=UTC)
+    capability = FakeCapability()
+
+    def clock() -> datetime:
+        return current_time
+
+    def create_capability(
+        bootstrap_context: CapabilityBootstrapContext,
+    ) -> FakeCapability:
+        return capability
+
+    entrypoint = _install_factory_module(
+        monkeypatch,
+        "tests.fake_registry_dynamic_health",
+        create_capability,
+    )
+
+    async def scenario() -> None:
+        nonlocal current_time
+        registry = await _build_registry(
+            [
+                _document(
+                    "dynamic/manifest.yaml",
+                    _raw_manifest("dynamic_cap", entrypoint=entrypoint),
+                )
+            ],
+            health_ttl_seconds=5,
+            health_clock=clock,
+        )
+        entry = registry.get("dynamic_cap")
+        assert entry is not None
+        assert entry.health == HealthResult(status="healthy", summary_code="READY")
+        assert capability.health_calls == 1
+        assert [
+            item.capability_id
+            for item in await registry.serviceable_router_projections()
+        ] == ["dynamic_cap"]
+        assert capability.health_calls == 1
+
+        capability.health = HealthResult(
+            status="unhealthy",
+            summary_code="DEPENDENCY_DOWN",
+        )
+        current_time += timedelta(seconds=5)
+
+        assert await registry.serviceable_router_projections() == ()
+        assert capability.health_calls == 2
+        assert registry.get("dynamic_cap") is entry
+        assert entry.health == HealthResult(status="healthy", summary_code="READY")
+        await registry.close()
+
+    asyncio.run(scenario())
+
+
+def test_registry_router_integration_applies_complete_health_admission_matrix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from agent_runtime.capabilities.routing import (
+        CapabilityPermissionService,
+        RouterCandidateProvider,
+    )
+
+    capabilities = {
+        "healthy_cap": FakeCapability(
+            health=HealthResult(status="healthy", summary_code="READY")
+        ),
+        "degraded_allowed": FakeCapability(
+            health=HealthResult(status="degraded", summary_code="PARTIAL_READY")
+        ),
+        "degraded_denied": FakeCapability(
+            health=HealthResult(status="degraded", summary_code="PARTIAL_READY")
+        ),
+        "unhealthy_cap": FakeCapability(
+            health=HealthResult(status="unhealthy", summary_code="DEPENDENCY_DOWN")
+        ),
+    }
+
+    documents = []
+    for capability_id, capability in capabilities.items():
+        def factory_for(instance: FakeCapability):
+            def create_capability(
+                bootstrap_context: CapabilityBootstrapContext,
+            ) -> FakeCapability:
+                return instance
+
+            return create_capability
+
+        entrypoint = _install_factory_module(
+            monkeypatch,
+            f"tests.fake_health_matrix_{capability_id}",
+            factory_for(capability),
+        )
+        manifest = _raw_manifest(
+            capability_id,
+            entrypoint=entrypoint,
+            allow_degraded=capability_id == "degraded_allowed",
+        )
+        documents.append(_document(f"{capability_id}/manifest.yaml", manifest))
+
+    class AllowAllPermissions:
+        async def get_allowed(self, *, user_id: str, capability_id: str):
+            return True
+
+    async def scenario() -> None:
+        registry = await _build_registry(documents)
+        provider = RouterCandidateProvider(
+            registry=registry,
+            permission_service=CapabilityPermissionService(
+                AllowAllPermissions()
+            ),
+        )
+        candidates = await provider.get_candidates(
+            user_id="runtime-user",
+            rejected_capability_ids=(),
+        )
+
+        assert [item.capability_id for item in candidates] == [
+            "degraded_allowed",
+            "healthy_cap",
+        ]
+        assert all(
+            set(item.model_dump())
+            == {"capability_id", "name", "description", "enabled"}
+            for item in candidates
+        )
+        assert all(capability.health_calls == 1 for capability in capabilities.values())
+        await registry.close()
+
+    asyncio.run(scenario())
+
+
+def test_registry_health_refresh_failure_only_removes_failed_capability(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    current_time = datetime(2026, 10, 9, 10, 0, tzinfo=UTC)
+    failed = FakeCapability()
+    healthy = FakeCapability()
+
+    def clock() -> datetime:
+        return current_time
+
+    documents = []
+    for capability_id, capability in (
+        ("failed_cap", failed),
+        ("healthy_cap", healthy),
+    ):
+        def factory_for(instance: FakeCapability):
+            def create_capability(
+                bootstrap_context: CapabilityBootstrapContext,
+            ) -> FakeCapability:
+                return instance
+
+            return create_capability
+
+        entrypoint = _install_factory_module(
+            monkeypatch,
+            f"tests.fake_health_isolation_{capability_id}",
+            factory_for(capability),
+        )
+        documents.append(
+            _document(
+                f"{capability_id}/manifest.yaml",
+                _raw_manifest(capability_id, entrypoint=entrypoint),
+            )
+        )
+
+    async def scenario() -> None:
+        nonlocal current_time
+        registry = await _build_registry(
+            documents,
+            health_ttl_seconds=1,
+            health_clock=clock,
+        )
+        failed.health = RuntimeError("secret-health-detail")
+        current_time += timedelta(seconds=1)
+
+        projections = await registry.serviceable_router_projections()
+
+        assert [item.capability_id for item in projections] == ["healthy_cap"]
+        assert failed.health_calls == 2
+        assert healthy.health_calls == 2
+        await registry.close()
+
+    with caplog.at_level("INFO"):
+        asyncio.run(scenario())
+
+    assert "secret-health-detail" not in caplog.text
+
+
+def test_registry_startup_health_cancellation_cleans_initialized_resources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cleanup_calls = 0
+
+    def create_capability(
+        bootstrap_context: CapabilityBootstrapContext,
+    ) -> FakeCapability:
+        async def cleanup() -> None:
+            nonlocal cleanup_calls
+            cleanup_calls += 1
+
+        bootstrap_context.register_cleanup(cleanup)
+        return FakeCapability(health=asyncio.CancelledError())
+
+    entrypoint = _install_factory_module(
+        monkeypatch,
+        "tests.fake_health_cancelled",
+        create_capability,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            _build_registry(
+                [
+                    _document(
+                        "cancelled/manifest.yaml",
+                        _raw_manifest("cancelled_cap", entrypoint=entrypoint),
+                    )
+                ]
+            )
+        )
+
+    assert cleanup_calls == 1
 
 
 def test_registry_isolates_invalid_duplicates_disabled_and_import_failure(
