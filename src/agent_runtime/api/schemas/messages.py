@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agent_runtime.capabilities.manifest import ManifestCapabilityId
+
 
 class MessageHistoryQuery(BaseModel):
     """历史消息的 before 分页查询参数。"""
@@ -58,9 +60,9 @@ class ProductMessageResponse(BaseModel):
             "completed 返回。"
         )
     )
-    capability_id: Literal["general_chat", "en_to_zh"] | None = Field(
+    capability_id: ManifestCapabilityId | None = Field(
         description=(
-            "生成 AIMessage 的能力标识，只允许 general_chat、en_to_zh 或 null；"
+            "生成 AIMessage 的稳定能力标识；非空值必须符合 Manifest ID 规则，"
             "HumanMessage 及缺少该元数据的旧消息为 null。"
         )
     )

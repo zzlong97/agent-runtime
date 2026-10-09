@@ -6,6 +6,10 @@ from uuid import UUID
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
+from agent_runtime.capabilities.manifest import (
+    ManifestCapabilityId,
+    validate_capability_id,
+)
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.feedback import PostgresFeedbackStore
@@ -22,7 +26,7 @@ type MessageRuntimeStatus = Literal[
     "incomplete",
     "stopped",
 ]
-type MessageCapabilityId = Literal["general_chat", "en_to_zh"]
+type MessageCapabilityId = ManifestCapabilityId
 type MessageFeedback = Literal["like", "dislike"]
 
 _RUNTIME_STATUSES = {
@@ -31,7 +35,6 @@ _RUNTIME_STATUSES = {
     "incomplete",
     "stopped",
 }
-_CAPABILITY_IDS = {"general_chat", "en_to_zh"}
 
 
 class MessageHistoryError(ApplicationError):
@@ -227,11 +230,14 @@ class MessageHistoryAdapter:
                 message="Parent 公共消息包含非法运行状态",
             )
         capability_id = message.additional_kwargs.get("capability_id")
-        if capability_id is not None and capability_id not in _CAPABILITY_IDS:
-            raise MessageHistoryError(
-                code="MESSAGE_HISTORY_INVALID",
-                message="Parent 公共消息包含非法能力标识",
-            )
+        if capability_id is not None:
+            try:
+                capability_id = validate_capability_id(capability_id)
+            except (TypeError, ValueError) as error:
+                raise MessageHistoryError(
+                    code="MESSAGE_HISTORY_INVALID",
+                    message="Parent 公共消息包含非法能力标识",
+                ) from error
         return ProductMessage(
             message_id=message_id,
             role="assistant",

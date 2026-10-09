@@ -132,7 +132,7 @@ def test_checkpoint_inspector_projects_stable_final_message() -> None:
                     id=str(run.response_message_id),
                     additional_kwargs={
                         "runtime_status": "completed",
-                        "capability_id": "general_chat",
+                        "capability_id": "weather_lookup",
                     },
                 )
             ]
@@ -143,7 +143,7 @@ def test_checkpoint_inspector_projects_stable_final_message() -> None:
 
     assert recovered is not None
     assert recovered.runtime_status == "completed"
-    assert recovered.capability_id == "general_chat"
+    assert recovered.capability_id == "weather_lookup"
 
 
 def test_checkpoint_recovery_rejects_unknown_side_effect_capability() -> None:

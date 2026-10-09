@@ -25,12 +25,13 @@ def test_message_history_schemas_use_closed_values_and_reject_extra_fields() -> 
             "role": "assistant",
             "content": "回复",
             "runtime_status": "completed",
-            "capability_id": "general_chat",
+            "capability_id": "weather_lookup",
             "feedback": None,
         }
     )
 
     assert item.role == "assistant"
+    assert item.capability_id == "weather_lookup"
     with pytest.raises(ValidationError):
         ProductMessageResponse.model_validate(
             {**item.model_dump(), "checkpoint_id": "internal"}
@@ -72,7 +73,7 @@ def test_message_history_schemas_describe_every_parameter_in_chinese() -> None:
                 "completed 返回。"
             ),
             "capability_id": (
-                "生成 AIMessage 的能力标识，只允许 general_chat、en_to_zh 或 null；"
+                "生成 AIMessage 的稳定能力标识；非空值必须符合 Manifest ID 规则，"
                 "HumanMessage 及缺少该元数据的旧消息为 null。"
             ),
             "feedback": (

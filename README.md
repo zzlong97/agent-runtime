@@ -18,8 +18,9 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 **Stage 2.5：持久化 Run 与可恢复 Runtime**。当前进入
 **Stage 3：Capability Runtime**。S3-01 架构文档与任务树已经验收并完成双远程同步，
 S3-02 Manifest Schema 与 Local CapabilitySource、S3-03 Capability 协议、Bootstrap
-与静态 Registry、S3-04 持久化基础设施均已验收；S3-05 Invocation、Task Service
-与 State Scope 已通过审核，提交并同步双远程后进入 S3-06。
+与静态 Registry、S3-04 持久化基础设施、S3-05 Invocation、Task Service 与 State
+Scope 均已验收并完成双远程同步；S3-06 权限、动态 Router 候选与公开
+capability_id 已验收通过，完成提交和双远程同步后进入 S3-07。
 具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
@@ -520,7 +521,7 @@ npm run test:e2e
 
 当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
 
-S3-05 未经 Reviewer 与负责人验收、提交并同步 GitHub/Gitee 前，不允许开始 S3-06；
+S3-06 已通过 Reviewer 与负责人验收；提交并同步 GitHub/Gitee 后方可开始 S3-07；
 任何 S3 任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、

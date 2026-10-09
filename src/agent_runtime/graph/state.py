@@ -11,5 +11,6 @@ class ParentState(TypedDict):
 
     messages: Annotated[list[AnyMessage], add_messages]
     resolved_capability_id: str | None
+    task_action: NotRequired[Literal["continue", "new"] | None]
     rejected_capability_ids: list[str]
     completion_status: NotRequired[Literal["completed", "unsupported"] | None]

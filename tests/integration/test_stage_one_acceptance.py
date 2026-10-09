@@ -166,7 +166,11 @@ class StageOneAcceptanceFakeModel(BaseChatModel):
         self._route_calls.append((content, candidates, capability_id))
         return self._tool_result(
             "RouterDecision",
-            {"capability_id": capability_id, "confidence": 0.99},
+            {
+                "capability_id": capability_id,
+                "task_action": "continue",
+                "confidence": 0.99,
+            },
         )
 
     def _generate(

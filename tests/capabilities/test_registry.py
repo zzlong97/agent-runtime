@@ -423,6 +423,9 @@ def test_registry_isolates_factory_protocol_initialize_and_health_failures(
     assert [item.capability_id for item in registry.router_projections()] == [
         "e_healthy"
     ]
+    assert [
+        item.capability_id for item in registry.active_router_projections()
+    ] == ["d_health_failed", "e_healthy"]
     asyncio.run(registry.close())
 
 

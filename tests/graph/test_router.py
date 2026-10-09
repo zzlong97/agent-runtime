@@ -55,15 +55,23 @@ def test_router_decision_schema_describes_and_validates_every_field() -> None:
 
     schema = RouterDecision.model_json_schema()
 
-    assert set(schema["properties"]) == {"capability_id", "confidence"}
+    assert set(schema["properties"]) == {
+        "capability_id",
+        "task_action",
+        "confidence",
+    }
     assert schema["additionalProperties"] is False
     assert schema["properties"]["capability_id"]["description"] == (
-        "路由器从本轮候选列表中选出的唯一能力标识；Stage 1 仅允许 "
-        "general_chat 或 en_to_zh。"
+        "路由器从本轮动态候选列表中选出的唯一能力标识；必须符合 Manifest ID "
+        "规则，且不得返回候选列表之外的值。"
+    )
+    assert schema["properties"]["task_action"]["description"] == (
+        "本轮希望使用的 Capability Task 动作；continue 表示继续当前 Task，new 表示"
+        "创建新 Task，Router 不得直接选择或修改 task_id。"
     )
     assert schema["properties"]["confidence"]["description"] == (
         "路由器对 capability_id 选择结果的置信度，取值范围为 0.0 至 1.0；"
-        "Stage 1 仅记录和校验该值，不触发中断或人工确认。"
+        "Stage 3 仅记录和校验该值，不触发中断或人工确认。"
     )
     assert schema["properties"]["confidence"]["minimum"] == 0.0
     assert schema["properties"]["confidence"]["maximum"] == 1.0
@@ -73,16 +81,30 @@ def test_router_decision_rejects_missing_or_extra_fields() -> None:
     from agent_runtime.graph.router import RouterDecision
 
     try:
-        RouterDecision.model_validate({"capability_id": "general_chat"})
+        RouterDecision.model_validate(
+            {
+                "capability_id": "general_chat",
+                "task_action": "continue",
+            }
+        )
     except ValidationError:
         pass
     else:
         raise AssertionError("缺少 confidence 时应拒绝 Router 输出")
 
+    with pytest.raises(ValidationError):
+        RouterDecision.model_validate(
+            {
+                "capability_id": "general_chat",
+                "confidence": 0.8,
+            }
+        )
+
     try:
         RouterDecision.model_validate(
             {
                 "capability_id": "general_chat",
+                "task_action": "continue",
                 "confidence": 0.8,
                 "candidates": [],
             }
@@ -97,7 +119,11 @@ def test_router_routes_ordinary_chat_to_general_chat() -> None:
     from agent_runtime.graph.router import ROUTER_SYSTEM_PROMPT, StageOneRouter
 
     model = FakeStructuredChatModel(
-        response={"capability_id": "general_chat", "confidence": 0.9}
+        response={
+            "capability_id": "general_chat",
+            "task_action": "continue",
+            "confidence": 0.9,
+        }
     )
     router = StageOneRouter(model)
 
@@ -112,7 +138,10 @@ def test_router_routes_ordinary_chat_to_general_chat() -> None:
         )
     )
 
-    assert result == {"resolved_capability_id": "general_chat"}
+    assert result == {
+        "resolved_capability_id": "general_chat",
+        "task_action": "continue",
+    }
     assert "只负责选择能力，不回答用户问题" in ROUTER_SYSTEM_PROMPT
     assert "本轮候选能力" in str(model.captured_messages[-1][-1].content)
     assert "介绍一下 LangGraph" in str(model.captured_messages[-1][-1].content)
@@ -123,7 +152,11 @@ def test_router_logs_decision_without_user_content(caplog) -> None:
 
     router = StageOneRouter(
         FakeStructuredChatModel(
-            response={"capability_id": "general_chat", "confidence": 0.88}
+            response={
+                "capability_id": "general_chat",
+                "task_action": "continue",
+                "confidence": 0.88,
+            }
         )
     )
 
@@ -162,7 +195,11 @@ def test_router_routes_explicit_english_to_chinese_request() -> None:
 
     router = StageOneRouter(
         FakeStructuredChatModel(
-            response={"capability_id": "en_to_zh", "confidence": 0.97}
+            response={
+                "capability_id": "en_to_zh",
+                "task_action": "new",
+                "confidence": 0.97,
+            }
         )
     )
 
@@ -179,7 +216,10 @@ def test_router_routes_explicit_english_to_chinese_request() -> None:
         )
     )
 
-    assert result == {"resolved_capability_id": "en_to_zh"}
+    assert result == {
+        "resolved_capability_id": "en_to_zh",
+        "task_action": "new",
+    }
 
 
 def test_router_does_not_interrupt_on_low_confidence() -> None:
@@ -187,7 +227,11 @@ def test_router_does_not_interrupt_on_low_confidence() -> None:
 
     router = StageOneRouter(
         FakeStructuredChatModel(
-            response={"capability_id": "general_chat", "confidence": 0.01}
+            response={
+                "capability_id": "general_chat",
+                "task_action": "continue",
+                "confidence": 0.01,
+            }
         )
     )
 
@@ -202,14 +246,21 @@ def test_router_does_not_interrupt_on_low_confidence() -> None:
         )
     )
 
-    assert result == {"resolved_capability_id": "general_chat"}
+    assert result == {
+        "resolved_capability_id": "general_chat",
+        "task_action": "continue",
+    }
 
 
 def test_router_excludes_rejected_capability_from_model_candidates() -> None:
     from agent_runtime.graph.router import StageOneRouter
 
     model = FakeStructuredChatModel(
-        response={"capability_id": "en_to_zh", "confidence": 0.95}
+        response={
+            "capability_id": "en_to_zh",
+            "task_action": "continue",
+            "confidence": 0.95,
+        }
     )
     router = StageOneRouter(model)
 
@@ -227,9 +278,74 @@ def test_router_excludes_rejected_capability_from_model_candidates() -> None:
     )
 
     prompt = str(model.captured_messages[-1][-1].content)
-    assert result == {"resolved_capability_id": "en_to_zh"}
+    assert result == {
+        "resolved_capability_id": "en_to_zh",
+        "task_action": "continue",
+    }
     assert "- en_to_zh:" in prompt
     assert "general_chat" not in prompt
+
+
+def test_router_uses_permission_filtered_registry_projection_with_third_id() -> None:
+    from agent_runtime.capabilities.registry import RouterProjection
+    from agent_runtime.graph.router import StageOneRouter
+
+    class FakeCandidateProvider:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def get_candidates(
+            self,
+            *,
+            user_id: str,
+            rejected_capability_ids,
+        ):
+            self.calls.append((user_id, tuple(rejected_capability_ids)))
+            return (
+                RouterProjection(
+                    capability_id="weather_lookup",
+                    name="天气查询",
+                    description="查询公开天气信息。",
+                    enabled=True,
+                ),
+            )
+
+    model = FakeStructuredChatModel(
+        response={
+            "capability_id": "weather_lookup",
+            "task_action": "new",
+            "confidence": 0.93,
+        }
+    )
+    provider = FakeCandidateProvider()
+    router = StageOneRouter(
+        model,
+        candidate_provider=provider,
+        user_id="runtime-user",
+    )
+
+    result = asyncio.run(
+        router.route(
+            {
+                "messages": [HumanMessage(content="上海天气如何")],
+                "resolved_capability_id": None,
+                "rejected_capability_ids": ["general_chat"],
+                "task_action": None,
+            },
+            {},
+        )
+    )
+
+    prompt = str(model.captured_messages[-1][-1].content)
+    assert result == {
+        "resolved_capability_id": "weather_lookup",
+        "task_action": "new",
+    }
+    assert provider.calls == [("runtime-user", ("general_chat",))]
+    assert "weather_lookup" in prompt
+    assert "天气查询" in prompt
+    assert "查询公开天气信息" in prompt
+    assert "entrypoint" not in prompt
 
 
 def test_router_rejects_model_choice_outside_current_candidates() -> None:
@@ -237,7 +353,11 @@ def test_router_rejects_model_choice_outside_current_candidates() -> None:
 
     router = StageOneRouter(
         FakeStructuredChatModel(
-            response={"capability_id": "general_chat", "confidence": 0.99}
+            response={
+                "capability_id": "general_chat",
+                "task_action": "continue",
+                "confidence": 0.99,
+            }
         )
     )
 
@@ -288,7 +408,11 @@ def test_router_model_failure_is_runtime_error_not_out_of_scope() -> None:
 
     router = StageOneRouter(
         FakeStructuredChatModel(
-            response={"capability_id": "general_chat", "confidence": 0.8},
+            response={
+                "capability_id": "general_chat",
+                "task_action": "continue",
+                "confidence": 0.8,
+            },
             failure_message="provider unavailable",
         )
     )
@@ -315,7 +439,11 @@ def test_router_rejects_request_when_no_candidate_remains() -> None:
     from agent_runtime.graph.router import RouterError, StageOneRouter
 
     model = FakeStructuredChatModel(
-        response={"capability_id": "general_chat", "confidence": 0.8}
+        response={
+            "capability_id": "general_chat",
+            "task_action": "continue",
+            "confidence": 0.8,
+        }
     )
     router = StageOneRouter(model)
 
@@ -336,11 +464,137 @@ def test_router_rejects_request_when_no_candidate_remains() -> None:
     assert model.captured_messages == []
 
 
+def test_dynamic_router_reports_all_rejected_as_non_error_control_result() -> None:
+    from agent_runtime.graph.router import StageOneRouter
+
+    class EmptyCandidateProvider:
+        async def get_candidates(
+            self,
+            *,
+            user_id: str,
+            rejected_capability_ids,
+        ):
+            assert user_id == "runtime-user"
+            assert tuple(rejected_capability_ids) == ("general_chat",)
+            return ()
+
+    model = FakeStructuredChatModel(
+        response={
+            "capability_id": "general_chat",
+            "task_action": "continue",
+            "confidence": 0.8,
+        }
+    )
+    router = StageOneRouter(
+        model,
+        candidate_provider=EmptyCandidateProvider(),
+        user_id="runtime-user",
+    )
+
+    result = asyncio.run(
+        router.route(
+            {
+                "messages": [HumanMessage(content="继续")],
+                "resolved_capability_id": None,
+                "rejected_capability_ids": ["general_chat"],
+            },
+            {},
+        )
+    )
+
+    assert result == {
+        "resolved_capability_id": None,
+        "task_action": None,
+    }
+    assert model.captured_messages == []
+
+
+def test_dynamic_provider_router_parent_all_out_of_scope_becomes_unsupported() -> None:
+    from agent_runtime.capabilities.registry import RouterProjection
+    from agent_runtime.capabilities.routing import (
+        CapabilityPermissionService,
+        RouterCandidateProvider,
+    )
+    from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
+    from agent_runtime.graph.parent import UNSUPPORTED_REPLY, build_parent_graph
+    from agent_runtime.graph.router import StageOneRouter
+
+    projection = RouterProjection(
+        capability_id="general_chat",
+        name="普通聊天",
+        description="处理普通聊天请求。",
+        enabled=True,
+    )
+
+    class Registry:
+        def active_router_projections(self):
+            return (projection,)
+
+        def router_projections(self):
+            return (projection,)
+
+    class PermissionRepository:
+        async def get_allowed(self, *, user_id: str, capability_id: str):
+            return True
+
+    provider = RouterCandidateProvider(
+        registry=Registry(),
+        permission_service=CapabilityPermissionService(PermissionRepository()),
+    )
+    model = FakeStructuredChatModel(
+        response={
+            "capability_id": "general_chat",
+            "task_action": "new",
+            "confidence": 0.95,
+        }
+    )
+    router = StageOneRouter(
+        model,
+        candidate_provider=provider,
+        user_id="runtime-user",
+    )
+    invocation_calls = 0
+
+    async def invoke_capability(state, config):
+        nonlocal invocation_calls
+        invocation_calls += 1
+        return CapabilityInvocation(
+            result=ChildResult(
+                status="rejected",
+                control_signal="OUT_OF_SCOPE",
+            ),
+            message=None,
+        )
+
+    parent = build_parent_graph(
+        route=router.route,
+        invoke_capability=invoke_capability,
+    )
+    result = asyncio.run(
+        parent.ainvoke(
+            {
+                "messages": [HumanMessage(content="超出能力范围的请求")],
+                "resolved_capability_id": None,
+                "rejected_capability_ids": [],
+            }
+        )
+    )
+
+    assert invocation_calls == 1
+    assert len(model.captured_messages) == 1
+    assert result["completion_status"] == "unsupported"
+    assert result["messages"][-1].content == UNSUPPORTED_REPLY
+
+
 def test_router_rejects_parent_state_without_human_message() -> None:
     from agent_runtime.graph.router import RouterError, StageOneRouter
 
     model = FakeStructuredChatModel(
-        response={"capability_id": "general_chat", "confidence": 0.8}
+        response={
+            "capability_id": "general_chat",
+            "task_action": "continue",
+            "confidence": 0.8,
+        }
     )
     router = StageOneRouter(model)
 
@@ -366,15 +620,21 @@ def test_router_is_usable_as_parent_graph_route_node() -> None:
     from agent_runtime.graph.parent import build_parent_graph
     from agent_runtime.graph.router import StageOneRouter
 
-    invoked_capabilities: list[str | None] = []
+    invoked_capabilities: list[tuple[str | None, str | None]] = []
     router = StageOneRouter(
         FakeStructuredChatModel(
-            response={"capability_id": "en_to_zh", "confidence": 0.92}
+            response={
+                "capability_id": "en_to_zh",
+                "task_action": "continue",
+                "confidence": 0.92,
+            }
         )
     )
 
     async def invoke_capability(state, config):
-        invoked_capabilities.append(state["resolved_capability_id"])
+        invoked_capabilities.append(
+            (state["resolved_capability_id"], state.get("task_action"))
+        )
         return CapabilityInvocation(
             result=ChildResult(status="completed", control_signal=None),
             message=AIMessage(content="你好", id="router-parent-message"),
@@ -395,4 +655,4 @@ def test_router_is_usable_as_parent_graph_route_node() -> None:
         )
     )
 
-    assert invoked_capabilities == ["en_to_zh"]
+    assert invoked_capabilities == [("en_to_zh", "continue")]

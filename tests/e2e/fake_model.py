@@ -116,7 +116,11 @@ class StageTwoBrowserFakeModel(BaseChatModel):
                 capability_id = "general_chat"
             return self._tool_result(
                 "RouterDecision",
-                {"capability_id": capability_id, "confidence": 0.99},
+                {
+                    "capability_id": capability_id,
+                    "task_action": "continue",
+                    "confidence": 0.99,
+                },
             )
         if "general_chat 的能力边界" in system_content:
             return self._tool_result(

@@ -5,7 +5,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-type CapabilityId = Literal["general_chat", "en_to_zh"]
+from agent_runtime.capabilities.manifest import ManifestCapabilityId
+
+type CapabilityId = ManifestCapabilityId
 
 
 class ChatMessageRequest(BaseModel):
@@ -67,10 +69,10 @@ class MessageEventData(BaseModel):
     message_id: UUID = Field(
         description="本轮 AIMessage 的服务端稳定 UUID；同一回复的所有 delta 相同。"
     )
-    capability_id: CapabilityId | None = Field(
+    capability_id: ManifestCapabilityId | None = Field(
         description=(
-            "生成本次增量的能力标识；Stage 2 只允许 general_chat、"
-            "en_to_zh 或尚未确定能力时的 null。"
+            "生成本次增量的稳定能力标识；非空值必须符合 Manifest ID 规则，"
+            "尚未确定或未采用能力时允许为 null。"
         )
     )
     delta: str = Field(
@@ -112,10 +114,10 @@ class DoneEventData(BaseModel):
             "本轮 AIMessage 的服务端稳定 UUID；与同一回复的 message 事件一致。"
         )
     )
-    capability_id: CapabilityId | None = Field(
+    capability_id: ManifestCapabilityId | None = Field(
         description=(
-            "本轮最终采用的能力标识；Stage 2 只允许 general_chat、"
-            "en_to_zh 或未采用能力时的 null。"
+            "本轮最终采用的稳定能力标识；非空值必须符合 Manifest ID 规则，"
+            "未采用能力时允许为 null。"
         )
     )
     status: Literal["completed", "unsupported", "stopped", "failed"] = Field(

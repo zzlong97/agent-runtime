@@ -24,6 +24,7 @@ from agent_runtime.capabilities.contracts import (
 )
 from agent_runtime.capabilities.manifest import (
     CapabilityManifest,
+    ManifestCapabilityId,
     validate_capability_id,
 )
 from agent_runtime.capabilities.source import (
@@ -50,7 +51,7 @@ class RouterProjection(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    capability_id: StrictStr = Field(
+    capability_id: ManifestCapabilityId = Field(
         description=(
             "符合 Manifest ID 规则的稳定 Capability 标识；Router 只能返回该标识，"
             "不得读取 entrypoint、运行策略或私有 State。"
@@ -334,6 +335,15 @@ class CapabilityRegistry:
                 )
             )
         return tuple(projections)
+
+    def active_router_projections(self) -> tuple[RouterProjection, ...]:
+        """返回忽略健康结果的 active 最小视图，用于区分权限与服务不可用。"""
+
+        return tuple(
+            _router_projection(entry)
+            for entry in self._entries
+            if entry.status == "active" and entry.manifest is not None
+        )
 
     async def close(self) -> None:
         """仅执行一次 Registry 关机，并按 Capability 初始化逆序清理资源。"""
@@ -675,6 +685,18 @@ def _is_serviceable(entry: CapabilityRegistryEntry) -> bool:
         return True
     return (
         entry.health.status == "degraded" and entry.manifest.allow_degraded
+    )
+
+
+def _router_projection(entry: CapabilityRegistryEntry) -> RouterProjection:
+    """从已验证的 active Entry 构造不含运行细节的 Router 最小投影。"""
+
+    assert entry.manifest is not None
+    return RouterProjection(
+        capability_id=entry.manifest.capability_id,
+        name=entry.manifest.name,
+        description=entry.manifest.description,
+        enabled=entry.manifest.enabled,
     )
 
 

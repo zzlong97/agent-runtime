@@ -68,8 +68,8 @@ def test_chat_and_sse_schemas_describe_every_field() -> None:
             "session_id": "本轮对话所属的稳定 Session UUID。",
             "message_id": "本轮 AIMessage 的服务端稳定 UUID；同一回复的所有 delta 相同。",
             "capability_id": (
-                "生成本次增量的能力标识；Stage 2 只允许 general_chat、"
-                "en_to_zh 或尚未确定能力时的 null。"
+                "生成本次增量的稳定能力标识；非空值必须符合 Manifest ID 规则，"
+                "尚未确定或未采用能力时允许为 null。"
             ),
             "delta": "本次 SSE message 事件携带的增量文本，不包含内部图事件。",
         },
@@ -85,8 +85,8 @@ def test_chat_and_sse_schemas_describe_every_field() -> None:
                 "本轮 AIMessage 的服务端稳定 UUID；与同一回复的 message 事件一致。"
             ),
             "capability_id": (
-                "本轮最终采用的能力标识；Stage 2 只允许 general_chat、"
-                "en_to_zh 或未采用能力时的 null。"
+                "本轮最终采用的稳定能力标识；非空值必须符合 Manifest ID 规则，"
+                "未采用能力时允许为 null。"
             ),
             "status": (
                 "本轮最终状态；Stage 2 只允许 completed、unsupported、stopped 或 failed。"
@@ -126,3 +126,30 @@ def test_done_event_accepts_stopped_and_rejects_status_outside_stage_two_protoco
                 "status": "interrupted",
             }
         )
+
+
+def test_public_sse_capability_id_accepts_manifest_id_and_rejects_invalid_value() -> None:
+    from agent_runtime.api.schemas.chat import DoneEventData, MessageEventData
+
+    common = {
+        "session_id": "00000000-0000-0000-0000-000000000001",
+        "message_id": "00000000-0000-0000-0000-000000000002",
+        "capability_id": "weather_lookup",
+    }
+    message = MessageEventData.model_validate({**common, "delta": "晴"})
+    done = DoneEventData.model_validate({**common, "status": "completed"})
+
+    assert message.capability_id == "weather_lookup"
+    assert done.capability_id == "weather_lookup"
+    assert message.model_dump(mode="json")["capability_id"] == "weather_lookup"
+
+    normalized = DoneEventData.model_validate(
+        {**common, "capability_id": " weather_lookup ", "status": "completed"}
+    )
+    assert normalized.capability_id == "weather_lookup"
+
+    for invalid in ("Weather", "has-dash", "1cap", "a" * 65):
+        with pytest.raises(ValidationError):
+            DoneEventData.model_validate(
+                {**common, "capability_id": invalid, "status": "completed"}
+            )

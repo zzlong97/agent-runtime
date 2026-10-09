@@ -25,6 +25,7 @@ from agent_runtime.capabilities.en_to_zh.adapter import EnglishToChineseAdapter
 from agent_runtime.capabilities.en_to_zh.graph import EnglishToChineseCapability
 from agent_runtime.capabilities.general_chat.adapter import GeneralChatAdapter
 from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
+from agent_runtime.capabilities.manifest import validate_capability_id
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
@@ -2784,11 +2785,14 @@ class ChatService:
         *,
         fallback: CapabilityId | None,
     ) -> CapabilityId | None:
-        """从公共消息元数据读取 Stage 2 允许的能力标识。"""
+        """从公共消息元数据读取并校验动态 Manifest 能力标识。"""
 
         capability_id = message.additional_kwargs.get("capability_id")
-        if capability_id in ("general_chat", "en_to_zh"):
-            return cast(CapabilityId, capability_id)
+        if capability_id is not None:
+            try:
+                return cast(CapabilityId, validate_capability_id(capability_id))
+            except (TypeError, ValueError):
+                pass
         return fallback
 
 

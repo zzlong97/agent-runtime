@@ -111,6 +111,7 @@ def build_parent_graph(
         )
         return {
             "rejected_capability_ids": [],
+            "task_action": None,
             "completion_status": None,
         }
 
@@ -138,6 +139,19 @@ def build_parent_graph(
         )
         update = await route(state, config)
         capability_id = update.get("resolved_capability_id")
+        if (
+            capability_id is None
+            and update.get("task_action") is None
+            and state["rejected_capability_ids"]
+        ):
+            log_business_event(
+                logger,
+                "Parent路由候选已全部拒绝",
+                session_id=session_id,
+                rejected_capability_ids=state["rejected_capability_ids"],
+                status="unsupported",
+            )
+            return update
         if capability_id not in _CAPABILITY_IDS:
             raise ParentGraphError(
                 code="PARENT_INVALID_CAPABILITY",
@@ -155,6 +169,15 @@ def build_parent_graph(
             capability_id=capability_id,
         )
         return update
+
+    def choose_after_route(
+        state: ParentState,
+    ) -> Literal["invoke_capability", "unsupported"]:
+        """动态候选全部拒绝时直接生成非错误 unsupported 结果。"""
+
+        if state.get("resolved_capability_id") is None:
+            return "unsupported"
+        return "invoke_capability"
 
     async def invoke_selected_capability(
         state: ParentState,
@@ -322,6 +345,6 @@ def build_parent_graph(
     builder.add_node("unsupported", generate_unsupported_reply)
     builder.add_edge(START, "prepare_request")
     builder.add_conditional_edges("prepare_request", choose_initial_step)
-    builder.add_edge("route", "invoke_capability")
+    builder.add_conditional_edges("route", choose_after_route)
     builder.add_edge("unsupported", END)
     return builder.compile(checkpointer=checkpointer)

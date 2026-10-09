@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-05（VERIFIED）
-Last Verified Task: S3-05
-Last Verified Commit: S3-05 验收提交（当前提交）
+Current Task: S3-06（VERIFIED）
+Last Verified Task: S3-06
+Last Verified Commit: S3-06 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -2530,7 +2530,7 @@ Task/Invocation/State 专项、真实数据库与 Checkpointer 验证、Review�
 
 ## S3-06 权限、动态 Router 候选与公开 capability_id
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S3-03, S3-04, S3-05
 
@@ -2568,12 +2568,12 @@ ManifestCapabilityId public schemas
 
 ### Acceptance
 
-- [ ] 无记录和 false 均不进入 Router，true 才进入
-- [ ] Router 后撤销权限会在 invoke 前被拒绝
-- [ ] 无权限、不可服务和全部 OUT_OF_SCOPE 的 Run 终态严格区分
-- [ ] 第三个合法测试 ID 可通过消息、事件、历史和前端展示
-- [ ] 公开字段和事件 schema_version 不变
-- [ ] 两个测试 Capability 不被自动授权
+- [x] 无记录和 false 均不进入 Router，true 才进入
+- [x] Router 后撤销权限会在 invoke 前被拒绝
+- [x] 无权限、不可服务和全部 OUT_OF_SCOPE 的 Run 终态严格区分
+- [x] 第三个合法测试 ID 可通过消息、事件、历史和前端展示
+- [x] 公开字段和事件 schema_version 不变
+- [x] 两个测试 Capability 不被自动授权
 
 ### Test Requirements
 
@@ -2586,6 +2586,45 @@ ManifestCapabilityId public schemas
 
 - S2.5 SSE 白名单、seq、重连和终态事件不变
 - 现有两个 ID 的 JSON 输出完全兼容
+
+### Verification Notes
+
+- 2026-10-09：新增无缓存 `CapabilityPermissionService`，无权限行和
+  `allowed=false` 均拒绝，只有 `allowed=true` 放行；Router 候选构造与 Invocation
+  前复查分别实时读取权限，权限撤销后复查稳定返回不可重试
+  `CAPABILITY_PERMISSION_DENIED`。
+- 2026-10-09：新增 `RouterCandidateProvider`，只向 Router 暴露 Registry 的
+  `capability_id/name/description/enabled` 四字段投影；已授权但不可服务返回可重试
+  `CAPABILITY_UNAVAILABLE`，所有已实际拒绝候选被排除后返回空候选，保留 Parent
+  `unsupported` 分流语义。S3-07 的 Health TTL/刷新治理和 S3-12 的正式主链路迁移均未
+  提前实现。
+- 2026-10-09：`RouterDecision` 增加必填 `task_action=continue|new`，Parent 控制状态
+  可保存该动作；动态路径支持第三个合法测试 ID。既有 Stage 1 固定分发兼容层按任务树
+  保留到 S3-12 移除，不参与动态候选授权判定。
+- 2026-10-09：公开 SSE Schema、历史 DTO、`message.finalized` RuntimeEvent、历史转换、
+  终态 Checkpoint 投影统一改用 `ManifestCapabilityId`；字段名、null 语义、公开事件类型
+  和 `schema_version=1` 不变。前端继续把未知合法 ID 作为普通标签原样展示。
+- 2026-10-09：S3-06 后端专项 `65 passed, 2 skipped`，权限/Router/历史增量专项
+  `21 passed`，真实 PostgreSQL 权限动态变更专项连同单元测试 `6 passed`；前端完整
+  套件 `26 passed`。
+- 2026-10-09：内部复审发现并关闭 `REV-S3-06-001`：动态候选全部被本轮
+  `OUT_OF_SCOPE` 拒绝后，Router 改为返回非错误控制结果，Parent 通过条件边进入
+  `unsupported`，不再错误地产生 `ROUTER_NO_CANDIDATE`；新增 Router 与 Parent 贯通的
+  两个确定性回归测试，修复后相关回归 `34 passed, 1 skipped`。
+- 2026-10-09：修复后默认完整后端套件 `530 passed, 46 skipped`，前端完整套件
+  `26 passed`。
+- 2026-10-09：Docker Desktop 由负责人恢复后，PostgreSQL 与 Redis 均为 healthy；
+  修复后启用真实 PostgreSQL + Redis 的完整套件 `575 passed, 1 skipped`，唯一跳过为显式
+  百炼 smoke test。
+- 2026-10-09：`uv lock --check`、`uv pip check`、`compileall`、`uv build`、前端生产
+  构建、Compose 配置和 `git diff --check` 均通过；Wheel 包含权限路由模块及哈希前端
+  资源。
+- 2026-10-09：`REV-S3-06-001` 定向复审确认已关闭，复审专项 `26 passed`、精确分支
+  复验 `5 passed`，未发现新的 Critical 或 Important 问题。
+- 2026-10-09：Reviewer 与负责人确认 S3-06 验收通过，任务更新为 `VERIFIED`；按工程
+  流程提交并同步 GitHub、Gitee 后进入 S3-07。
+- Result：S3-06 已 `VERIFIED`；未提前实现 S3-07 Health TTL、刷新或其他后续能力，
+  完成验收提交与双远程同步后进入 S3-07。
 
 ### Definition of Done
 

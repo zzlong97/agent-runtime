@@ -17,6 +17,7 @@ from pydantic import (
     model_validator,
 )
 
+from agent_runtime.capabilities.manifest import ManifestCapabilityId
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.runtime.event_models import RuntimeEvent, RuntimeEventDraft
 from agent_runtime.runtime.models import JsonValue
@@ -444,8 +445,11 @@ class MessageFinalizedPayload(_ClosedPayload):
     ] = Field(
         description="公共消息终态，只允许 completed、unsupported、incomplete 或 stopped。"
     )
-    capability_id: Literal["general_chat", "en_to_zh"] | None = Field(
-        description="实际完成该公共消息的固定能力标识；无能力结果时允许为空。"
+    capability_id: ManifestCapabilityId | None = Field(
+        description=(
+            "实际完成该公共消息的稳定能力标识；非空值必须符合 Manifest ID 规则，"
+            "无能力结果时允许为空。"
+        )
     )
 
 
@@ -568,7 +572,7 @@ class MessageFinalizedEvent(_PublicEventBase):
         description="公开事件类型，表示最终公共 AIMessage 已完成持久化。"
     )
     payload: MessageFinalizedPayload = Field(
-        description="最终消息标识、公共消息状态及固定能力标识。"
+        description="最终消息标识、公共消息状态及动态 Manifest 能力标识。"
     )
 
 

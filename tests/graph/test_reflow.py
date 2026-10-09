@@ -44,6 +44,7 @@ def test_parent_continues_current_capability_without_rerouting() -> None:
     assert invoked_capabilities == ["general_chat"]
     assert result["completion_status"] == "completed"
     assert result["rejected_capability_ids"] == []
+    assert result["task_action"] is None
 
 
 @pytest.mark.parametrize(

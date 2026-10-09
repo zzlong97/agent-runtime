@@ -35,7 +35,7 @@ SEMVER_PATTERN = re.compile(
 )
 STATE_SCHEMA_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
-type CapabilityId = Annotated[
+type ManifestCapabilityId = Annotated[
     str,
     StringConstraints(
         strict=True,
@@ -46,7 +46,10 @@ type CapabilityId = Annotated[
     ),
 ]
 
-_CAPABILITY_ID_ADAPTER = TypeAdapter(CapabilityId)
+# 兼容 S3-02 已发布的内部名称；公开 Schema 统一使用语义更明确的新名称。
+type CapabilityId = ManifestCapabilityId
+
+_CAPABILITY_ID_ADAPTER = TypeAdapter(ManifestCapabilityId)
 
 
 def validate_capability_id(value: object) -> str:

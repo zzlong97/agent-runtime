@@ -67,6 +67,49 @@ def test_message_started_requires_positive_attempt() -> None:
         )
 
 
+def test_message_finalized_accepts_dynamic_manifest_id_without_schema_version_change() -> None:
+    from agent_runtime.runtime.event_models import RuntimeEvent
+    from agent_runtime.runtime.event_schemas import (
+        MessageFinalizedPayload,
+        project_public_event,
+    )
+
+    now = datetime.now(UTC)
+    payload = MessageFinalizedPayload(
+        response_message_id=uuid4(),
+        runtime_status="completed",
+        capability_id="weather_lookup",
+    )
+    event = RuntimeEvent(
+        event_id=uuid4(),
+        run_id=uuid4(),
+        seq=7,
+        event_type="message.finalized",
+        source="executor",
+        visibility="public",
+        payload=payload.model_dump(mode="json"),
+        schema_version=1,
+        durability="durable",
+        created_at=now,
+    )
+
+    projected = project_public_event(event)
+
+    assert projected.schema_version == 1
+    assert projected.payload.capability_id == "weather_lookup"
+    assert set(projected.payload.model_dump(mode="json")) == {
+        "response_message_id",
+        "runtime_status",
+        "capability_id",
+    }
+    with pytest.raises(ValidationError):
+        MessageFinalizedPayload(
+            response_message_id=uuid4(),
+            runtime_status="completed",
+            capability_id="invalid-id",
+        )
+
+
 def test_public_projection_rejects_internal_event_and_hides_internal_fields() -> None:
     from agent_runtime.runtime.event_models import RuntimeEvent
     from agent_runtime.runtime.event_schemas import (

@@ -9,6 +9,10 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import StateSnapshot
 
+from agent_runtime.capabilities.manifest import (
+    ManifestCapabilityId,
+    validate_capability_id,
+)
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.graph.config import parent_thread_config
@@ -20,7 +24,7 @@ _AUTOMATIC_RECOVERY_CAPABILITIES = frozenset({"general_chat", "en_to_zh"})
 RecoveredRuntimeStatus = Literal[
     "completed", "unsupported", "incomplete", "stopped"
 ]
-RecoveredCapabilityId = Literal["general_chat", "en_to_zh"]
+type RecoveredCapabilityId = ManifestCapabilityId
 
 
 class RunCheckpointError(ApplicationError):
@@ -145,12 +149,15 @@ def recovered_final_message(
     }:
         return None
     raw_capability = final_message.additional_kwargs.get("capability_id")
-    if raw_capability not in {None, "general_chat", "en_to_zh"}:
-        raise RunCheckpointError(
-            code="RUN_CHECKPOINT_MESSAGE_INVALID",
-            message="Run Checkpoint 的公共消息能力标识不合法",
-            status_code=409,
-        )
+    if raw_capability is not None:
+        try:
+            raw_capability = validate_capability_id(raw_capability)
+        except (TypeError, ValueError) as error:
+            raise RunCheckpointError(
+                code="RUN_CHECKPOINT_MESSAGE_INVALID",
+                message="Run Checkpoint 的公共消息能力标识不合法",
+                status_code=409,
+            ) from error
     return RecoveredFinalMessage(
         runtime_status=cast(RecoveredRuntimeStatus, raw_status),
         capability_id=cast(RecoveredCapabilityId | None, raw_capability),

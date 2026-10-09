@@ -9,10 +9,17 @@ from agent_runtime.capabilities.contracts import (
     CapabilityFactory,
     HealthResult,
 )
+from agent_runtime.capabilities.manifest import ManifestCapabilityId
 from agent_runtime.capabilities.registry import (
     CapabilityRegistry,
     CapabilityRegistryEntry,
     RouterProjection,
+)
+from agent_runtime.capabilities.routing import (
+    CapabilityPermissionDeniedError,
+    CapabilityPermissionService,
+    CapabilityUnavailableError,
+    RouterCandidateProvider,
 )
 from agent_runtime.capabilities.persistence import (
     CapabilityOperationCreateResult,
@@ -56,6 +63,8 @@ __all__ = [
     "CapabilityOperation",
     "CapabilityOperationCreateResult",
     "CapabilityOperationRepository",
+    "CapabilityPermissionDeniedError",
+    "CapabilityPermissionService",
     "CapabilityRegistry",
     "CapabilityRegistryEntry",
     "CapabilityTask",
@@ -65,12 +74,15 @@ __all__ = [
     "CapabilityTaskRepository",
     "CapabilityTaskResolution",
     "CapabilityTaskService",
+    "CapabilityUnavailableError",
     "CapabilityStateVersionIncompatibleError",
     "CheckpointerThreadStore",
     "ChildCheckpointStore",
     "ChildThreadIdFactory",
     "HealthResult",
+    "ManifestCapabilityId",
     "RouterProjection",
+    "RouterCandidateProvider",
     "StateCompatibilityPolicy",
     "UserCapabilityPermission",
     "UserCapabilityPermissionRepository",
