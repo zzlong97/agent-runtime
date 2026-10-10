@@ -66,6 +66,8 @@ def test_agent_contract_exposes_only_controlled_execution_inputs() -> None:
         "response_message_id",
         "cancellation",
         "events",
+        "invocation_id",
+        "_operation_gateway",
     }
     assert {field.name for field in fields(AgentContext)} == {
         "session_id",

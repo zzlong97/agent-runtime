@@ -3,8 +3,9 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
-from typing import Literal, Protocol
+from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass, field
+from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from langchain_core.messages import BaseMessage
@@ -67,9 +68,29 @@ class AgentCancellation:
             raise asyncio.CancelledError
 
 
-@dataclass(frozen=True, slots=True)
+class RunOperationGateway(Protocol):
+    """RunContext 可调用但不能访问底层 Repository 的 Operation 入口。"""
+
+    run_id: UUID
+    invocation_id: UUID
+
+    def idempotency_key(self, operation_key: str) -> str:
+        """生成绑定当前调用的稳定副作用幂等键。"""
+
+        ...
+
+    def operation(
+        self,
+        operation_key: str,
+    ) -> AbstractAsyncContextManager[Any]:
+        """返回 Runtime 管理的异步 Operation Context。"""
+
+        ...
+
+
+@dataclass(frozen=True, slots=True, init=False)
 class RunContext:
-    """只提供稳定 Run 标识、只读取消能力和类型化事件出口。"""
+    """提供稳定调用标识、取消、事件出口与受控 Operation Ledger。"""
 
     run_id: UUID | None
     request_id: UUID | None
@@ -77,6 +98,62 @@ class RunContext:
     response_message_id: UUID
     cancellation: AgentCancellation
     events: AgentEventOutlet
+    invocation_id: UUID | None
+    _operation_gateway: RunOperationGateway | None = field(
+        repr=False,
+        compare=False,
+    )
+
+    def __init__(
+        self,
+        *,
+        run_id: UUID | None,
+        request_id: UUID | None,
+        input_message_id: UUID | None,
+        response_message_id: UUID,
+        cancellation: AgentCancellation,
+        events: AgentEventOutlet,
+        invocation_id: UUID | None = None,
+        operation_gateway: RunOperationGateway | None = None,
+    ) -> None:
+        """构造受控上下文并校验 Operation 入口绑定的调用身份。"""
+
+        object.__setattr__(self, "run_id", run_id)
+        object.__setattr__(self, "request_id", request_id)
+        object.__setattr__(self, "input_message_id", input_message_id)
+        object.__setattr__(self, "response_message_id", response_message_id)
+        object.__setattr__(self, "cancellation", cancellation)
+        object.__setattr__(self, "events", events)
+        object.__setattr__(self, "invocation_id", invocation_id)
+        object.__setattr__(self, "_operation_gateway", operation_gateway)
+        if operation_gateway is None:
+            return
+        if run_id is None or operation_gateway.run_id != run_id:
+            raise ValueError("Operation Gateway 与 RunContext 的 Run 不一致")
+        if invocation_id is None or operation_gateway.invocation_id != invocation_id:
+            raise ValueError("Operation Gateway 与 RunContext 的 Invocation 不一致")
+
+    def idempotency_key(self, operation_key: str) -> str:
+        """生成当前 Invocation 下指定业务操作的稳定幂等键。"""
+
+        gateway = self._require_operation_gateway()
+        return gateway.idempotency_key(operation_key)
+
+    def operation(
+        self,
+        operation_key: str,
+    ) -> AbstractAsyncContextManager[Any]:
+        """返回由 Runtime 管理的异步 Operation Context。"""
+
+        gateway = self._require_operation_gateway()
+        return gateway.operation(operation_key)
+
+    def _require_operation_gateway(self) -> RunOperationGateway:
+        """缺少 S3 Operation Ledger 绑定时明确拒绝副作用入口。"""
+
+        if self._operation_gateway is None:
+            raise RuntimeError("当前 RunContext 未配置 Operation Ledger")
+        return self._operation_gateway
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +220,10 @@ def run_context_from_parent_config(
         response_message_id=response_message_id,
         cancellation=AgentCancellation(cancellation_probe),
         events=AgentEventOutlet(event_handler),
+        invocation_id=_optional_uuid(
+            metadata.get("invocation_id"),
+            field_name="invocation_id",
+        ),
     )
 
 

@@ -20,6 +20,12 @@ from agent_runtime.capabilities.execution import (
     CapabilityErrorMapper,
     CapabilityExecutionController,
 )
+from agent_runtime.capabilities.operation_ledger import (
+    CapabilityOperationContext,
+    CapabilityOperationGateway,
+    CapabilityOperationHandle,
+    build_operation_idempotency_key,
+)
 from agent_runtime.capabilities.registry import (
     CapabilityRegistry,
     CapabilityRegistryEntry,
@@ -75,6 +81,9 @@ __all__ = [
     "CapabilityInvocation",
     "CapabilityInvocationService",
     "CapabilityOperation",
+    "CapabilityOperationContext",
+    "CapabilityOperationGateway",
+    "CapabilityOperationHandle",
     "CapabilityOperationCreateResult",
     "CapabilityOperationRepository",
     "CapabilityPermissionDeniedError",
@@ -102,4 +111,5 @@ __all__ = [
     "StateCompatibilityPolicy",
     "UserCapabilityPermission",
     "UserCapabilityPermissionRepository",
+    "build_operation_idempotency_key",
 ]

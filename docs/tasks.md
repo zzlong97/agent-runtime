@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-09（IN_PROGRESS）
-Last Verified Task: S3-08
-Last Verified Commit: S3-08 验收提交（当前提交）
+Current Task: S3-09（VERIFIED，待提交并同步）
+Last Verified Task: S3-09
+Last Verified Commit: 待生成 S3-09 验收提交
 Blockers: None
 ```
 
@@ -2808,7 +2808,7 @@ CapabilityErrorMapper
 
 ## S3-09 Operation Ledger 与 ctx.operation
 
-**Status:** IN_PROGRESS
+**Status:** VERIFIED
 
 **Dependencies:** S3-04, S3-05, S3-08
 
@@ -2847,12 +2847,12 @@ CapabilityOperationHandle.mark_failed()
 
 ### Acceptance
 
-- [ ] 相同 run/invocation/operation 得到相同 key，不同任一维度得到不同 key
-- [ ] 崩溃或普通异常后保持 pending
-- [ ] 正常执行原子进入 succeeded
-- [ ] Capability 显式确定失败才进入 failed
-- [ ] succeeded 不重复调用副作用，failed 默认拒绝自动重试
-- [ ] 一次 Invocation 的多个 Operation 独立记录
+- [x] 相同 run/invocation/operation 得到相同 key，不同任一维度得到不同 key
+- [x] 崩溃或普通异常后保持 pending
+- [x] 正常执行原子进入 succeeded
+- [x] Capability 显式确定失败才进入 failed
+- [x] succeeded 不重复调用副作用，failed 默认拒绝自动重试
+- [x] 一次 Invocation 的多个 Operation 独立记录
 
 ### Test Requirements
 
@@ -2865,6 +2865,30 @@ CapabilityOperationHandle.mark_failed()
 
 - 无副作用 Capability 不要求创建 Operation
 - Operation 内容不进入 Parent、SSE 或业务日志
+
+### Verification Notes
+
+- 2026-10-10：新增固定版本、字段顺序、UTF-8 与长度前缀的 canonical 编码，锁定
+  `run_id + invocation_id + operation_key` SHA-256 测试向量；`RunContext` 仅通过受控
+  Gateway 暴露 `idempotency_key()` 与 `operation()`，不暴露底层 Repository。
+- 2026-10-10：实现 `CapabilityOperationContext` 与 `CapabilityOperationHandle`；正常
+  退出原子写 `succeeded`，普通异常、取消和模拟崩溃保持 `pending`，只有显式
+  `mark_failed()` 写 `failed`；既有 `succeeded` 返回 `should_execute=false`，既有
+  `failed` 以不可自动重试错误拒绝。
+- 2026-10-10：真实 PostgreSQL 验证八路并发 get-or-create 只保留一条 Operation，
+  open Invocation、Task、Capability 归属不匹配均在写入前拒绝；相反终态竞争只有一个
+  获胜，同终态重试幂等；模拟进程崩溃后复用相同 Operation ID 与幂等键，Fake 外部
+  系统收到两次尝试但只执行一次业务副作用。
+- 2026-10-10：Operation Ledger 聚焦及既有持久化回归通过；默认完整套件
+  `586 passed, 50 skipped`，真实 PostgreSQL + Redis 完整套件
+  `635 passed, 1 skipped`，唯一跳过为显式百炼 smoke test。
+- 2026-10-10：业务日志只记录安全关联标识、状态、错误码和耗时，不记录
+  `operation_key`、外部异常正文或响应 payload；独立代码复审提出的 INFO 日志捕获和
+  终态拒绝日志问题已修复，复核无剩余 Critical、Important 或 Minor 问题。
+- 2026-10-10：Reviewer 与负责人确认 S3-09 审核通过，任务状态更新为 `VERIFIED`；
+  按工程流程先提交并同步 GitHub、Gitee，双远程一致后才允许进入 S3-10。
+- Result：S3-09 已 `VERIFIED`；未提前实现 S3-10 的恢复扫描、恢复策略或 Checkpoint
+  对账能力。
 
 ### Definition of Done
 

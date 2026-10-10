@@ -5,7 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from agent_runtime.capabilities.persistence_models import (
@@ -328,10 +328,17 @@ FROM capability_operations
 WHERE idempotency_key = %s
 """
 
-_UPDATE_OPERATION_STATUS = f"""
+_SELECT_OPERATION_FOR_UPDATE = f"""
+SELECT {_OPERATION_COLUMNS}
+FROM capability_operations
+WHERE operation_id = %s
+FOR UPDATE
+"""
+
+_UPDATE_PENDING_OPERATION_STATUS = f"""
 UPDATE capability_operations
 SET status = %s, updated_at = %s
-WHERE operation_id = %s
+WHERE operation_id = %s AND status = 'pending'
 RETURNING {_OPERATION_COLUMNS}
 """
 
@@ -395,6 +402,60 @@ class CapabilityOperationCreateResult:
 
     operation: CapabilityOperation
     created: bool
+
+
+async def _insert_or_reuse_operation(
+    *,
+    connection,
+    operation: CapabilityOperation,
+) -> CapabilityOperationCreateResult:
+    """在调用方事务内插入 Operation，唯一冲突时严格复核全部归属键。"""
+
+    cursor = await connection.execute(
+        _INSERT_OPERATION,
+        (
+            *_operation_params(operation),
+            operation.run_id,
+            operation.task_id,
+            operation.capability_id,
+        ),
+    )
+    row = await cursor.fetchone()
+    created = row is not None
+    if row is None:
+        business_cursor = await connection.execute(
+            _SELECT_OPERATION_BY_BUSINESS_KEY,
+            (
+                operation.run_id,
+                operation.invocation_id,
+                operation.operation_key,
+            ),
+        )
+        business_row = await business_cursor.fetchone()
+        idempotency_cursor = await connection.execute(
+            _SELECT_OPERATION_BY_IDEMPOTENCY_KEY,
+            (operation.idempotency_key,),
+        )
+        idempotency_row = await idempotency_cursor.fetchone()
+        if (
+            business_row is None
+            or idempotency_row is None
+            or business_row["operation_id"] != idempotency_row["operation_id"]
+            or str(business_row["idempotency_key"])
+            != operation.idempotency_key
+            or UUID(str(business_row["task_id"])) != operation.task_id
+            or str(business_row["capability_id"]) != operation.capability_id
+        ):
+            raise CapabilityPersistenceConflictError(
+                code="CAPABILITY_OPERATION_CONFLICT",
+                message="Operation 唯一键与既有记录冲突",
+                status_code=409,
+            )
+        row = business_row
+    return CapabilityOperationCreateResult(
+        operation=_operation_from_row(row),
+        created=created,
+    )
 
 
 async def _setup_schema(
@@ -1280,50 +1341,10 @@ class CapabilityOperationRepository:
         )
         try:
             async with open_database_connection(self._settings) as connection:
-                cursor = await connection.execute(
-                    _INSERT_OPERATION,
-                    (
-                        *_operation_params(operation),
-                        operation.run_id,
-                        operation.task_id,
-                        operation.capability_id,
-                    ),
+                result = await _insert_or_reuse_operation(
+                    connection=connection,
+                    operation=operation,
                 )
-                row = await cursor.fetchone()
-                created = row is not None
-                if row is None:
-                    business_cursor = await connection.execute(
-                        _SELECT_OPERATION_BY_BUSINESS_KEY,
-                        (
-                            operation.run_id,
-                            operation.invocation_id,
-                            operation.operation_key,
-                        ),
-                    )
-                    business_row = await business_cursor.fetchone()
-                    idempotency_cursor = await connection.execute(
-                        _SELECT_OPERATION_BY_IDEMPOTENCY_KEY,
-                        (operation.idempotency_key,),
-                    )
-                    idempotency_row = await idempotency_cursor.fetchone()
-                    if (
-                        business_row is None
-                        or idempotency_row is None
-                        or business_row["operation_id"]
-                        != idempotency_row["operation_id"]
-                        or str(business_row["idempotency_key"])
-                        != operation.idempotency_key
-                        or UUID(str(business_row["task_id"]))
-                        != operation.task_id
-                        or str(business_row["capability_id"])
-                        != operation.capability_id
-                    ):
-                        raise CapabilityPersistenceConflictError(
-                            code="CAPABILITY_OPERATION_CONFLICT",
-                            message="Operation 唯一键与既有记录冲突",
-                            status_code=409,
-                        )
-                    row = business_row
                 await connection.commit()
         except ApplicationError as error:
             log_business_event(
@@ -1341,10 +1362,6 @@ class CapabilityOperationRepository:
             raise
         except Exception as error:
             raise _persistence_error("Capability Operation 登记失败", error) from error
-        result = CapabilityOperationCreateResult(
-            operation=_operation_from_row(row),
-            created=created,
-        )
         log_business_event(
             logger,
             "Capability Operation登记完成",
@@ -1354,7 +1371,104 @@ class CapabilityOperationRepository:
             task_id=result.operation.task_id,
             capability_id=result.operation.capability_id,
             status=result.operation.status,
-            created=created,
+            created=result.created,
+            duration_ms=_elapsed_ms(started_at),
+        )
+        return result
+
+    async def create_or_get_for_invocation(
+        self,
+        operation: CapabilityOperation,
+    ) -> CapabilityOperationCreateResult:
+        """校验 Run、open Invocation、Task 与 Capability 归属后幂等登记。"""
+
+        if operation.status != "pending":
+            raise ValueError("新 Operation 必须是 pending 状态")
+        started_at = perf_counter()
+        log_business_event(
+            logger,
+            "Capability Operation归属校验开始",
+            operation_id=operation.operation_id,
+            run_id=operation.run_id,
+            invocation_id=operation.invocation_id,
+            task_id=operation.task_id,
+            capability_id=operation.capability_id,
+        )
+        try:
+            async with open_database_connection(self._settings) as connection:
+                task_cursor = await connection.execute(
+                    _SELECT_TASK,
+                    (operation.task_id,),
+                )
+                task_row = await task_cursor.fetchone()
+                if task_row is None:
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_OPERATION_OWNERSHIP_CONFLICT",
+                        message="Operation 关联的 Capability Task 不存在",
+                        status_code=409,
+                    )
+                task = _task_from_row(task_row)
+                await _validate_run_session_and_open_invocation(
+                    connection=connection,
+                    run_id=operation.run_id,
+                    session_id=task.session_id,
+                    invocation_id=operation.invocation_id,
+                    capability_id=operation.capability_id,
+                )
+                locked_task_cursor = await connection.execute(
+                    _SELECT_TASK_FOR_UPDATE,
+                    (operation.task_id,),
+                )
+                locked_task_row = await locked_task_cursor.fetchone()
+                if locked_task_row is None:
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_OPERATION_OWNERSHIP_CONFLICT",
+                        message="Operation 关联的 Capability Task 不存在",
+                        status_code=409,
+                    )
+                locked_task = _task_from_row(locked_task_row)
+                if (
+                    locked_task.status != "active"
+                    or locked_task.capability_id != operation.capability_id
+                    or locked_task.last_run_id != operation.run_id
+                    or locked_task.last_invocation_id != operation.invocation_id
+                ):
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_OPERATION_OWNERSHIP_CONFLICT",
+                        message="Operation 与当前 Capability Task 调用归属不一致",
+                        status_code=409,
+                    )
+                result = await _insert_or_reuse_operation(
+                    connection=connection,
+                    operation=operation,
+                )
+                await connection.commit()
+        except ApplicationError as error:
+            log_business_event(
+                logger,
+                "Capability Operation归属校验拒绝",
+                operation_id=operation.operation_id,
+                run_id=operation.run_id,
+                invocation_id=operation.invocation_id,
+                task_id=operation.task_id,
+                capability_id=operation.capability_id,
+                error_code=error.code,
+                error_type=type(error).__name__,
+                duration_ms=_elapsed_ms(started_at),
+            )
+            raise
+        except Exception as error:
+            raise _persistence_error("Capability Operation 登记失败", error) from error
+        log_business_event(
+            logger,
+            "Capability Operation归属校验完成",
+            operation_id=result.operation.operation_id,
+            run_id=result.operation.run_id,
+            invocation_id=result.operation.invocation_id,
+            task_id=result.operation.task_id,
+            capability_id=result.operation.capability_id,
+            status=result.operation.status,
+            created=result.created,
             duration_ms=_elapsed_ms(started_at),
         )
         return result
@@ -1383,9 +1497,28 @@ class CapabilityOperationRepository:
         status: CapabilityOperationStatus,
         updated_at: datetime,
     ) -> CapabilityOperation:
-        """更新 Operation 最小账本状态，不写外部响应或异常详情。"""
+        """兼容入口：只允许 pending 原子进入 succeeded 或 failed。"""
+
+        if status == "pending":
+            raise ValueError("Operation 不能通过终态入口写回 pending")
+        return await self.transition_pending(
+            operation_id=operation_id,
+            status=status,
+            updated_at=updated_at,
+        )
+
+    async def transition_pending(
+        self,
+        *,
+        operation_id: UUID,
+        status: Literal["succeeded", "failed"],
+        updated_at: datetime,
+    ) -> CapabilityOperation:
+        """锁定记录并保证唯一的 pending 到终态转换。"""
 
         as_operation_status(status)
+        if status not in {"succeeded", "failed"}:
+            raise ValueError("Operation 终态只允许 succeeded 或 failed")
         started_at = perf_counter()
         log_business_event(
             logger,
@@ -1395,20 +1528,52 @@ class CapabilityOperationRepository:
         )
         try:
             async with open_database_connection(self._settings) as connection:
-                cursor = await connection.execute(
-                    _UPDATE_OPERATION_STATUS,
-                    (status, updated_at, operation_id),
+                current_cursor = await connection.execute(
+                    _SELECT_OPERATION_FOR_UPDATE,
+                    (operation_id,),
                 )
-                row = await cursor.fetchone()
+                current_row = await current_cursor.fetchone()
+                if current_row is None:
+                    raise CapabilityOperationNotFoundError(
+                        code="CAPABILITY_OPERATION_NOT_FOUND",
+                        message="Capability Operation 不存在",
+                        status_code=404,
+                    )
+                current = _operation_from_row(current_row)
+                if current.status == status:
+                    row = current_row
+                elif current.status != "pending":
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_OPERATION_TERMINAL_CONFLICT",
+                        message="Capability Operation 已进入其他终态",
+                        status_code=409,
+                    )
+                else:
+                    cursor = await connection.execute(
+                        _UPDATE_PENDING_OPERATION_STATUS,
+                        (status, updated_at, operation_id),
+                    )
+                    row = await cursor.fetchone()
+                    if row is None:
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_OPERATION_TERMINAL_CONFLICT",
+                            message="Capability Operation 终态转换发生冲突",
+                            status_code=409,
+                        )
                 await connection.commit()
+        except ApplicationError as error:
+            log_business_event(
+                logger,
+                "Capability Operation状态写入拒绝",
+                operation_id=operation_id,
+                status=status,
+                error_code=error.code,
+                error_type=type(error).__name__,
+                duration_ms=_elapsed_ms(started_at),
+            )
+            raise
         except Exception as error:
             raise _persistence_error("Capability Operation 状态更新失败", error) from error
-        if row is None:
-            raise CapabilityOperationNotFoundError(
-                code="CAPABILITY_OPERATION_NOT_FOUND",
-                message="Capability Operation 不存在",
-                status_code=404,
-            )
         result = _operation_from_row(row)
         log_business_event(
             logger,
