@@ -89,8 +89,8 @@ class ConcurrencyPolicy(_ClosedManifestModel):
         gt=0,
         allow_inf_nan=False,
         description=(
-            "等待当前 Capability 并发槽的最长秒数，必须大于零；超时后的错误映射"
-            "由后续 Runtime 治理任务实现，本阶段仅校验声明。"
+            "等待当前 Capability 单进程并发槽的最长秒数，必须大于零；超过该时限"
+            "由 Runtime 返回 CAPABILITY_BUSY，且不得提前创建 Capability Task。"
         ),
     )
 
@@ -112,8 +112,8 @@ class ExecutionPolicy(_ClosedManifestModel):
         gt=0,
         allow_inf_nan=False,
         description=(
-            "单次 Invocation 的最长执行秒数，必须大于零；实际计时和超时错误处理"
-            "属于后续 Runtime 治理任务。"
+            "单次 Invocation 的最长执行秒数，必须大于零；超时后 Runtime 先请求"
+            "协作取消，再按 cancel_grace_seconds 决定是否强制取消本地 Task。"
         ),
     )
     cancel_grace_seconds: StrictFloat = Field(
@@ -121,7 +121,7 @@ class ExecutionPolicy(_ClosedManifestModel):
         allow_inf_nan=False,
         description=(
             "执行超时或取消后等待 Capability 协作退出的宽限秒数，允许为零；超过"
-            "宽限期后的本地任务取消由后续 Runtime 治理任务负责。"
+            "宽限期仍未退出时，Runtime 强制取消本地 asyncio Task。"
         ),
     )
 
@@ -213,7 +213,7 @@ class CapabilityManifest(_ClosedManifestModel):
     execution: ExecutionPolicy = Field(
         description=(
             "Capability 的 Invocation 执行时限声明，包含执行超时和协作取消宽限；"
-            "本阶段只校验配置，不启动执行控制器。"
+            "Runtime 按该策略治理当前进程中的每次调用，不承诺跨进程执行控制。"
         ),
     )
     recovery_policy: Literal["automatic", "manual"] = Field(

@@ -167,6 +167,8 @@ def test_registry_builds_active_entry_and_minimal_router_projection(
     assert entry.status == "active"
     assert entry.health == HealthResult(status="healthy", summary_code="READY")
     assert entry.capability is not None
+    assert entry.concurrency_controller is not None
+    assert entry.concurrency_controller.is_bounded is False
     assert captured[0].manifest.capability_id == "active_cap"
     assert captured[0].capability_config["region"] == "test"
     assert not hasattr(captured[0], "redis")

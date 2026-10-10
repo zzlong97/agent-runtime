@@ -22,6 +22,9 @@ from agent_runtime.capabilities.contracts import (
     CapabilityFactory,
     HealthResult,
 )
+from agent_runtime.capabilities.execution import (
+    CapabilityConcurrencyController,
+)
 from agent_runtime.capabilities.manifest import (
     CapabilityManifest,
     ManifestCapabilityId,
@@ -87,6 +90,7 @@ class CapabilityRegistryEntry:
     status: CapabilityRegistryStatus
     manifest: CapabilityManifest | None
     capability: Capability | None
+    concurrency_controller: CapabilityConcurrencyController | None
     health: HealthResult | None
     diagnostic_code: str | None
 
@@ -568,6 +572,10 @@ async def _load_entry(
             status="active",
             manifest=manifest,
             capability=capability,
+            concurrency_controller=CapabilityConcurrencyController(
+                capability_id=manifest.capability_id,
+                policy=manifest.concurrency,
+            ),
             health=None,
             diagnostic_code=None,
         ),
@@ -691,6 +699,7 @@ def _entry_without_instance(
         status=status,
         manifest=manifest,
         capability=None,
+        concurrency_controller=None,
         health=None,
         diagnostic_code=diagnostic_code,
     )

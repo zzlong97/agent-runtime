@@ -15,6 +15,11 @@ from agent_runtime.capabilities.health import (
     HealthSnapshot,
     ServiceabilityDecision,
 )
+from agent_runtime.capabilities.execution import (
+    CapabilityConcurrencyController,
+    CapabilityErrorMapper,
+    CapabilityExecutionController,
+)
 from agent_runtime.capabilities.registry import (
     CapabilityRegistry,
     CapabilityRegistryEntry,
@@ -61,7 +66,10 @@ __all__ = [
     "AgentResultMetadata",
     "Capability",
     "CapabilityBootstrapContext",
+    "CapabilityConcurrencyController",
     "CapabilityError",
+    "CapabilityErrorMapper",
+    "CapabilityExecutionController",
     "CapabilityFactory",
     "CapabilityHealthService",
     "CapabilityInvocation",

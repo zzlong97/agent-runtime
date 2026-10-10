@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-07（VERIFIED）
-Last Verified Task: S3-07
-Last Verified Commit: S3-07 验收提交（当前提交）
+Current Task: S3-09（IN_PROGRESS）
+Last Verified Task: S3-08
+Last Verified Commit: S3-08 验收提交（当前提交）
 Blockers: None
 ```
 
@@ -2721,7 +2721,7 @@ ServiceabilityDecision
 
 ## S3-08 Capability 并发、超时与错误映射
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S3-05, S3-07
 
@@ -2759,12 +2759,12 @@ CapabilityErrorMapper
 
 ### Acceptance
 
-- [ ] bounded 上限不被并发竞争突破
-- [ ] 等待超时不创建新 Task，并形成 started/failed Invocation
-- [ ] 执行超时先协作取消，宽限后才强制取消
-- [ ] 显式 Cancel 记录 cancelled 而非 timeout
-- [ ] 所有异常和取消路径释放槽位
-- [ ] 失败公共消息非空且 Task 默认保持 active
+- [x] bounded 上限不被并发竞争突破
+- [x] 等待超时不创建新 Task，并形成 started/failed Invocation
+- [x] 执行超时先协作取消，宽限后才强制取消
+- [x] 显式 Cancel 记录 cancelled 而非 timeout
+- [x] 所有异常和取消路径释放槽位
+- [x] 失败公共消息非空且 Task 默认保持 active
 
 ### Test Requirements
 
@@ -2778,6 +2778,28 @@ CapabilityErrorMapper
 - S2.5 Cancel 202、首终态获胜和 Session 单活动 Run 不变
 - 慢 SSE 客户端仍不取消 Run
 
+### Verification Notes
+
+- 2026-10-09：新增 `CapabilityConcurrencyController`、
+  `CapabilityExecutionController` 与 `CapabilityErrorMapper`；active Registry Entry
+  持有唯一单进程并发控制器，未引入分布式 Semaphore、重试、熔断或 S3-09 能力。
+- 2026-10-09：确定性覆盖 bounded 上限、unlimited、acquire timeout、等待取消、
+  success/error/cancel 槽位释放、cooperative/force timeout、上游 Cancel 与 deadline
+  竞争、重复 Cancel 清理、完整错误白名单及 details/异常文本脱敏；专项连续 10 轮通过。
+- 2026-10-09：真实 PostgreSQL 验证 busy 路径只写 started/failed 且不创建 Task；
+  timeout 路径保持 Task active，并验证 `message.finalized` 先于唯一 Run 终态；既有
+  S2.5 真实链路继续验证 stopped/incomplete 公共消息非空。
+- 2026-10-09：修复后默认完整套件 `576 passed, 48 skipped`；启用真实 PostgreSQL +
+  Redis 的完整套件 `623 passed, 1 skipped`，唯一跳过为显式百炼 smoke test；S3-08
+  及非空终态消息聚焦回归 `38 passed, 2 deselected`。
+- 2026-10-09：`uv lock --check`、`uv pip check`、`compileall`、`uv build`、前端测试与
+  生产构建、Compose 配置和 `git diff --check` 均通过；独立代码复审发现的取消优先级、
+  重复取消清理和 retryable 固化问题均已修复，复审无剩余 Critical 或 Important 问题。
+- 2026-10-10：Reviewer 与负责人确认 S3-08 验收通过；提交前重新执行真实 PostgreSQL +
+  Redis 完整套件，结果为 `623 passed, 1 skipped`，并通过依赖锁、依赖兼容、编译、
+  构建和 `git diff --check` 门禁。
+- Result：S3-08 已 `VERIFIED`；完成验收提交与 GitHub、Gitee 双远程同步后进入 S3-09。
+
 ### Definition of Done
 
 并发/超时/取消竞态门禁、Review、负责人验收和双远程同步完成。
@@ -2786,7 +2808,7 @@ CapabilityErrorMapper
 
 ## S3-09 Operation Ledger 与 ctx.operation
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 
 **Dependencies:** S3-04, S3-05, S3-08
 
