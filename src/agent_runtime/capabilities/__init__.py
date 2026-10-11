@@ -26,6 +26,13 @@ from agent_runtime.capabilities.operation_ledger import (
     CapabilityOperationHandle,
     build_operation_idempotency_key,
 )
+from agent_runtime.capabilities.recovery import (
+    CapabilityRecoveryDecision,
+    CapabilityRecoveryError,
+    CapabilityRecoveryPolicyEvaluator,
+    OpenInvocationRecoveryContext,
+    OpenInvocationResolver,
+)
 from agent_runtime.capabilities.registry import (
     CapabilityRegistry,
     CapabilityRegistryEntry,
@@ -112,4 +119,9 @@ __all__ = [
     "UserCapabilityPermission",
     "UserCapabilityPermissionRepository",
     "build_operation_idempotency_key",
+    "CapabilityRecoveryDecision",
+    "CapabilityRecoveryError",
+    "CapabilityRecoveryPolicyEvaluator",
+    "OpenInvocationRecoveryContext",
+    "OpenInvocationResolver",
 ]

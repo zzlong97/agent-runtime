@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-09（VERIFIED，待提交并同步）
-Last Verified Task: S3-09
-Last Verified Commit: 待生成 S3-09 验收提交
+Current Task: S3-10（VERIFIED，待提交并同步）
+Last Verified Task: S3-10
+Last Verified Commit: 待生成 S3-10 验收提交
 Blockers: None
 ```
 
@@ -2898,7 +2898,7 @@ Ledger 真实数据库与崩溃窗口验证、Review、负责人验收和双远�
 
 ## S3-10 Capability 恢复策略与 Checkpoint 对账
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S3-05, S3-09
 
@@ -2936,12 +2936,12 @@ RunCheckpointInspector integration
 
 ### Acceptance
 
-- [ ] automatic + none 沿用精确 Checkpoint 恢复
-- [ ] automatic + idempotent 复用 invocation_id、task_id 和 idempotency_key
-- [ ] succeeded Operation 不重复，pending 只用原 key 重试
-- [ ] manual 不调用 Capability，形成非空 incomplete + failed
-- [ ] manual 专用错误不影响 automatic 路径
-- [ ] 恢复次数上限、Interrupt 对账和唯一终态保持 S2.5 语义
+- [x] automatic + none 沿用精确 Checkpoint 恢复
+- [x] automatic + idempotent 复用 invocation_id、task_id 和 idempotency_key
+- [x] succeeded Operation 不重复，pending 只用原 key 重试
+- [x] manual 不调用 Capability，形成非空 incomplete + failed
+- [x] manual 专用错误不影响 automatic 路径
+- [x] 恢复次数上限、Interrupt 对账和唯一终态保持 S2.5 语义
 
 ### Test Requirements
 
@@ -2954,6 +2954,40 @@ RunCheckpointInspector integration
 
 - S2.5 三次恢复上限和 start_checkpoint/input_payload 重放不变
 - Run 不新增 retry 类型
+
+### Verification Notes
+
+- 2026-10-11：新增 `OpenInvocationResolver` 与
+  `CapabilityRecoveryPolicyEvaluator`；从 durable open Invocation、Task 和 Operation
+  恢复稳定身份，按严格 Manifest 判定 automatic 或 manual 安全失败，不接入 S3-11
+  Regenerate 门禁或 S3-12 正式 Registry composition。
+- 2026-10-11：automatic + none 通过真实 PostgreSQL Checkpointer 从精确 Checkpoint
+  恢复；automatic + idempotent 覆盖副作用前、外部成功后 Ledger 前、Ledger 成功后
+  Parent 最终消息前三个崩溃窗口，复用 invocation_id、task_id 和幂等键，Fake 外部
+  系统始终只形成一个业务事实。
+- 2026-10-11：manual 的无最终消息与已落盘 incomplete 两个窗口均不调用 Capability，
+  保存非空 incomplete 并用不可重试的 `CAPABILITY_MANUAL_RECOVERY_REQUIRED` 结束
+  Run；Task 和 pending Operation 保持原状，Checkpoint-first 的 stopped、已完成消息与
+  Interrupt 投影仍优先于恢复策略。
+- 2026-10-11：独立复审发现并修复 Task 已终态而 Invocation 尚未终态的合法崩溃窗口，
+  并将 Task 恢复查询改为全量校验；同一 Invocation 的多 Task 歧义和 Task/Run 跨
+  Session 归属均以稳定冲突拒绝。automatic/manual 真实恢复测试覆盖终态 Task 场景。
+- 2026-10-11：复审收尾补齐真实 Invocation/Task/Operation Service 崩溃重放：Task
+  终态后只允许复用归属完全一致的既有 Operation，禁止创建新副作用记录；manual
+  和确定性恢复策略错误都会关闭可确认的 open Invocation。策略判定前先领取恢复，
+  确定性错误形成唯一非空失败投影，其他异常仍受三次恢复上限约束，不再留下永久
+  活动 Run。
+- 2026-10-11：S3-10 单元与真实 PostgreSQL 专项 `26 passed`；默认完整套件
+  `599 passed, 63 skipped`；启用真实 PostgreSQL + Redis 的完整套件
+  `661 passed, 1 skipped`，唯一跳过为按项目规则显式启用的百炼真实 smoke test。
+- 2026-10-11：`uv lock --check`、`uv pip check`、`compileall`、`uv build`、Compose
+  配置与 `git diff --check` 均通过；Wheel 与源码包构建成功。
+- 2026-10-11：独立 Reviewer 复跑 S3-10 专项 `26 passed`，确认此前三项复审问题
+  全部关闭，未发现 Critical、Important 或 Minor 问题，结论为 Ready to merge。
+- 2026-10-11：Reviewer 与负责人确认 S3-10 审核通过；提交前重新执行真实 PostgreSQL
+  + Redis 完整套件，结果为 `661 passed, 1 skipped`，并通过依赖锁、依赖兼容、编译、
+  构建、Compose 配置与 `git diff --check` 门禁。
+- Result：S3-10 已 `VERIFIED`；完成验收提交与 GitHub、Gitee 双远程同步后进入 S3-11。
 
 ### Definition of Done
 

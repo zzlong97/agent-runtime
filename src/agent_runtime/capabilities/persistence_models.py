@@ -86,12 +86,15 @@ class CapabilityTaskResolution:
     previous_task_id: UUID | None
     provisional: bool
     state_scope: CapabilityStateScope
+    recovered_terminal: bool = False
 
     def __post_init__(self) -> None:
         """保证降级和 provisional 标记只表达已确认的 Task 语义。"""
 
-        if self.task.status != "active":
+        if self.task.status != "active" and not self.recovered_terminal:
             raise ValueError("Invocation 只能解析到 active Capability Task")
+        if self.recovered_terminal != (self.task.status != "active"):
+            raise ValueError("recovered_terminal 必须准确表达已落盘的 Task 终态")
         if self.requested_action not in {"continue", "new"}:
             raise ValueError("requested_action 只允许 continue 或 new")
         if self.resolved_action not in {"continue", "new"}:

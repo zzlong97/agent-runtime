@@ -25,7 +25,14 @@ from agent_runtime.capabilities.en_to_zh.adapter import EnglishToChineseAdapter
 from agent_runtime.capabilities.en_to_zh.graph import EnglishToChineseCapability
 from agent_runtime.capabilities.general_chat.adapter import GeneralChatAdapter
 from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
+from agent_runtime.capabilities.invocation_service import CapabilityInvocationService
 from agent_runtime.capabilities.manifest import validate_capability_id
+from agent_runtime.capabilities.recovery import (
+    CapabilityRecoveryError,
+    CapabilityRecoveryDecision,
+    CapabilityRecoveryPolicyEvaluator,
+    OpenInvocationRecoveryContext,
+)
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
@@ -112,6 +119,7 @@ type CompletionStatus = Literal["completed", "unsupported"]
 
 _FAILED_MESSAGE_FALLBACK = "抱歉，本次回复未能完成。"
 _STOPPED_MESSAGE_FALLBACK = "已停止本次回复。"
+_MANUAL_RECOVERY_MESSAGE = "该能力需要人工恢复，当前回复未完成。"
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +168,9 @@ class ChatService:
         runtime_event_gateway: RuntimeEventGateway | None = None,
         run_interrupt_repository: PostgresRunInterruptRepository | None = None,
         run_coordinator: RunCoordinator | None = None,
+        capability_recovery_policy_evaluator: (
+            CapabilityRecoveryPolicyEvaluator | None
+        ) = None,
         session_id_factory: Callable[[], UUID] = uuid4,
         human_message_id_factory: Callable[[], UUID] = uuid4,
         response_message_id_factory: Callable[[], UUID] = uuid4,
@@ -188,6 +199,9 @@ class ChatService:
         self._runtime_event_gateway = runtime_event_gateway
         self._run_interrupt_repository = run_interrupt_repository
         self._run_coordinator = run_coordinator
+        self._capability_recovery_policy_evaluator = (
+            capability_recovery_policy_evaluator
+        )
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
         self._response_message_id_factory = response_message_id_factory
@@ -1140,7 +1154,18 @@ class ChatService:
                         sequencer=sequencer,
                     )
             return
+        recovery_evaluator = self._capability_recovery_policy_evaluator
+        requires_capability_policy = (
+            recovery_evaluator is not None
+            and graph_interrupt is None
+            and (
+                final_message is None
+                or final_message.runtime_status == "incomplete"
+            )
+        )
+        recovery_decision: CapabilityRecoveryDecision | None = None
         claimed_run = run
+        recovery_limit_reached = False
         async with coordinator.claim_guard(run.run_id):
             current = await repository.get(run.run_id)
             if current.status == "cancel_requested":
@@ -1150,14 +1175,8 @@ class ChatService:
             if current.status not in {"running", "recovering"}:
                 return
             if current.recovery_attempts >= 3:
-                if final_message is None and graph_interrupt is None:
-                    await self._fail_recovery_exhausted_locked(
-                        current,
-                        snapshot=snapshot,
-                        sequencer=sequencer,
-                    )
-                    return
                 claimed_run = current
+                recovery_limit_reached = True
             else:
                 next_attempt = current.recovery_attempts + 1
                 claim = await sequencer.claim_recovery(
@@ -1172,11 +1191,103 @@ class ChatService:
                 )
                 claimed_run = claim.run
 
+        if requires_capability_policy:
+            assert recovery_evaluator is not None
+            checkpoint_capability_id = (
+                final_message.capability_id
+                if final_message is not None
+                and final_message.capability_id is not None
+                else snapshot.values.get("resolved_capability_id")
+                if snapshot is not None
+                else None
+            )
+            try:
+                recovery_decision = await recovery_evaluator.evaluate(
+                    run_id=run.run_id,
+                    checkpoint_capability_id=checkpoint_capability_id,
+                )
+            except CapabilityRecoveryError as error:
+                async with coordinator.claim_guard(run.run_id):
+                    current = await repository.get(run.run_id)
+                    if current.status == "cancel_requested":
+                        await coordinator.begin_cancel_finalization(run.run_id)
+                        await self._finalize_persistent_cancellation_locked(
+                            current
+                        )
+                        return
+                    if current.status in {"running", "recovering"}:
+                        await self._fail_capability_recovery_policy_locked(
+                            current,
+                            snapshot=snapshot,
+                            final_message=final_message,
+                            error=error,
+                            sequencer=sequencer,
+                        )
+                return
+            except Exception:
+                if claimed_run.recovery_attempts < 3:
+                    raise
+                async with coordinator.claim_guard(run.run_id):
+                    current = await repository.get(run.run_id)
+                    if current.status == "cancel_requested":
+                        await coordinator.begin_cancel_finalization(run.run_id)
+                        await self._finalize_persistent_cancellation_locked(
+                            current
+                        )
+                        return
+                    if current.status in {"running", "recovering"}:
+                        await self._fail_recovery_exhausted_locked(
+                            current,
+                            snapshot=snapshot,
+                            sequencer=sequencer,
+                        )
+                return
+
+        if (
+            recovery_decision is not None
+            and recovery_decision.action == "manual_fail"
+            and final_message is None
+        ):
+            async with coordinator.claim_guard(run.run_id):
+                current = await repository.get(run.run_id)
+                if current.status == "cancel_requested":
+                    await coordinator.begin_cancel_finalization(run.run_id)
+                    await self._finalize_persistent_cancellation_locked(current)
+                    return
+                if current.status in {"running", "recovering"}:
+                    await self._fail_manual_capability_recovery_locked(
+                        current,
+                        snapshot=snapshot,
+                        decision=recovery_decision,
+                        sequencer=sequencer,
+                    )
+            return
+
+        if (
+            recovery_limit_reached
+            and final_message is None
+            and graph_interrupt is None
+        ):
+            async with coordinator.claim_guard(run.run_id):
+                current = await repository.get(run.run_id)
+                if current.status == "cancel_requested":
+                    await coordinator.begin_cancel_finalization(run.run_id)
+                    await self._finalize_persistent_cancellation_locked(current)
+                    return
+                if current.status in {"running", "recovering"}:
+                    await self._fail_recovery_exhausted_locked(
+                        current,
+                        snapshot=snapshot,
+                        sequencer=sequencer,
+                    )
+            return
+
         if final_message is not None:
             await self._project_recovered_final_message(
                 claimed_run,
                 final_message=final_message,
                 sequencer=sequencer,
+                recovery_decision=recovery_decision,
             )
             return
         if graph_interrupt is not None:
@@ -1187,7 +1298,7 @@ class ChatService:
             )
             return
 
-        if snapshot is not None:
+        if recovery_evaluator is None and snapshot is not None:
             ensure_automatic_recovery_safe(snapshot)
         async with coordinator.claim_guard(run.run_id):
             current = await repository.get(run.run_id)
@@ -1231,12 +1342,231 @@ class ChatService:
             recovery_config=recovery_config,
         )
 
+    async def _fail_manual_capability_recovery_locked(
+        self,
+        run: Run,
+        *,
+        snapshot: StateSnapshot | None,
+        decision: CapabilityRecoveryDecision,
+        sequencer: RunSequencer,
+    ) -> None:
+        """manual 崩溃恢复不重放 Capability，只保存非空失败投影。"""
+
+        event_repository = self._runtime_event_repository
+        assert event_repository is not None
+        inspector = RunCheckpointInspector(parent_graph=self._parent_graph)
+        turn = await self._turn_from_run(
+            run,
+            recovery_config=(
+                inspector.recovery_config(run, snapshot)
+                if snapshot is not None
+                else None
+            ),
+        )
+        await self.persist_runtime_message(
+            turn,
+            _MANUAL_RECOVERY_MESSAGE,
+            runtime_status="incomplete",
+            capability_id=decision.capability_id,
+            include_human=(turn.human_message is not None),
+        )
+        if not await event_repository.has_event_type(
+            run_id=run.run_id,
+            event_type="message.finalized",
+        ):
+            await sequencer.emit(
+                self._runtime_event_draft(
+                    "message.finalized",
+                    MessageFinalizedPayload(
+                        response_message_id=run.response_message_id,
+                        runtime_status="incomplete",
+                        capability_id=decision.capability_id,
+                    ),
+                )
+            )
+        await self._close_manual_recovery_invocation(
+            decision=decision,
+            sequencer=sequencer,
+        )
+        await sequencer.transition_run(
+            target_status="failed",
+            event=self._runtime_event_draft(
+                "run.failed",
+                RunFailedPayload(
+                    status="failed",
+                    code="CAPABILITY_MANUAL_RECOVERY_REQUIRED",
+                    message="该能力需要人工恢复后才能继续",
+                    retryable=False,
+                ),
+            ),
+            updated_at=datetime.now(UTC),
+            error_code="CAPABILITY_MANUAL_RECOVERY_REQUIRED",
+            error_message="该能力需要人工恢复后才能继续",
+        )
+        await self._session_service.touch_session(session_id=run.session_id)
+        invocation = decision.invocation
+        log_business_event(
+            logger,
+            "Capability人工恢复安全失败完成",
+            level=logging.WARNING,
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            invocation_id=(
+                None if invocation is None else invocation.invocation_id
+            ),
+            task_id=(
+                None
+                if invocation is None or invocation.task is None
+                else invocation.task.task_id
+            ),
+            capability_id=decision.capability_id,
+            status="failed",
+            error_code="CAPABILITY_MANUAL_RECOVERY_REQUIRED",
+        )
+
+    async def _fail_capability_recovery_policy_locked(
+        self,
+        run: Run,
+        *,
+        snapshot: StateSnapshot | None,
+        final_message: RecoveredFinalMessage | None,
+        error: CapabilityRecoveryError,
+        sequencer: RunSequencer,
+    ) -> None:
+        """确定性策略错误形成唯一失败投影，避免 Run 永久占用 Session。"""
+
+        event_repository = self._runtime_event_repository
+        assert event_repository is not None
+        capability_id = (
+            final_message.capability_id
+            if final_message is not None
+            else error.invocation.capability_id
+            if error.invocation is not None
+            else None
+        )
+        if final_message is None:
+            inspector = RunCheckpointInspector(parent_graph=self._parent_graph)
+            turn = await self._turn_from_run(
+                run,
+                recovery_config=(
+                    inspector.recovery_config(run, snapshot)
+                    if snapshot is not None
+                    else None
+                ),
+            )
+            await self.persist_runtime_message(
+                turn,
+                _FAILED_MESSAGE_FALLBACK,
+                runtime_status="incomplete",
+                capability_id=capability_id,
+                include_human=(turn.human_message is not None),
+            )
+        if not await event_repository.has_event_type(
+            run_id=run.run_id,
+            event_type="message.finalized",
+        ):
+            await sequencer.emit(
+                self._runtime_event_draft(
+                    "message.finalized",
+                    MessageFinalizedPayload(
+                        response_message_id=run.response_message_id,
+                        runtime_status="incomplete",
+                        capability_id=capability_id,
+                    ),
+                )
+            )
+        if error.invocation is not None:
+            await self._close_recovery_invocation(
+                invocation=error.invocation,
+                sequencer=sequencer,
+                error_code=error.code,
+            )
+        await sequencer.transition_run(
+            target_status="failed",
+            event=self._runtime_event_draft(
+                "run.failed",
+                RunFailedPayload(
+                    status="failed",
+                    code="CAPABILITY_EXECUTION_FAILED",
+                    message="能力恢复失败，请重新发送。",
+                    retryable=False,
+                ),
+            ),
+            updated_at=datetime.now(UTC),
+            error_code="CAPABILITY_EXECUTION_FAILED",
+            error_message="能力恢复失败，请重新发送。",
+        )
+        await self._session_service.touch_session(session_id=run.session_id)
+        log_business_event(
+            logger,
+            "Capability恢复策略拒绝完成",
+            level=logging.ERROR,
+            run_id=run.run_id,
+            request_id=run.request_id,
+            session_id=run.session_id,
+            message_id=run.response_message_id,
+            invocation_id=(
+                None
+                if error.invocation is None
+                else error.invocation.invocation_id
+            ),
+            capability_id=capability_id,
+            status="failed",
+            error_code="CAPABILITY_EXECUTION_FAILED",
+            recovery_error_code=error.code,
+            recovery_attempt=run.recovery_attempts,
+        )
+
+    @staticmethod
+    async def _close_manual_recovery_invocation(
+        *,
+        decision: CapabilityRecoveryDecision,
+        sequencer: RunSequencer,
+    ) -> None:
+        """用恢复出的稳定身份幂等关闭 manual open Invocation。"""
+
+        invocation = decision.invocation
+        if invocation is None:
+            return
+        await ChatService._close_recovery_invocation(
+            invocation=invocation,
+            sequencer=sequencer,
+            error_code="CAPABILITY_MANUAL_RECOVERY_REQUIRED",
+        )
+
+    @staticmethod
+    async def _close_recovery_invocation(
+        *,
+        invocation: OpenInvocationRecoveryContext,
+        sequencer: RunSequencer,
+        error_code: str,
+    ) -> None:
+        """用恢复出的稳定身份幂等关闭唯一 open Invocation。"""
+
+        task = invocation.task
+        await CapabilityInvocationService(sequencer=sequencer).fail(
+            invocation_id=invocation.invocation_id,
+            capability_id=invocation.capability_id,
+            task_id=None if task is None else task.task_id,
+            requested_task_action=invocation.requested_task_action,
+            effective_task_action=invocation.effective_task_action,
+            state_scope=invocation.state_scope,
+            state_schema_version=(
+                None if task is None else task.state_schema_version
+            ),
+            error_code=error_code,
+            created_at=datetime.now(UTC),
+        )
+
     async def _project_recovered_final_message(
         self,
         run: Run,
         *,
         final_message: RecoveredFinalMessage,
         sequencer: RunSequencer,
+        recovery_decision: CapabilityRecoveryDecision | None = None,
     ) -> None:
         """Checkpoint 已有终态消息时只补事件和 Run 投影，不重跑 Graph。"""
 
@@ -1301,20 +1631,40 @@ class ChatService:
                     updated_at=datetime.now(UTC),
                 )
             else:
+                manual_recovery = (
+                    recovery_decision is not None
+                    and recovery_decision.action == "manual_fail"
+                )
+                if manual_recovery:
+                    assert recovery_decision is not None
+                    await self._close_manual_recovery_invocation(
+                        decision=recovery_decision,
+                        sequencer=sequencer,
+                    )
+                error_code = (
+                    "CAPABILITY_MANUAL_RECOVERY_REQUIRED"
+                    if manual_recovery
+                    else "RUN_RECOVERED_INCOMPLETE"
+                )
+                error_message = (
+                    "该能力需要人工恢复后才能继续"
+                    if manual_recovery
+                    else "进程中断前的未完成回复已恢复。"
+                )
                 await sequencer.transition_run(
                     target_status="failed",
                     event=self._runtime_event_draft(
                         "run.failed",
                         RunFailedPayload(
                             status="failed",
-                            code="RUN_RECOVERED_INCOMPLETE",
-                            message="进程中断前的未完成回复已恢复。",
-                            retryable=True,
+                            code=error_code,
+                            message=error_message,
+                            retryable=not manual_recovery,
                         ),
                     ),
                     updated_at=datetime.now(UTC),
-                    error_code="RUN_RECOVERED_INCOMPLETE",
-                    error_message="进程中断前的未完成回复已恢复。",
+                    error_code=error_code,
+                    error_message=error_message,
                 )
             await self._session_service.touch_session(session_id=run.session_id)
         log_business_event(

@@ -20,9 +20,9 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 S3-02 Manifest Schema 与 Local CapabilitySource、S3-03 Capability 协议、Bootstrap
 与静态 Registry、S3-04 持久化基础设施、S3-05 Invocation、Task Service 与 State
 Scope、S3-06 权限、动态 Router 候选与公开 capability_id 均已验收并完成双远程同步；
-S3-08 Capability 单进程并发、两阶段超时取消与稳定错误映射已完成验收并同步两个
-远程；S3-09 Operation Ledger 与 `ctx.operation()` 已通过验收，完成本次提交并同步
-两个远程后进入 S3-10。
+S3-08 Capability 单进程并发、两阶段超时取消与稳定错误映射、S3-09 Operation
+Ledger 与 `ctx.operation()` 均已完成验收并同步两个远程；S3-10 Capability 恢复
+策略与 Checkpoint 对账已通过验收，完成本次提交并同步两个远程后进入 S3-11。
 具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
@@ -285,6 +285,10 @@ S2.5-11 与 Stage 2.5 整体验收通过：
 - S3-09 已实现稳定副作用幂等键、Operation pending/succeeded/failed 状态机、
   `RunContext.idempotency_key()`、`RunContext.operation()`、显式 `mark_failed()` 与
   调用归属校验并通过验收；正式 Invocation Gateway 组装仍留在 S3-12
+- S3-10 已完成编码和自验：Checkpoint-first 对账后按 Manifest 判定 automatic 或
+  manual 恢复；automatic + idempotent 复用稳定 Invocation、Task 与 Operation 身份，
+  manual 和确定性策略错误安全形成非空 incomplete + failed；独立复审和负责人验收
+  均已通过
 
 ### Stage 3：Capability Runtime
 
@@ -293,7 +297,7 @@ Stage 3 能力演进范围如下，已完成项和当前门禁以 `docs/tasks.md
 - Capability Task、Invocation、三种 State Scope 和 State Schema 兼容
 - 仅 `invocation + none` Capability 可使用的安全 Regenerate 门禁
 - HealthSnapshot、进程内并发和两阶段超时取消已实现并通过 S3-08 验收
-- Operation Ledger 已实现；automatic/manual Recovery Policy 留待 S3-10
+- Operation Ledger 与 automatic/manual Recovery Policy 已完成 S3-10 编码和自验
 - 默认拒绝的用户级 Capability 权限与动态 Router 候选已实现
 - 开放但受约束的公开 `capability_id`
 - `general_chat` / `en_to_zh` 作为非生产测试 Capability 的标准迁移
@@ -538,7 +542,7 @@ npm run test:e2e
 
 当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
 
-S3-09 已通过验收；其提交同步到 GitHub、Gitee 后才允许开始 S3-10；
+S3-10 已通过验收；其提交同步到 GitHub、Gitee 后才允许开始 S3-11；
 任何 S3 任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、

@@ -185,6 +185,14 @@ WHERE last_run_id = %s AND last_invocation_id = %s
 FOR UPDATE
 """
 
+_SELECT_TASK_BY_INVOCATION = """
+SELECT task.*, run.session_id AS run_session_id
+FROM capability_tasks AS task
+JOIN runs AS run ON run.run_id = %s
+WHERE task.last_run_id = %s AND task.last_invocation_id = %s
+ORDER BY task.task_id ASC
+"""
+
 _SELECT_TASK_RESOLUTION_EVENTS = """
 SELECT event_type, payload
 FROM runtime_events
@@ -328,6 +336,13 @@ FROM capability_operations
 WHERE idempotency_key = %s
 """
 
+_SELECT_OPERATIONS_BY_INVOCATION = f"""
+SELECT {_OPERATION_COLUMNS}
+FROM capability_operations
+WHERE run_id = %s AND invocation_id = %s
+ORDER BY created_at ASC, operation_id ASC
+"""
+
 _SELECT_OPERATION_FOR_UPDATE = f"""
 SELECT {_OPERATION_COLUMNS}
 FROM capability_operations
@@ -423,39 +438,55 @@ async def _insert_or_reuse_operation(
     row = await cursor.fetchone()
     created = row is not None
     if row is None:
-        business_cursor = await connection.execute(
-            _SELECT_OPERATION_BY_BUSINESS_KEY,
-            (
-                operation.run_id,
-                operation.invocation_id,
-                operation.operation_key,
-            ),
+        row = await _read_existing_operation(
+            connection=connection,
+            operation=operation,
+            required=True,
         )
-        business_row = await business_cursor.fetchone()
-        idempotency_cursor = await connection.execute(
-            _SELECT_OPERATION_BY_IDEMPOTENCY_KEY,
-            (operation.idempotency_key,),
-        )
-        idempotency_row = await idempotency_cursor.fetchone()
-        if (
-            business_row is None
-            or idempotency_row is None
-            or business_row["operation_id"] != idempotency_row["operation_id"]
-            or str(business_row["idempotency_key"])
-            != operation.idempotency_key
-            or UUID(str(business_row["task_id"])) != operation.task_id
-            or str(business_row["capability_id"]) != operation.capability_id
-        ):
-            raise CapabilityPersistenceConflictError(
-                code="CAPABILITY_OPERATION_CONFLICT",
-                message="Operation 唯一键与既有记录冲突",
-                status_code=409,
-            )
-        row = business_row
     return CapabilityOperationCreateResult(
         operation=_operation_from_row(row),
         created=created,
     )
+
+
+async def _read_existing_operation(
+    *,
+    connection,
+    operation: CapabilityOperation,
+    required: bool,
+):
+    """读取并严格复核幂等 Operation；可选允许记录尚不存在。"""
+
+    business_cursor = await connection.execute(
+        _SELECT_OPERATION_BY_BUSINESS_KEY,
+        (
+            operation.run_id,
+            operation.invocation_id,
+            operation.operation_key,
+        ),
+    )
+    business_row = await business_cursor.fetchone()
+    idempotency_cursor = await connection.execute(
+        _SELECT_OPERATION_BY_IDEMPOTENCY_KEY,
+        (operation.idempotency_key,),
+    )
+    idempotency_row = await idempotency_cursor.fetchone()
+    if business_row is None and idempotency_row is None and not required:
+        return None
+    if (
+        business_row is None
+        or idempotency_row is None
+        or business_row["operation_id"] != idempotency_row["operation_id"]
+        or str(business_row["idempotency_key"]) != operation.idempotency_key
+        or UUID(str(business_row["task_id"])) != operation.task_id
+        or str(business_row["capability_id"]) != operation.capability_id
+    ):
+        raise CapabilityPersistenceConflictError(
+            code="CAPABILITY_OPERATION_CONFLICT",
+            message="Operation 唯一键与既有记录冲突",
+            status_code=409,
+        )
+    return business_row
 
 
 async def _setup_schema(
@@ -538,6 +569,90 @@ class CapabilityTaskRepository:
         except Exception as error:
             raise _persistence_error("Capability Task 读取失败", error) from error
         return _task_from_row(row) if row is not None else None
+
+    async def get_by_invocation(
+        self,
+        *,
+        run_id: UUID,
+        invocation_id: UUID,
+    ) -> CapabilityTask | None:
+        """按最后一次 Run 与 Invocation 读取唯一 Task 恢复投影。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_TASK_BY_INVOCATION,
+                    (run_id, run_id, invocation_id),
+                )
+                rows = await cursor.fetchall()
+                if len(rows) > 1:
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_TASK_INVOCATION_CONFLICT",
+                        message="同一 Invocation 关联了多个 Capability Task",
+                        status_code=409,
+                    )
+                row = rows[0] if rows else None
+                if (
+                    row is not None
+                    and row["session_id"] != row["run_session_id"]
+                ):
+                    raise CapabilityPersistenceConflictError(
+                        code="CAPABILITY_TASK_SESSION_MISMATCH",
+                        message="Capability Task 与 Run 的 Session 不一致",
+                        status_code=409,
+                    )
+        except ApplicationError:
+            raise
+        except Exception as error:
+            raise _persistence_error(
+                "Capability Task 恢复投影读取失败",
+                error,
+            ) from error
+        return _task_from_row(row) if row is not None else None
+
+    async def get_resolution_action(
+        self,
+        *,
+        run_id: UUID,
+        task_id: UUID,
+        requested_action: CapabilityTaskAction,
+    ) -> CapabilityTaskAction:
+        """从本次 Run 的 Task 事件恢复实际 new/continue 动作。"""
+
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_TASK_RESOLUTION_EVENTS,
+                    (run_id, str(task_id)),
+                )
+                rows = await cursor.fetchall()
+        except Exception as error:
+            raise _persistence_error(
+                "Capability Task 解析动作读取失败",
+                error,
+            ) from error
+        event_types = {str(row["event_type"]) for row in rows}
+        created = "internal.capability.task.created" in event_types
+        degraded = (
+            "internal.capability.task.continue_degraded_to_new" in event_types
+        )
+        if requested_action == "new":
+            if not created:
+                raise CapabilityPersistenceConflictError(
+                    code="CAPABILITY_TASK_RESOLUTION_CONFLICT",
+                    message="new Task 缺少对应的 durable 创建事件",
+                    status_code=409,
+                )
+            return "new"
+        if not created:
+            return "continue"
+        if degraded:
+            return "new"
+        raise CapabilityPersistenceConflictError(
+            code="CAPABILITY_TASK_RESOLUTION_CONFLICT",
+            message="continue 降级 Task 缺少对应的 durable 诊断事件",
+            status_code=409,
+        )
 
     async def update_projection(
         self,
@@ -1428,8 +1543,7 @@ class CapabilityOperationRepository:
                     )
                 locked_task = _task_from_row(locked_task_row)
                 if (
-                    locked_task.status != "active"
-                    or locked_task.capability_id != operation.capability_id
+                    locked_task.capability_id != operation.capability_id
                     or locked_task.last_run_id != operation.run_id
                     or locked_task.last_invocation_id != operation.invocation_id
                 ):
@@ -1438,10 +1552,27 @@ class CapabilityOperationRepository:
                         message="Operation 与当前 Capability Task 调用归属不一致",
                         status_code=409,
                     )
-                result = await _insert_or_reuse_operation(
-                    connection=connection,
-                    operation=operation,
-                )
+                if locked_task.status == "active":
+                    result = await _insert_or_reuse_operation(
+                        connection=connection,
+                        operation=operation,
+                    )
+                else:
+                    existing_row = await _read_existing_operation(
+                        connection=connection,
+                        operation=operation,
+                        required=False,
+                    )
+                    if existing_row is None:
+                        raise CapabilityPersistenceConflictError(
+                            code="CAPABILITY_OPERATION_OWNERSHIP_CONFLICT",
+                            message="终态 Capability Task 不允许创建新的 Operation",
+                            status_code=409,
+                        )
+                    result = CapabilityOperationCreateResult(
+                        operation=_operation_from_row(existing_row),
+                        created=False,
+                    )
                 await connection.commit()
         except ApplicationError as error:
             log_business_event(
@@ -1489,6 +1620,44 @@ class CapabilityOperationRepository:
         except Exception as error:
             raise _persistence_error("Capability Operation 读取失败", error) from error
         return _operation_from_row(row) if row is not None else None
+
+    async def list_for_invocation(
+        self,
+        *,
+        run_id: UUID,
+        invocation_id: UUID,
+    ) -> tuple[CapabilityOperation, ...]:
+        """按稳定顺序读取单个 Invocation 的全部 Operation 恢复投影。"""
+
+        started_at = perf_counter()
+        log_business_event(
+            logger,
+            "Capability Operation恢复列表查询开始",
+            run_id=run_id,
+            invocation_id=invocation_id,
+        )
+        try:
+            async with open_database_connection(self._settings) as connection:
+                cursor = await connection.execute(
+                    _SELECT_OPERATIONS_BY_INVOCATION,
+                    (run_id, invocation_id),
+                )
+                rows = await cursor.fetchall()
+        except Exception as error:
+            raise _persistence_error(
+                "Capability Operation 恢复列表读取失败",
+                error,
+            ) from error
+        operations = tuple(_operation_from_row(row) for row in rows)
+        log_business_event(
+            logger,
+            "Capability Operation恢复列表查询完成",
+            run_id=run_id,
+            invocation_id=invocation_id,
+            operation_count=len(operations),
+            duration_ms=_elapsed_ms(started_at),
+        )
+        return operations
 
     async def set_status(
         self,
@@ -1803,7 +1972,7 @@ async def _recover_task_resolution(
             status_code=409,
         )
     task = _task_from_row(rows[0])
-    _validate_continue_task(
+    _validate_recovered_task(
         task=task,
         session_id=session_id,
         capability_id=capability_id,
@@ -1820,7 +1989,11 @@ async def _recover_task_resolution(
         changed_payload = event_by_type.get(
             "internal.capability.task.current_changed"
         )
-        if changed_payload is None or current_task_id != task.task_id:
+        if changed_payload is None or (
+            task.status == "active" and current_task_id != task.task_id
+        ) or (
+            task.status != "active" and current_task_id is not None
+        ):
             raise CapabilityPersistenceConflictError(
                 code="CAPABILITY_TASK_CONTEXT_CONFLICT",
                 message="已解析 provisional Task 与 current 指针不一致",
@@ -1841,6 +2014,7 @@ async def _recover_task_resolution(
         previous_task_id=previous_task_id,
         provisional=resolved_new,
         state_scope=state_scope,
+        recovered_terminal=task.status != "active",
     )
 
 
@@ -1861,6 +2035,30 @@ def _validate_continue_task(
         raise CapabilityPersistenceConflictError(
             code="CAPABILITY_TASK_CONTEXT_CONFLICT",
             message="current Task 不是同 Session、同 Capability 的 active Task",
+            status_code=409,
+        )
+    if task.state_schema_version not in allowed_versions:
+        raise CapabilityStateVersionIncompatibleError(
+            code="CAPABILITY_STATE_VERSION_INCOMPATIBLE",
+            message="当前 Capability 无法继续读取该 Task 的状态版本",
+            status_code=409,
+            retryable=False,
+        )
+
+
+def _validate_recovered_task(
+    *,
+    task: CapabilityTask,
+    session_id: UUID,
+    capability_id: str,
+    allowed_versions: frozenset[str],
+) -> None:
+    """恢复同一 Invocation 时允许 Task 终态已先于 Invocation 落盘。"""
+
+    if task.session_id != session_id or task.capability_id != capability_id:
+        raise CapabilityPersistenceConflictError(
+            code="CAPABILITY_TASK_CONTEXT_CONFLICT",
+            message="已解析 Task 与当前 Session 或 Capability 不一致",
             status_code=409,
         )
     if task.state_schema_version not in allowed_versions:
