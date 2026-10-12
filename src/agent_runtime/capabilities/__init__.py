@@ -33,6 +33,12 @@ from agent_runtime.capabilities.recovery import (
     OpenInvocationRecoveryContext,
     OpenInvocationResolver,
 )
+from agent_runtime.capabilities.regeneration import (
+    CapabilityRegeneratePolicy,
+    CapabilityRegenerateUnsupportedError,
+    RegenerateSubmissionDecision,
+    RegenerateSubmissionValidator,
+)
 from agent_runtime.capabilities.registry import (
     CapabilityRegistry,
     CapabilityRegistryEntry,
@@ -122,6 +128,10 @@ __all__ = [
     "CapabilityRecoveryDecision",
     "CapabilityRecoveryError",
     "CapabilityRecoveryPolicyEvaluator",
+    "CapabilityRegeneratePolicy",
+    "CapabilityRegenerateUnsupportedError",
     "OpenInvocationRecoveryContext",
     "OpenInvocationResolver",
+    "RegenerateSubmissionDecision",
+    "RegenerateSubmissionValidator",
 ]

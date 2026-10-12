@@ -239,6 +239,43 @@ def test_regenerate_returns_accepted_run_summary() -> None:
     ]
 
 
+def test_regenerate_maps_unsupported_capability_to_http_409() -> None:
+    """Capability 安全门禁拒绝以稳定 409 返回，不创建失败 Run。"""
+
+    from agent_runtime.capabilities.regeneration import (
+        CapabilityRegenerateUnsupportedError,
+    )
+    from agent_runtime.main import create_app
+
+    service = FakeAsyncRunService()
+    service.error = CapabilityRegenerateUnsupportedError(
+        code="CAPABILITY_REGENERATE_UNSUPPORTED",
+        message="该能力不支持重新生成",
+        status_code=409,
+        retryable=False,
+    )
+    app = create_app(chat_service=service)
+
+    response = _request(
+        app,
+        "POST",
+        (
+            f"/api/v1/chat/sessions/{SESSION_ID}/messages/"
+            f"{SOURCE_MESSAGE_ID}/regenerate"
+        ),
+        json={"request_id": str(REQUEST_ID)},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": {
+            "code": "CAPABILITY_REGENERATE_UNSUPPORTED",
+            "message": "该能力不支持重新生成",
+            "retryable": False,
+        }
+    }
+
+
 def test_active_run_query_supports_page_refresh_without_private_fields() -> None:
     from agent_runtime.main import create_app
 

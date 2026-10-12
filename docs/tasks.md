@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-10（VERIFIED，待提交并同步）
-Last Verified Task: S3-10
-Last Verified Commit: 待生成 S3-10 验收提交
+Current Task: S3-11（VERIFIED，待提交并同步）
+Last Verified Task: S3-11
+Last Verified Commit: 待生成 S3-11 验收提交
 Blockers: None
 ```
 
@@ -2997,7 +2997,7 @@ RunCheckpointInspector integration
 
 ## S3-11 Regenerate Capability 安全门禁
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S3-05, S3-06, S3-09, S3-10
 
@@ -3036,12 +3036,12 @@ CAPABILITY_REGENERATE_UNSUPPORTED
 
 ### Acceptance
 
-- [ ] invocation + none 可创建 regenerate Run 并复用 current Task
-- [ ] 每次合法 Regenerate 使用新 invocation_id 和新 Child thread
-- [ ] run/session scope 或 idempotent/unsafe 在 Run 创建前返回 409
-- [ ] 拒绝路径不创建 Run、Task、Invocation、Operation 或 Checkpoint
-- [ ] 不重新 Router，且 invoke 前权限/健康复查仍执行
-- [ ] 旧 Session 无 current Task 时按既定 continue→new 降级
+- [x] invocation + none 可创建 regenerate Run 并复用 current Task
+- [x] 每次合法 Regenerate 使用新 invocation_id 和新 Child thread
+- [x] run/session scope 或 idempotent/unsafe 在 Run 创建前返回 409
+- [x] 拒绝路径不创建 Run、Task、Invocation、Operation 或 Checkpoint
+- [x] 不重新 Router，且 invoke 前权限/健康复查仍执行
+- [x] 旧 Session 无 current Task 时按既定 continue→new 降级
 
 ### Test Requirements
 
@@ -3054,6 +3054,37 @@ CAPABILITY_REGENERATE_UNSUPPORTED
 
 - Stage 2 最新 completed 消息限制、Checkpoint Fork 和历史分支不变
 - 两个测试 Capability 的既有 Regenerate 可继续工作
+
+### Verification Notes
+
+- 2026-10-11：新增 `CapabilityRegeneratePolicy`，对 State Scope × Side Effect
+  Policy 九种组合执行固定门禁，只有 `invocation + none` 通过；其他组合在 Parent
+  Checkpoint Fork、Run、Task、Invocation 和 Operation 创建前返回 HTTP 409
+  `CAPABILITY_REGENERATE_UNSUPPORTED`。
+- 2026-10-11：新增 `RegenerateSubmissionValidator`，从活动分支最新 completed
+  AIMessage 取得原 `capability_id`，依次复查 active/enabled Registry Manifest、动态
+  Health、实时权限和 current Task 固化的 State Schema；不存在 current Task 时保留
+  `task_action=continue`，由既有 Task 事务按规则降级 `new`，不自动迁移或改写 Task。
+- 2026-10-11：`ChatService` 在 request_id 幂等读取之后、Parent 起点捕获和 Run
+  创建之前调用可注入校验器；合法请求把已确认的 `capability_id + continue` 写入活动
+  Run 最小恢复输入，执行继续从 Parent Fork 的 `invoke_capability` 节点开始，不重新
+  Router。S3-12 才负责在正式 composition root 装配 Registry 与通用 Invocation
+  Gateway，本任务未提前替换两个固定能力分发。
+- 2026-10-11：真实 PostgreSQL/API 拒绝测试确认不安全组合返回 409，且 Run、Task、
+  Task Context、Operation、RuntimeEvent 均无新增；真实 PostgreSQL Parent
+  Checkpointer 组件级组合测试确认合法请求复用同一 current Task、既有 Invocation 与
+  Thread 组件生成新的 invocation_id 和 invocation-scope Child thread，Parent Fork
+  使用新回复 ID 且准备阶段 Router 调用次数不增加。完整动态执行链路的 invoke 前
+  Health/Permission 二次复查和 Router/Invocation 串联留给 S3-12 composition root
+  集成测试，本任务不以手工组件组合冒充尚未装配的端到端能力。
+- 2026-10-11：request_id 重试在动态复查前返回原 Run；新 request_id 每次重新读取
+  Health 与 Permission，撤销或不可用后立即拒绝。S3-11 聚焦回归 `62 passed`，默认
+  完整回归 `619 passed, 65 skipped`，PostgreSQL + Redis 完整回归
+  `683 passed, 1 skipped`，唯一跳过为显式百炼 smoke test；依赖锁、依赖兼容、源码
+  与测试编译、Compose 配置、源码包和 wheel 构建、`git diff --check` 均通过。
+- 2026-10-12：负责人确认 S3-11 审核通过，任务状态更新为 `VERIFIED`；提交与双远程
+  同步完成前不开始 S3-12 编码。
+- Result：S3-11 已通过负责人验收，等待生成验收提交并同步 GitHub、Gitee。
 
 ### Definition of Done
 

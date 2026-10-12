@@ -33,6 +33,7 @@ from agent_runtime.capabilities.recovery import (
     CapabilityRecoveryPolicyEvaluator,
     OpenInvocationRecoveryContext,
 )
+from agent_runtime.capabilities.regeneration import RegenerateSubmissionValidator
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
@@ -171,6 +172,9 @@ class ChatService:
         capability_recovery_policy_evaluator: (
             CapabilityRecoveryPolicyEvaluator | None
         ) = None,
+        regenerate_submission_validator: (
+            RegenerateSubmissionValidator | None
+        ) = None,
         session_id_factory: Callable[[], UUID] = uuid4,
         human_message_id_factory: Callable[[], UUID] = uuid4,
         response_message_id_factory: Callable[[], UUID] = uuid4,
@@ -202,6 +206,7 @@ class ChatService:
         self._capability_recovery_policy_evaluator = (
             capability_recovery_policy_evaluator
         )
+        self._regenerate_submission_validator = regenerate_submission_validator
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
         self._response_message_id_factory = response_message_id_factory
@@ -387,6 +392,27 @@ class ChatService:
                     code="MESSAGE_REGENERATE_NOT_ALLOWED",
                     message="仅允许重新生成当前活动分支最新的 completed AIMessage",
                     status_code=409,
+                )
+            source_message = messages[-1]
+            validator = self._regenerate_submission_validator
+            if validator is not None:
+                if source_message.capability_id is None:
+                    raise ChatRuntimeError(
+                        code="CAPABILITY_REGENERATE_UNSUPPORTED",
+                        message="该能力不支持重新生成",
+                        status_code=409,
+                        retryable=False,
+                    )
+                decision = await validator.validate(
+                    user_id=self._settings.local_user_id,
+                    session_id=session_id,
+                    capability_id=source_message.capability_id,
+                )
+                request_payload.update(
+                    {
+                        "capability_id": decision.capability_id,
+                        "task_action": decision.task_action,
+                    }
                 )
             source_human = next(
                 (
