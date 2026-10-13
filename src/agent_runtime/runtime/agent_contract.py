@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.graph.child_result import ChildResult
 
-type AgentCapabilityId = Literal["general_chat", "en_to_zh"]
+type AgentCapabilityId = str
 type CancellationProbe = Callable[[], Awaitable[bool]]
 type AgentEventHandler = Callable[["AgentTextEvent"], None]
 
@@ -158,12 +158,15 @@ class RunContext:
 
 @dataclass(frozen=True, slots=True)
 class AgentContext:
-    """只提供固定能力标识及其隔离的 Child 执行配置。"""
+    """提供动态能力标识、Task/State Scope 与隔离的 Child 执行配置。"""
 
     session_id: UUID
     capability_id: AgentCapabilityId
     thread_id: str
     config: RunnableConfig
+    task_id: UUID | None = None
+    state_scope: Literal["invocation", "run", "session"] | None = None
+    state_schema_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

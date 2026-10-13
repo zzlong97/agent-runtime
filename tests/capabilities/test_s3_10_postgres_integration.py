@@ -1131,20 +1131,29 @@ def test_automatic_none_resumes_exact_postgres_checkpoint_for_dynamic_capability
 
 
 @pytest.mark.parametrize(
-    ("crash_window", "expected_external_attempts", "expected_before_status"),
+    (
+        "crash_window",
+        "expected_external_attempts",
+        "expected_before_status",
+        "expected_capability_calls",
+        "expected_message_attempts",
+    ),
     [
-        ("before_operation", 1, None),
-        ("after_external", 2, "pending"),
-        ("after_ledger", 1, "succeeded"),
-        ("after_task_transition", 1, "succeeded"),
+        ("before_operation", 1, None, 2, [1, 2]),
+        ("after_external", 2, "pending", 2, [1, 2]),
+        ("after_ledger", 1, "succeeded", 2, [1, 2]),
+        ("after_task_transition", 1, "succeeded", 2, [1, 2]),
+        ("after_parent_checkpoint", 1, "succeeded", 1, [1]),
     ],
 )
 def test_automatic_idempotent_reuses_operation_across_crash_windows(
     crash_window: str,
     expected_external_attempts: int,
     expected_before_status: str | None,
+    expected_capability_calls: int,
+    expected_message_attempts: list[int],
 ) -> None:
-    """三个副作用崩溃窗口都必须复用调用身份且最多产生一次外部事实。"""
+    """副作用与 Parent 落盘崩溃窗口都必须复用 Invocation 身份。"""
 
     from langchain_core.messages import AIMessage, HumanMessage
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -1270,7 +1279,7 @@ def test_automatic_idempotent_reuses_operation_across_crash_windows(
             if crash_pending and crash_window == "after_ledger":
                 crash_pending = False
                 raise SimulatedProcessCrash("Ledger 成功但 Parent 未完成")
-            transitioned_task = await task_service.apply_transition(
+            await task_service.apply_transition(
                 task=resolution.task,
                 task_transition="completed",
                 run_id=case.submission.run_id,
@@ -1292,17 +1301,6 @@ def test_automatic_idempotent_reuses_operation_across_crash_windows(
                     "runtime_status": "completed",
                     "capability_id": capability_id,
                 },
-            )
-            await invocation_service.complete(
-                invocation_id=invocation.invocation_id,
-                capability_id=capability_id,
-                task_id=transitioned_task.task_id,
-                requested_task_action=invocation.task_action,
-                effective_task_action=resolution.resolved_action,
-                state_scope=resolution.state_scope,
-                state_schema_version=transitioned_task.state_schema_version,
-                outcome="completed",
-                created_at=datetime.now(UTC),
             )
             get_stream_writer()(response)
             return {
@@ -1364,20 +1362,25 @@ def test_automatic_idempotent_reuses_operation_across_crash_windows(
                     input_message_id=case.submission.input_message_id,
                     response_message_id=case.submission.response_message_id,
                 )
-                with pytest.raises(SimulatedProcessCrash):
-                    async for _event in first_graph.astream(
-                        {
-                            "messages": [
-                                HumanMessage(
-                                    content="幂等副作用恢复测试",
-                                    id=str(case.submission.input_message_id),
-                                )
-                            ]
-                        },
-                        config,
-                        stream_mode="custom",
-                    ):
+                graph_stream = first_graph.astream(
+                    {
+                        "messages": [
+                            HumanMessage(
+                                content="幂等副作用恢复测试",
+                                id=str(case.submission.input_message_id),
+                            )
+                        ]
+                    },
+                    config,
+                    stream_mode="custom",
+                )
+                if crash_window == "after_parent_checkpoint":
+                    async for _event in graph_stream:
                         pass
+                else:
+                    with pytest.raises(SimulatedProcessCrash):
+                        async for _event in graph_stream:
+                            pass
 
             resolver = OpenInvocationResolver(
                 event_repository=events,
@@ -1423,6 +1426,7 @@ def test_automatic_idempotent_reuses_operation_across_crash_windows(
                     run_interrupt_repository=interrupts,
                     run_coordinator=coordinator,
                     capability_recovery_policy_evaluator=evaluator,
+                    open_invocation_resolver=resolver,
                 )
                 try:
                     await coordinator.start(service.execute_persistent_run)
@@ -1453,7 +1457,7 @@ def test_automatic_idempotent_reuses_operation_across_crash_windows(
 
                     assert completed.status == "completed"
                     assert completed.recovery_attempts == 1
-                    assert capability_calls == 2
+                    assert capability_calls == expected_capability_calls
                     assert external_attempts == expected_external_attempts
                     assert len(external_effects) == 1
                     assert recovered_open_invocation is None
@@ -1463,7 +1467,7 @@ def test_automatic_idempotent_reuses_operation_across_crash_windows(
                         event.payload["attempt"]
                         for event in public_events
                         if event.event_type == "message.started"
-                    ] == [1, 2]
+                    ] == expected_message_attempts
                     assert len(replies) == 1
                     assert str(replies[0].text).strip()
                 finally:

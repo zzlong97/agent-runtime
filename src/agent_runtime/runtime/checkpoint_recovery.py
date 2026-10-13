@@ -20,7 +20,6 @@ from agent_runtime.runtime.models import Run
 
 logger = logging.getLogger(__name__)
 
-_AUTOMATIC_RECOVERY_CAPABILITIES = frozenset({"general_chat", "en_to_zh"})
 RecoveredRuntimeStatus = Literal[
     "completed", "unsupported", "incomplete", "stopped"
 ]
@@ -165,10 +164,10 @@ def recovered_final_message(
 
 
 def ensure_automatic_recovery_safe(snapshot: StateSnapshot | Any) -> None:
-    """拒绝自动恢复当前阶段未声明幂等保障的副作用能力。"""
+    """仅允许尚未进入 Capability 的遗留 Checkpoint 直接自动恢复。"""
 
     capability_id = snapshot.values.get("resolved_capability_id")
-    if capability_id is None or capability_id in _AUTOMATIC_RECOVERY_CAPABILITIES:
+    if capability_id is None:
         return
     raise RunCheckpointError(
         code="RUN_RECOVERY_UNSAFE_SIDE_EFFECT",

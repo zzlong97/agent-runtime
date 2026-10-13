@@ -74,6 +74,9 @@ def test_agent_contract_exposes_only_controlled_execution_inputs() -> None:
         "capability_id",
         "thread_id",
         "config",
+        "task_id",
+        "state_scope",
+        "state_schema_version",
     }
     assert {field.name for field in fields(TaskInput)} == {"messages"}
 

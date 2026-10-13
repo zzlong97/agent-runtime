@@ -131,7 +131,12 @@ def test_all_rejected_capabilities_emit_and_persist_unsupported_message() -> Non
             for capability_id in ("general_chat", "en_to_zh")
             if capability_id not in rejected
         ]
-        return {"resolved_capability_id": available[0]}
+        if not available:
+            return {"resolved_capability_id": None, "task_action": None}
+        return {
+            "resolved_capability_id": available[0],
+            "task_action": "continue",
+        }
 
     async def invoke_capability(state, config):
         invoked_capabilities.append(state["resolved_capability_id"])
@@ -168,7 +173,7 @@ def test_all_rejected_capabilities_emit_and_persist_unsupported_message() -> Non
 
     events, result = asyncio.run(exercise())
 
-    assert route_rejections == [[], ["general_chat"]]
+    assert route_rejections == [[], ["general_chat"], ["general_chat", "en_to_zh"]]
     assert invoked_capabilities == ["general_chat", "en_to_zh"]
     assert result["rejected_capability_ids"] == ["general_chat", "en_to_zh"]
     assert result["resolved_capability_id"] is None

@@ -69,6 +69,9 @@ from agent_runtime.capabilities.invocation_service import (
     CapabilityInvocation,
     CapabilityInvocationService,
 )
+from agent_runtime.capabilities.invocation_gateway import (
+    CapabilityInvocationGateway,
+)
 from agent_runtime.capabilities.state_scope import (
     CapabilityStateVersionIncompatibleError,
     ChildThreadIdFactory,
@@ -92,6 +95,7 @@ __all__ = [
     "CapabilityFactory",
     "CapabilityHealthService",
     "CapabilityInvocation",
+    "CapabilityInvocationGateway",
     "CapabilityInvocationService",
     "CapabilityOperation",
     "CapabilityOperationContext",

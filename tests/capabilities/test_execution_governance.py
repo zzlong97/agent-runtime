@@ -618,6 +618,25 @@ def test_error_mapper_never_converts_explicit_cancellation_to_failure() -> None:
         CapabilityErrorMapper().map(asyncio.CancelledError())
 
 
+def test_error_mapper_preserves_runtime_policy_error_whitelist() -> None:
+    """Task 解析等 Runtime 门禁抛出的稳定错误码必须保留。"""
+
+    from agent_runtime.capabilities.execution import CapabilityErrorMapper
+    from agent_runtime.core.errors import ApplicationError
+
+    mapped = CapabilityErrorMapper().map(
+        ApplicationError(
+            code="CAPABILITY_STATE_VERSION_INCOMPATIBLE",
+            message="内部状态版本详情",
+            retryable=True,
+        )
+    )
+
+    assert mapped.code == "CAPABILITY_STATE_VERSION_INCOMPATIBLE"
+    assert mapped.message == "该能力的任务状态版本不兼容"
+    assert mapped.retryable is False
+
+
 def test_busy_path_can_close_started_invocation_without_resolving_task() -> None:
     from agent_runtime.capabilities.execution import (
         CapabilityConcurrencyController,

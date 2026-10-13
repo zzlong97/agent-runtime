@@ -2224,6 +2224,15 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         async def setup(self) -> None:
             events.append("runtime_event_setup")
 
+    class FakeCapabilityRepository:
+        event_name = "capability_setup"
+
+        def __init__(self, settings):
+            pass
+
+        async def setup(self) -> None:
+            events.append(self.event_name)
+
     class FakeRuntimeEventPublisher:
         @classmethod
         def from_url(cls, *args, **kwargs):
@@ -2232,6 +2241,14 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
 
         async def aclose(self) -> None:
             events.append("publisher_closed")
+
+    class FakeRuntimeEventReader:
+        @classmethod
+        def from_url(cls, *args, **kwargs):
+            return cls()
+
+        async def aclose(self) -> None:
+            events.append("reader_closed")
 
     class FakeRunCoordinator:
         def __init__(self, **kwargs):
@@ -2282,17 +2299,16 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
             raise AssertionError("测试不应真正执行 Run")
 
     @asynccontextmanager
-    async def fake_checkpointers(settings):
-        yield SimpleNamespace(parent=None, general_chat=None, en_to_zh=None)
+    async def fake_checkpointers(settings, *, child_count=0):
+        assert child_count == 0
+        yield SimpleNamespace(
+            parent=None,
+            cleanup=None,
+            children=(),
+            general_chat=None,
+            en_to_zh=None,
+        )
         events.append("checkpointers_closed")
-
-    class FakeRouter:
-        def __init__(self, model):
-            self.route = object()
-
-    class FakeAdapter:
-        def __init__(self, *, capability):
-            self.invoke = object()
 
     monkeypatch.setattr(
         chat_module,
@@ -2321,8 +2337,33 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     )
     monkeypatch.setattr(
         chat_module,
+        "CapabilityTaskRepository",
+        FakeCapabilityRepository,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "CapabilityTaskContextRepository",
+        FakeCapabilityRepository,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "CapabilityOperationRepository",
+        FakeCapabilityRepository,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "UserCapabilityPermissionRepository",
+        FakeCapabilityRepository,
+    )
+    monkeypatch.setattr(
+        chat_module,
         "RedisStreamPublisher",
         FakeRuntimeEventPublisher,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "RedisStreamReader",
+        FakeRuntimeEventReader,
     )
     monkeypatch.setattr(
         chat_module,
@@ -2331,25 +2372,12 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     )
     monkeypatch.setattr(
         chat_module,
-        "open_stage_one_checkpointers",
+        "open_runtime_checkpointers",
         fake_checkpointers,
     )
-    monkeypatch.setattr(chat_module, "StageOneRouter", FakeRouter)
     monkeypatch.setattr(
         chat_module,
-        "GeneralChatCapability",
-        lambda **kwargs: object(),
-    )
-    monkeypatch.setattr(
-        chat_module,
-        "EnglishToChineseCapability",
-        lambda **kwargs: object(),
-    )
-    monkeypatch.setattr(chat_module, "GeneralChatAdapter", FakeAdapter)
-    monkeypatch.setattr(chat_module, "EnglishToChineseAdapter", FakeAdapter)
-    monkeypatch.setattr(
-        chat_module,
-        "build_parent_graph",
+        "build_runtime_demo_graph",
         lambda **kwargs: object(),
     )
     monkeypatch.setattr(
@@ -2376,18 +2404,22 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
 
     async def exercise() -> None:
         async with chat_module.open_chat_service(
-            Settings(_env_file=None),
+            Settings(_env_file=None, runtime_demo_mode=True),
             model=object(),
         ):
             events.append("serving")
 
     asyncio.run(exercise())
 
-    assert events[:6] == [
+    assert events[:10] == [
         "session_setup",
         "feedback_setup",
         "run_setup",
         "runtime_event_setup",
+        "capability_setup",
+        "capability_setup",
+        "capability_setup",
+        "capability_setup",
         "publisher_created",
         "service_created",
     ]
@@ -2405,10 +2437,11 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     assert captured["delete_feedback_store"] is captured["feedback_store"]
     assert captured["delete_session_repository"] is not None
     assert captured["chat_deletion_service"] is not None
-    assert events[-4:] == [
+    assert events[-5:] == [
         "coordinator_closed",
         "runs_closed",
         "publisher_closed",
+        "reader_closed",
         "checkpointers_closed",
     ]
 

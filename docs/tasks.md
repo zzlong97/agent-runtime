@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-11（VERIFIED，待提交并同步）
-Last Verified Task: S3-11
-Last Verified Commit: 待生成 S3-11 验收提交
+Current Task: S3-13（IN_PROGRESS）
+Last Verified Task: S3-12
+Last Verified Commit: 待生成 S3-12 验收提交
 Blockers: None
 ```
 
@@ -3094,7 +3094,7 @@ Regenerate 安全矩阵、真实 Checkpointer 集成、Review、负责人验收�
 
 ## S3-12 迁移 general_chat / en_to_zh 并移除硬编码分支
 
-**Status:** TODO
+**Status:** VERIFIED
 
 **Dependencies:** S3-06 ~ S3-11
 
@@ -3128,13 +3128,13 @@ Regenerate 安全矩阵、真实 Checkpointer 集成、Review、负责人验收�
 
 ### Acceptance
 
-- [ ] 正式代码无两个 ID 的能力分发硬编码
-- [ ] 两个能力均从 Manifest 到 Registry 再到 Runtime 执行
-- [ ] OUT_OF_SCOPE 有限回流和拒绝零业务副作用不回归
-- [ ] 最终完整 AIMessage 仍只由 Parent 保存
-- [ ] 三种 state scope 可通过 Manifest 测试变体验证，不复制业务实现
-- [ ] 两个测试 Manifest 固定为 invocation + none，既有 Regenerate 通过安全门禁
-- [ ] 真实百炼仍仅为显式 smoke
+- [x] 正式代码无两个 ID 的能力分发硬编码
+- [x] 两个能力均从 Manifest 到 Registry 再到 Runtime 执行
+- [x] OUT_OF_SCOPE 有限回流和拒绝零业务副作用不回归
+- [x] 最终完整 AIMessage 仍只由 Parent 保存
+- [x] 三种 state scope 可通过 Manifest 测试变体验证，不复制业务实现
+- [x] 两个测试 Manifest 固定为 invocation + none，既有 Regenerate 通过安全门禁
+- [x] 真实百炼仍仅为显式 smoke
 
 ### Test Requirements
 
@@ -3149,6 +3149,49 @@ Regenerate 安全矩阵、真实 Checkpointer 集成、Review、负责人验收�
 - Stage 2 历史、Regenerate、Feedback
 - Stage 2.5 Run、SSE、Cancel、Interrupt/Resume、恢复
 
+### Verification Notes
+
+- 2026-10-12：为 `general_chat` 与 `en_to_zh` 增加标准 entrypoint、
+  `initialize / health_check / invoke` 契约和 `AgentResult` 全文出口；既有 `run`
+  仅保留为历史单元测试兼容入口，正式 composition root 不再引用固定 Adapter。
+- 2026-10-12：正式链路改为本地 YAML Source → 启动期 Registry Snapshot → 动态
+  Router 候选 → 通用 Invocation Gateway；Gateway 在调用前复查 Registry、Health 与
+  Permission，并统一串联 Invocation、Task、State Scope、并发/超时、Operation
+  Ledger、标准结果和 Parent 公共 AIMessage。
+- 2026-10-12：Parent、Router、恢复兼容入口和 Checkpointer 生命周期已移除两个测试
+  Capability 的固定分发集合；每个已实例化 Capability 获得独立 PostgreSQL saver
+  句柄，并严格按 invocation、run、session 三种 namespace 生成 thread_id。正式恢复
+  链路注入 Manifest 驱动的 Recovery Evaluator，未扩展 S3-13 Session 删除范围。
+- 2026-10-12：测试显式写入 allow 权限；真实 PostgreSQL 重启测试覆盖普通聊天、
+  连续会话、能力切换、动态 Invocation Checkpoint 隔离和 Parent 权威历史；Stage 2
+  历史 Regenerate 通过“保留 Parent 历史、移除来源 Run/Task”夹具验证
+  `parent_run_id = NULL`，不补建虚假 Run。
+- 2026-10-12：收尾复核修正 Invocation 终态顺序：成功 Gateway 只返回 Parent 规范结果，
+  待 Parent 最终 AIMessage Checkpoint 落盘后才提交 Invocation completed；若在两者之间
+  崩溃，恢复器使用同一 open invocation_id 补齐终态，不重新生成 Operation 幂等键。
+  Task 解析动作恢复查询同步补读 `continue_degraded_to_new` durable 事件。
+- 2026-10-12：补充副作用前、外部成功后 Ledger 前、Ledger 后、Task 终态后及 Parent
+  Checkpoint 后五个真实 PostgreSQL 崩溃窗口，专项 `5 passed`；真实正式链路重启与
+  Parent/Child Checkpoint 隔离测试 `1 passed`；聚焦回归 `70 passed, 1 skipped`。
+- 2026-10-12：复审补齐 Parent 终态已落盘但完成投影前收到 Cancel 的生命周期收尾：
+  stopped Checkpoint 对账会先幂等关闭 open Invocation，再提交唯一 `run.cancelled`，
+  不自动结束 Task。Gateway 成功后 Runtime 读取失败时，也会在 incomplete Checkpoint
+  落盘后、`run.failed` 前关闭 open Invocation；两项终态竞态、stopped 恢复与五个崩溃
+  窗口组合专项 `12 passed`。
+- 2026-10-13：按 `REV-S3-12-001` 增加正式 `open_chat_service`、显式权限、Fake Model
+  与真实 PostgreSQL 的全能力拒绝端到端测试；断言两个 Invocation 各执行一次且均为
+  rejected、无 Capability 可见生成、provisional Task/Context/Operation 均为零、Parent
+  只保存固定 unsupported 终态且 Run completed。新增专项 `1 passed`，S3-12 核心组合
+  专项 `21 passed`。
+- 2026-10-13：默认完整套件 `635 passed, 69 skipped`；启用真实 PostgreSQL + Redis 的
+  完整套件 `703 passed, 1 skipped`，唯一跳过为按项目规则显式启用的百炼真实 smoke
+  test。
+- 2026-10-12：`uv lock --check`、`uv pip check`、`compileall`、`uv build`、Compose
+  配置与 `git diff --check` 均通过；Wheel 包含两个 entrypoint、Manifest 与通用
+  Invocation Gateway。当前状态为 `DONE`，等待 Reviewer 复审，不标记 `VERIFIED`。
+- 2026-10-13：Reviewer 确认 `REV-S3-12-001` 已关闭，负责人确认 S3-12 审核通过；
+  任务更新为 `VERIFIED`，按工程流程提交并同步 GitHub、Gitee 后进入 S3-13。
+
 ### Definition of Done
 
 两个测试能力完全通过通用链路，旧分发移除，专项与全量回归、Review、负责人验收、
@@ -3158,7 +3201,7 @@ Regenerate 安全矩阵、真实 Checkpointer 集成、Review、负责人验收�
 
 ## S3-13 Session 删除与动态 Child Checkpoint 清理
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 
 **Dependencies:** S3-05, S3-09, S3-12
 

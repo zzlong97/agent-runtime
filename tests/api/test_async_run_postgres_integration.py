@@ -12,6 +12,10 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from pydantic import PrivateAttr
 
 from ..e2e.fake_model import StageTwoBrowserFakeModel
+from ..capability_fixtures import (
+    allow_builtin_capabilities,
+    cleanup_capability_runtime_for_session,
+)
 
 
 class BlockingRuntimeFakeModel(StageTwoBrowserFakeModel):
@@ -146,6 +150,7 @@ def test_async_run_api_persists_before_202_and_executes_after_disconnect() -> No
     async def exercise() -> None:
         nonlocal session_id, run_id
         try:
+            await allow_builtin_capabilities(settings)
             async with open_chat_service(settings, model=model) as service:
                 app = create_app(settings, chat_service=service)
                 transport = httpx.ASGITransport(app=app)
@@ -161,7 +166,7 @@ def test_async_run_api_persists_before_202_and_executes_after_disconnect() -> No
                         "/api/v1/chat/completions",
                         json=payload,
                     )
-                    assert response.status_code == 202
+                    assert response.status_code == 202, response.text
                     summary = response.json()
                     session_id = UUID(summary["session_id"])
                     run_id = UUID(summary["run_id"])
@@ -350,6 +355,10 @@ def test_async_run_api_persists_before_202_and_executes_after_disconnect() -> No
                     )
         finally:
             if session_id is not None:
+                await cleanup_capability_runtime_for_session(
+                    settings,
+                    session_id,
+                )
                 async with AsyncPostgresSaver.from_conn_string(
                     settings.database_connection_string
                 ) as checkpointer:
@@ -423,6 +432,7 @@ def test_cancel_and_failure_persist_nonempty_terminal_message(
     async def exercise() -> None:
         nonlocal session_id
         try:
+            await allow_builtin_capabilities(settings)
             async with open_chat_service(
                 settings,
                 model=model_factory(),
@@ -497,6 +507,10 @@ def test_cancel_and_failure_persist_nonempty_terminal_message(
                     )
         finally:
             if session_id is not None:
+                await cleanup_capability_runtime_for_session(
+                    settings,
+                    session_id,
+                )
                 async with AsyncPostgresSaver.from_conn_string(
                     settings.database_connection_string
                 ) as checkpointer:
@@ -556,6 +570,7 @@ def test_completion_and_cancel_publish_only_one_message_finalized() -> None:
     async def exercise() -> None:
         nonlocal session_id
         try:
+            await allow_builtin_capabilities(settings)
             async with open_chat_service(
                 settings,
                 model=StageTwoBrowserFakeModel(),
@@ -624,6 +639,238 @@ def test_completion_and_cancel_publish_only_one_message_finalized() -> None:
                     assert events[-1].event_type == "run.completed"
         finally:
             if session_id is not None:
+                await cleanup_capability_runtime_for_session(
+                    settings,
+                    session_id,
+                )
+                async with AsyncPostgresSaver.from_conn_string(
+                    settings.database_connection_string
+                ) as checkpointer:
+                    for thread_id in (
+                        f"{session_id}:general_chat",
+                        f"{session_id}:en_to_zh",
+                        str(session_id),
+                    ):
+                        await checkpointer.adelete_thread(thread_id)
+                async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM runtime_events WHERE run_id IN "
+                        "(SELECT run_id FROM runs WHERE session_id = %s)",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM runs WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.commit()
+
+    _run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="设置 RUN_POSTGRES_TESTS=1 后运行 PostgreSQL 集成测试",
+)
+def test_cancel_after_parent_checkpoint_closes_open_invocation() -> None:
+    """Parent 终态已落盘后取消仍必须关闭当前 open Invocation。"""
+
+    from agent_runtime.chat import open_chat_service
+    from agent_runtime.core.config import Settings
+    from agent_runtime.main import create_app
+    from agent_runtime.persistence.database import open_database_connection
+    from agent_runtime.runtime.event_repository import (
+        PostgresRuntimeEventRepository,
+    )
+    from agent_runtime.runtime.repository import PostgresRunRepository
+
+    base_settings = Settings()
+    settings = Settings(
+        database_url=base_settings.database_url,
+        local_user_id=f"s3-12-cancel-invocation-{uuid4()}",
+        redis_url="redis://127.0.0.1:1/0",
+        redis_socket_timeout_seconds=0.05,
+        run_coordinator_scan_interval_seconds=0.02,
+        _env_file=None,
+    )
+    session_id: UUID | None = None
+
+    async def exercise() -> None:
+        nonlocal session_id
+        try:
+            await allow_builtin_capabilities(settings)
+            async with open_chat_service(
+                settings,
+                model=StageTwoBrowserFakeModel(),
+            ) as service:
+                parent_checkpoint_ready = asyncio.Event()
+                release_projection = asyncio.Event()
+                original_require = service._require_nonempty_persistent_message
+
+                async def require_with_barrier(**kwargs):
+                    message = await original_require(**kwargs)
+                    parent_checkpoint_ready.set()
+                    await release_projection.wait()
+                    return message
+
+                service._require_nonempty_persistent_message = require_with_barrier
+                app = create_app(settings, chat_service=service)
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url="http://runtime.test",
+                ) as client:
+                    submitted = await client.post(
+                        "/api/v1/chat/completions",
+                        json={
+                            "request_id": str(uuid4()),
+                            "message": {"content": "取消 Invocation 竞争"},
+                        },
+                    )
+                    assert submitted.status_code == 202
+                    summary = submitted.json()
+                    session_id = UUID(summary["session_id"])
+                    run_id = UUID(summary["run_id"])
+                    await asyncio.wait_for(
+                        parent_checkpoint_ready.wait(), timeout=2
+                    )
+
+                    cancel_response = await client.post(
+                        f"/api/v1/chat/runs/{run_id}/cancel"
+                    )
+                    assert cancel_response.status_code == 202
+                    release_projection.set()
+
+                    repository = PostgresRunRepository(settings)
+                    for _ in range(100):
+                        terminal = await repository.get(run_id)
+                        if terminal.status == "cancelled":
+                            break
+                        await asyncio.sleep(0.02)
+                    else:
+                        raise AssertionError("取消请求未在限定时间内形成终态")
+
+                    open_invocation = await PostgresRuntimeEventRepository(
+                        settings
+                    ).get_open_capability_invocation(run_id=run_id)
+                    assert open_invocation is None
+        finally:
+            release_projection.set()
+            if session_id is not None:
+                await cleanup_capability_runtime_for_session(
+                    settings,
+                    session_id,
+                )
+                async with AsyncPostgresSaver.from_conn_string(
+                    settings.database_connection_string
+                ) as checkpointer:
+                    for thread_id in (
+                        f"{session_id}:general_chat",
+                        f"{session_id}:en_to_zh",
+                        str(session_id),
+                    ):
+                        await checkpointer.adelete_thread(thread_id)
+                async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM runtime_events WHERE run_id IN "
+                        "(SELECT run_id FROM runs WHERE session_id = %s)",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM runs WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.commit()
+
+    _run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="设置 RUN_POSTGRES_TESTS=1 后运行 PostgreSQL 集成测试",
+)
+def test_runtime_failure_after_gateway_success_closes_open_invocation() -> None:
+    """Gateway 成功后 Runtime 读取失败也必须关闭 open Invocation。"""
+
+    from agent_runtime.chat import open_chat_service
+    from agent_runtime.core.config import Settings
+    from agent_runtime.main import create_app
+    from agent_runtime.persistence.database import open_database_connection
+    from agent_runtime.runtime.event_repository import (
+        PostgresRuntimeEventRepository,
+    )
+    from agent_runtime.runtime.repository import PostgresRunRepository
+
+    base_settings = Settings()
+    settings = Settings(
+        database_url=base_settings.database_url,
+        local_user_id=f"s3-12-fail-invocation-{uuid4()}",
+        redis_url="redis://127.0.0.1:1/0",
+        redis_socket_timeout_seconds=0.05,
+        run_coordinator_scan_interval_seconds=0.02,
+        _env_file=None,
+    )
+    session_id: UUID | None = None
+
+    async def exercise() -> None:
+        nonlocal session_id
+        try:
+            await allow_builtin_capabilities(settings)
+            async with open_chat_service(
+                settings,
+                model=StageTwoBrowserFakeModel(),
+            ) as service:
+
+                async def fail_completion_status(_turn):
+                    raise RuntimeError("模拟 Runtime 完成状态读取失败")
+
+                service.get_completion_status = fail_completion_status
+                app = create_app(settings, chat_service=service)
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url="http://runtime.test",
+                ) as client:
+                    submitted = await client.post(
+                        "/api/v1/chat/completions",
+                        json={
+                            "request_id": str(uuid4()),
+                            "message": {"content": "Runtime 读取失败"},
+                        },
+                    )
+                    assert submitted.status_code == 202
+                    summary = submitted.json()
+                    session_id = UUID(summary["session_id"])
+                    run_id = UUID(summary["run_id"])
+
+                    repository = PostgresRunRepository(settings)
+                    for _ in range(100):
+                        terminal = await repository.get(run_id)
+                        if terminal.status == "failed":
+                            break
+                        await asyncio.sleep(0.02)
+                    else:
+                        raise AssertionError("运行失败未在限定时间内形成终态")
+
+                    open_invocation = await PostgresRuntimeEventRepository(
+                        settings
+                    ).get_open_capability_invocation(run_id=run_id)
+                    assert open_invocation is None
+        finally:
+            if session_id is not None:
+                await cleanup_capability_runtime_for_session(
+                    settings,
+                    session_id,
+                )
                 async with AsyncPostgresSaver.from_conn_string(
                     settings.database_connection_string
                 ) as checkpointer:
@@ -665,7 +912,6 @@ def test_regenerate_stage_two_history_keeps_parent_run_id_null() -> None:
     from agent_runtime.main import create_app
     from agent_runtime.persistence.database import open_database_connection
     from agent_runtime.runtime.repository import PostgresRunRepository
-    from agent_runtime.streaming.sse import stream_chat_sse
 
     base_settings = Settings()
     settings = Settings(
@@ -681,36 +927,75 @@ def test_regenerate_stage_two_history_keeps_parent_run_id_null() -> None:
     async def exercise() -> None:
         nonlocal session_id
         try:
+            await allow_builtin_capabilities(settings)
             async with open_chat_service(
                 settings,
                 model=StageTwoBrowserFakeModel(),
             ) as service:
-                legacy_turn = await service.prepare_turn(
-                    session_id=None,
-                    content="Stage 2 历史消息",
-                )
-                session_id = legacy_turn.session_id
-                async for _frame in stream_chat_sse(service, legacy_turn):
-                    pass
-
                 app = create_app(settings, chat_service=service)
                 transport = httpx.ASGITransport(app=app)
                 async with httpx.AsyncClient(
                     transport=transport,
                     base_url="http://runtime.test",
                 ) as client:
+                    source_response = await client.post(
+                        "/api/v1/chat/completions",
+                        json={
+                            "request_id": str(uuid4()),
+                            "message": {"content": "Stage 2 历史消息"},
+                        },
+                    )
+                    assert (
+                        source_response.status_code == 202
+                    ), source_response.text
+                    source_summary = source_response.json()
+                    source_run_id = UUID(source_summary["run_id"])
+                    session_id = UUID(source_summary["session_id"])
+                    source_message_id = UUID(
+                        source_summary["response_message_id"]
+                    )
+                    repository = PostgresRunRepository(settings)
+                    for _ in range(300):
+                        source_run = await repository.get(source_run_id)
+                        if source_run.status in {
+                            "completed",
+                            "failed",
+                            "cancelled",
+                        }:
+                            assert source_run.status == "completed"
+                            break
+                        await asyncio.sleep(0.01)
+                    else:
+                        raise AssertionError("来源 Run 未在限定时间内完成")
+
+                    # 模拟升级前仅保留 Parent 公共历史、没有持久 Run 与
+                    # Stage 3 Task 的会话，不给历史消息补建虚假关联。
+                    await cleanup_capability_runtime_for_session(
+                        settings,
+                        session_id,
+                    )
+                    async with open_database_connection(settings) as connection:
+                        await connection.execute(
+                            "DELETE FROM runtime_events WHERE run_id = %s",
+                            (source_run_id,),
+                        )
+                        await connection.execute(
+                            "DELETE FROM runs WHERE run_id = %s",
+                            (source_run_id,),
+                        )
+                        await connection.commit()
+
                     request_id = uuid4()
                     path = (
                         f"/api/v1/chat/sessions/{session_id}/messages/"
-                        f"{legacy_turn.response_message_id}/regenerate"
+                        f"{source_message_id}/regenerate"
                     )
                     response = await client.post(
                         path,
                         json={"request_id": str(request_id)},
                     )
-                    assert response.status_code == 202
+                    assert response.status_code == 202, response.text
                     run_id = UUID(response.json()["run_id"])
-                    repository = PostgresRunRepository(settings)
                     created = await repository.get(run_id)
                     assert created.run_type == "regenerate"
                     assert created.parent_run_id is None
@@ -724,6 +1009,10 @@ def test_regenerate_stage_two_history_keeps_parent_run_id_null() -> None:
                     assert (await repository.get(run_id)).parent_run_id is None
         finally:
             if session_id is not None:
+                await cleanup_capability_runtime_for_session(
+                    settings,
+                    session_id,
+                )
                 async with AsyncPostgresSaver.from_conn_string(
                     settings.database_connection_string
                 ) as checkpointer:

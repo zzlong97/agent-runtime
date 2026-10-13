@@ -22,8 +22,9 @@ S3-02 Manifest Schema 与 Local CapabilitySource、S3-03 Capability 协议、Boo
 Scope、S3-06 权限、动态 Router 候选与公开 capability_id 均已验收并完成双远程同步；
 S3-08 Capability 单进程并发、两阶段超时取消与稳定错误映射、S3-09 Operation
 Ledger 与 `ctx.operation()` 均已完成验收并同步两个远程；S3-10 Capability 恢复
-策略与 Checkpoint 对账已通过验收并同步两个远程；S3-11 Regenerate Capability
-安全门禁已通过验收，完成提交和双远程同步后进入 S3-12。
+策略与 Checkpoint 对账、S3-11 Regenerate Capability 安全门禁均已通过验收并同步
+两个远程；S3-12 两个测试 Capability 的标准 Runtime 迁移已通过验收，当前进入
+S3-13 Session 删除与动态 Child Checkpoint 清理。
 具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
@@ -268,28 +269,34 @@ S2.5-11 与 Stage 2.5 整体验收通过：
 - S3-02 已实现严格 Manifest Schema、本地 YAML `CapabilitySource` 和两个测试
   Capability 的静态 Manifest，已经验收但尚未接入 Registry 或执行链路
 - S3-03 已验收关闭结果协议、只读 Bootstrap、同步 entrypoint 校验、静态 Registry、
-  局部故障隔离、启动健康结果、逆序幂等 cleanup 和四字段 Router Projection；当前
-  保持为独立组件，尚未接入 Parent、Router 或 Run 执行主链路
+  局部故障隔离、启动健康结果、逆序幂等 cleanup 和四字段 Router Projection；S3-12
+  已把该 Registry Snapshot 接入正式执行主链路
 - S3-04 已实现 Capability Task、Task Context、Operation 与 Permission 四张表、不可变
-  领域对象和 PostgreSQL Repository；保持独立持久化边界，尚未接入调用编排
+  领域对象和 PostgreSQL Repository，并由 S3-12 通用 Invocation Gateway 统一编排
 - S3-05 已完成唯一 open Invocation 生命周期、Task Service 原子事务、provisional Task
   拒绝回滚、完整 Invocation durable event 关联字段、三种确定性 State Scope thread_id
-  和基于 Task 固化版本的 State Schema 兼容边界；当前保持独立 Runtime 组件，尚未接入
-  Parent、Router 或后续权限/健康/并发治理链路
+  和基于 Task 固化版本的 State Schema 兼容边界；当前已接入 Parent 动态执行链路
 - S3-06 已验收默认拒绝的用户权限、无缓存权限双检、动态 Router 候选和开放但受约束的
   公开 `capability_id`，并已同步 GitHub、Gitee
 - S3-07 已验收启动强检、进程内 HealthSnapshot、全局 TTL、过期单飞刷新、degraded
   准入和单能力异常隔离，并已提交及同步 GitHub、Gitee
 - S3-08 已实现并通过验收：Registry Entry 持有单进程并发控制器、两阶段超时取消、
-  显式 Cancel 优先级、重复取消安全收尾和 CapabilityError 安全白名单映射；尚未接入
-  S3-12 正式分发链路
+  显式 Cancel 优先级、重复取消安全收尾和 CapabilityError 安全白名单映射；S3-12
+  已将其接入正式分发链路
 - S3-09 已实现稳定副作用幂等键、Operation pending/succeeded/failed 状态机、
   `RunContext.idempotency_key()`、`RunContext.operation()`、显式 `mark_failed()` 与
-  调用归属校验并通过验收；正式 Invocation Gateway 组装仍留在 S3-12
-- S3-10 已完成编码和自验：Checkpoint-first 对账后按 Manifest 判定 automatic 或
+  调用归属校验并通过验收；正式 Invocation Gateway 已完成组装
+- S3-10 已通过验收并完成双远程同步：Checkpoint-first 对账后按 Manifest 判定 automatic 或
   manual 恢复；automatic + idempotent 复用稳定 Invocation、Task 与 Operation 身份，
-  manual 和确定性策略错误安全形成非空 incomplete + failed；独立复审和负责人验收
-  均已通过
+  manual 和确定性策略错误安全形成非空 incomplete + failed
+- S3-11 已通过验收并完成双远程同步：Regenerate 提交前复查 Registry、Health、权限、
+  State Scope、Side Effect Policy 与 Task Schema，只允许 `invocation + none`
+- S3-12 已通过验收：两个仓库内测试 Capability 经 Manifest、Registry、动态
+  Router 和通用 Invocation Gateway 执行；每个 Capability 使用独立 Checkpointer
+  句柄，Invocation completed 在 Parent 最终消息落盘后提交，完成投影前收到 Cancel
+  时则在 stopped Checkpoint 对账中关闭 open Invocation，Runtime 失败时也在 incomplete
+  Checkpoint 后关闭 Invocation；正式链路不再按固定 ID 分发，并由真实 PostgreSQL
+  自动化覆盖两个 Capability 全部拒绝与 provisional Task 回滚
 
 ### Stage 3：Capability Runtime
 
@@ -543,7 +550,7 @@ npm run test:e2e
 
 当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
 
-S3-10 已通过验收并同步 GitHub、Gitee；S3-11 已通过验收并等待提交同步；
+S3-12 已通过验收；当前进入 S3-13 Session 删除与动态 Child Checkpoint 清理；
 任何 S3 任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、

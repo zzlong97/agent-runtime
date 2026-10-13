@@ -10,7 +10,6 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agent_runtime.capabilities.manifest import ManifestCapabilityId
-from agent_runtime.capabilities.registry import RouterProjection
 from agent_runtime.capabilities.routing import RouterCandidateProvider
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
@@ -22,20 +21,6 @@ task_action 只能是 continue 或 new；不要选择或编造 task_id。
 confidence 表示你对本次能力选择的置信度，范围为 0.0 至 1.0。
 不要返回候选列表之外的能力，不要返回 TopN，不要请求用户确认。"""
 
-_LEGACY_PROJECTIONS = (
-    RouterProjection(
-        capability_id="general_chat",
-        name="普通聊天",
-        description="普通聊天、知识问答和简单咨询；不处理任何翻译任务。",
-        enabled=True,
-    ),
-    RouterProjection(
-        capability_id="en_to_zh",
-        name="英译汉",
-        description="仅处理把英文内容忠实、完整地翻译成中文的请求。",
-        enabled=True,
-    ),
-)
 logger = logging.getLogger(__name__)
 
 
@@ -71,19 +56,23 @@ class RouterDecision(BaseModel):
 
 
 class StageOneRouter:
-    """兼容既有链路，并可从 Registry 与实时权限读取动态候选。"""
+    """只从 Registry、Health 与实时权限交集读取动态候选。"""
 
     def __init__(
         self,
         model: BaseChatModel,
         *,
-        candidate_provider: RouterCandidateProvider | None = None,
-        user_id: str | None = None,
+        candidate_provider: RouterCandidateProvider,
+        user_id: str,
     ) -> None:
-        """绑定关闭的结构化输出，并校验动态候选依赖必须成对提供。"""
+        """绑定关闭的结构化输出和必需的动态候选提供器。"""
 
-        if (candidate_provider is None) != (user_id is None):
-            raise ValueError("candidate_provider 与 user_id 必须同时提供")
+        if (
+            candidate_provider is None
+            or not isinstance(user_id, str)
+            or not user_id.strip()
+        ):
+            raise ValueError("动态 Router 必须提供 candidate_provider 与非空 user_id")
         self._model = model.with_structured_output(RouterDecision)
         self._candidate_provider = candidate_provider
         self._user_id = user_id
@@ -126,55 +115,30 @@ class StageOneRouter:
                 message="Parent State 中缺少可路由的 HumanMessage",
             )
         rejected_capability_ids = set(state["rejected_capability_ids"])
-        if self._candidate_provider is None:
-            candidate_projections = tuple(
-                projection
-                for projection in _LEGACY_PROJECTIONS
-                if projection.capability_id not in rejected_capability_ids
-            )
-        else:
-            assert self._user_id is not None
-            candidate_projections = await self._candidate_provider.get_candidates(
-                user_id=self._user_id,
-                rejected_capability_ids=rejected_capability_ids,
-            )
+        candidate_projections = await self._candidate_provider.get_candidates(
+            user_id=self._user_id,
+            rejected_capability_ids=rejected_capability_ids,
+        )
         candidates = {
             projection.capability_id: projection
             for projection in candidate_projections
         }
         if not candidates:
-            if self._candidate_provider is not None:
-                log_business_event(
-                    logger,
-                    "Router候选已全部拒绝",
-                    rejected_capability_ids=sorted(rejected_capability_ids),
-                    status="all_rejected",
-                    duration_ms=round(
-                        (perf_counter() - decision_started_at) * 1000,
-                        2,
-                    ),
-                    **log_context,
-                )
-                return {
-                    "resolved_capability_id": None,
-                    "task_action": None,
-                }
             log_business_event(
                 logger,
-                "Router决策失败",
-                level=logging.ERROR,
-                error_code="ROUTER_NO_CANDIDATE",
+                "Router候选已全部拒绝",
                 rejected_capability_ids=sorted(rejected_capability_ids),
+                status="all_rejected",
                 duration_ms=round(
                     (perf_counter() - decision_started_at) * 1000,
                     2,
                 ),
                 **log_context,
             )
-            raise RouterError(
-                code="ROUTER_NO_CANDIDATE",
-                message="本轮没有可供路由的能力",
-            )
+            return {
+                "resolved_capability_id": None,
+                "task_action": None,
+            }
         candidate_text = "\n".join(
             (
                 f"- {capability_id}: 名称：{projection.name} | "

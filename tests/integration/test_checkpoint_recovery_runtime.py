@@ -609,11 +609,16 @@ def test_third_failed_recovery_forms_one_nonempty_failed_terminal() -> None:
 def test_intermediate_checkpoint_resumes_exactly_with_new_attempt() -> None:
     """流式执行中断后应从目标 Run 的中间 Checkpoint 续跑并递增 attempt。"""
 
+    from types import SimpleNamespace
+
     from langchain_core.messages import AIMessage, HumanMessage
     from langgraph.checkpoint.memory import InMemorySaver
     from langgraph.config import get_stream_writer
     from langgraph.graph import END, START, StateGraph
 
+    from agent_runtime.capabilities.recovery import (
+        CapabilityRecoveryPolicyEvaluator,
+    )
     from agent_runtime.chat import ChatService
     from agent_runtime.core.config import Settings
     from agent_runtime.graph.config import parent_thread_config
@@ -705,6 +710,28 @@ def test_intermediate_checkpoint_resumes_exactly_with_new_attempt() -> None:
             user_id=settings.local_user_id,
             scan_interval_seconds=60,
         )
+
+        class AutomaticNoneRegistry:
+            """为手工组装的遗留测试图提供显式恢复策略。"""
+
+            @staticmethod
+            def get(capability_id):
+                assert capability_id == "general_chat"
+                return SimpleNamespace(
+                    manifest=SimpleNamespace(
+                        recovery_policy="automatic",
+                        side_effect_policy="none",
+                    )
+                )
+
+        class NoOpenInvocationResolver:
+            """遗留 S2.5 Checkpoint 不存在 Stage 3 Invocation。"""
+
+            @staticmethod
+            async def resolve(*, run_id):
+                assert run_id == submission.run_id
+                return None
+
         service = ChatService(
             settings=settings,
             session_repository=sessions,
@@ -717,6 +744,12 @@ def test_intermediate_checkpoint_resumes_exactly_with_new_attempt() -> None:
             runtime_event_repository=events,
             run_interrupt_repository=interrupts,
             run_coordinator=coordinator,
+            capability_recovery_policy_evaluator=(
+                CapabilityRecoveryPolicyEvaluator(
+                    registry=AutomaticNoneRegistry(),
+                    invocation_resolver=NoOpenInvocationResolver(),
+                )
+            ),
         )
         try:
             await coordinator.start(service.execute_persistent_run)

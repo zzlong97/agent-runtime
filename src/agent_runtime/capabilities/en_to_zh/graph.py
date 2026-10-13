@@ -8,6 +8,11 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from agent_runtime.capabilities.contracts import (
+    AgentResult,
+    AgentResultMetadata,
+    HealthResult,
+)
 from agent_runtime.capabilities.en_to_zh.state import EnglishToChineseState
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.graph.child_result import ChildResult
@@ -96,14 +101,24 @@ class EnglishToChineseCapability:
             checkpointer=checkpointer,
         )
 
-    async def run(
+    async def initialize(self) -> None:
+        """英译汉当前没有额外异步资源需要初始化。"""
+
+    async def health_check(self) -> HealthResult:
+        """返回仅表示本地实例已完成构造的稳定健康结果。"""
+
+        return HealthResult(
+            status="healthy",
+            summary_code="CAPABILITY_READY",
+        )
+
+    async def invoke(
         self,
-        *,
         run_context: RunContext,
         agent_context: AgentContext,
         task_input: TaskInput,
-    ) -> ChildResult:
-        """先执行范围守卫，再转发翻译图的消息事件。"""
+    ) -> AgentResult:
+        """执行范围守卫，并返回包含完整译文的 Stage 3 AgentResult。"""
 
         messages = list(task_input.messages)
         latest_message = next(
@@ -142,11 +157,16 @@ class EnglishToChineseCapability:
             ) from error
 
         if not decision.can_translate_to_chinese:
-            return ChildResult(
+            return AgentResult(
                 status="rejected",
-                control_signal="OUT_OF_SCOPE",
+                content="",
+                metadata=AgentResultMetadata(
+                    control_signal="OUT_OF_SCOPE",
+                    task_transition="keep_active",
+                ),
             )
 
+        content_parts: list[str] = []
         try:
             async for event in self._graph.astream(
                 {
@@ -160,10 +180,30 @@ class EnglishToChineseCapability:
                 message, _metadata = event
                 text = str(message.text)
                 if text:
+                    content_parts.append(text)
                     run_context.events.emit(AgentTextEvent(text=text))
         except Exception as error:
             raise EnglishToChineseError(
                 code="EN_TO_ZH_CALL_FAILED",
                 message="英译汉模型调用失败",
             ) from error
-        return ChildResult(status="completed", control_signal=None)
+        return AgentResult(
+            status="completed",
+            content="".join(content_parts),
+            metadata=AgentResultMetadata(),
+        )
+
+    async def run(
+        self,
+        *,
+        run_context: RunContext,
+        agent_context: AgentContext,
+        task_input: TaskInput,
+    ) -> ChildResult:
+        """先执行范围守卫，再转发翻译图的消息事件。"""
+
+        result = await self.invoke(run_context, agent_context, task_input)
+        return ChildResult(
+            status=result.status,
+            control_signal=result.metadata.control_signal,
+        )

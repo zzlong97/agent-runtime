@@ -36,6 +36,7 @@ def test_delete_session_cancels_active_run_and_removes_runtime_data() -> None:
         local_user_id=f"s25-session-delete-{uuid4()}",
         run_coordinator_scan_interval_seconds=0.02,
         run_cancel_grace_seconds=0.05,
+        runtime_demo_mode=True,
         _env_file=None,
     )
     session_id: UUID | None = None
@@ -63,7 +64,7 @@ def test_delete_session_cancels_active_run_and_removes_runtime_data() -> None:
                         "/api/v1/chat/completions",
                         json={
                             "request_id": str(uuid4()),
-                            "message": {"content": "执行长任务"},
+                            "message": {"content": "/demo slow"},
                         },
                     )
                     assert submitted.status_code == 202

@@ -50,6 +50,51 @@ class FakeStructuredChatModel(BaseChatModel):
         )
 
 
+class FakeCandidateProvider:
+    """为 Router 单元测试提供显式、可过滤的动态候选。"""
+
+    async def get_candidates(
+        self,
+        *,
+        user_id: str,
+        rejected_capability_ids,
+    ):
+        from agent_runtime.capabilities.registry import RouterProjection
+
+        assert user_id == "runtime-user"
+        rejected = set(rejected_capability_ids)
+        return tuple(
+            projection
+            for projection in (
+                RouterProjection(
+                    capability_id="general_chat",
+                    name="普通聊天",
+                    description="处理普通聊天和知识问答。",
+                    enabled=True,
+                ),
+                RouterProjection(
+                    capability_id="en_to_zh",
+                    name="英译汉",
+                    description="把英文内容忠实完整地翻译成中文。",
+                    enabled=True,
+                ),
+            )
+            if projection.capability_id not in rejected
+        )
+
+
+def build_router(model: BaseChatModel):
+    """以测试专用动态候选组装 Router。"""
+
+    from agent_runtime.graph.router import StageOneRouter
+
+    return StageOneRouter(
+        model,
+        candidate_provider=FakeCandidateProvider(),
+        user_id="runtime-user",
+    )
+
+
 def test_router_decision_schema_describes_and_validates_every_field() -> None:
     from agent_runtime.graph.router import RouterDecision
 
@@ -125,7 +170,7 @@ def test_router_routes_ordinary_chat_to_general_chat() -> None:
             "confidence": 0.9,
         }
     )
-    router = StageOneRouter(model)
+    router = build_router(model)
 
     result = asyncio.run(
         router.route(
@@ -150,7 +195,7 @@ def test_router_routes_ordinary_chat_to_general_chat() -> None:
 def test_router_logs_decision_without_user_content(caplog) -> None:
     from agent_runtime.graph.router import StageOneRouter
 
-    router = StageOneRouter(
+    router = build_router(
         FakeStructuredChatModel(
             response={
                 "capability_id": "general_chat",
@@ -193,7 +238,7 @@ def test_router_logs_decision_without_user_content(caplog) -> None:
 def test_router_routes_explicit_english_to_chinese_request() -> None:
     from agent_runtime.graph.router import StageOneRouter
 
-    router = StageOneRouter(
+    router = build_router(
         FakeStructuredChatModel(
             response={
                 "capability_id": "en_to_zh",
@@ -225,7 +270,7 @@ def test_router_routes_explicit_english_to_chinese_request() -> None:
 def test_router_does_not_interrupt_on_low_confidence() -> None:
     from agent_runtime.graph.router import StageOneRouter
 
-    router = StageOneRouter(
+    router = build_router(
         FakeStructuredChatModel(
             response={
                 "capability_id": "general_chat",
@@ -262,7 +307,7 @@ def test_router_excludes_rejected_capability_from_model_candidates() -> None:
             "confidence": 0.95,
         }
     )
-    router = StageOneRouter(model)
+    router = build_router(model)
 
     result = asyncio.run(
         router.route(
@@ -351,7 +396,7 @@ def test_router_uses_permission_filtered_registry_projection_with_third_id() -> 
 def test_router_rejects_model_choice_outside_current_candidates() -> None:
     from agent_runtime.graph.router import RouterError, StageOneRouter
 
-    router = StageOneRouter(
+    router = build_router(
         FakeStructuredChatModel(
             response={
                 "capability_id": "general_chat",
@@ -381,7 +426,7 @@ def test_router_rejects_model_choice_outside_current_candidates() -> None:
 def test_router_converts_schema_validation_failure_to_runtime_error() -> None:
     from agent_runtime.graph.router import RouterError, StageOneRouter
 
-    router = StageOneRouter(
+    router = build_router(
         FakeStructuredChatModel(response={"capability_id": "general_chat"})
     )
 
@@ -406,7 +451,7 @@ def test_router_converts_schema_validation_failure_to_runtime_error() -> None:
 def test_router_model_failure_is_runtime_error_not_out_of_scope() -> None:
     from agent_runtime.graph.router import RouterError, StageOneRouter
 
-    router = StageOneRouter(
+    router = build_router(
         FakeStructuredChatModel(
             response={
                 "capability_id": "general_chat",
@@ -435,8 +480,7 @@ def test_router_model_failure_is_runtime_error_not_out_of_scope() -> None:
     assert not hasattr(captured.value, "control_signal")
 
 
-def test_router_rejects_request_when_no_candidate_remains() -> None:
-    from agent_runtime.graph.router import RouterError, StageOneRouter
+def test_router_reports_all_rejected_when_no_candidate_remains() -> None:
 
     model = FakeStructuredChatModel(
         response={
@@ -445,22 +489,20 @@ def test_router_rejects_request_when_no_candidate_remains() -> None:
             "confidence": 0.8,
         }
     )
-    router = StageOneRouter(model)
+    router = build_router(model)
 
-    with pytest.raises(RouterError) as captured:
-        asyncio.run(
-            router.route(
-                {
-                    "messages": [HumanMessage(content="继续")],
-                    "resolved_capability_id": None,
-                    "rejected_capability_ids": ["general_chat", "en_to_zh"],
-                },
-                {},
-            )
+    result = asyncio.run(
+        router.route(
+            {
+                "messages": [HumanMessage(content="继续")],
+                "resolved_capability_id": None,
+                "rejected_capability_ids": ["general_chat", "en_to_zh"],
+            },
+            {},
         )
+    )
 
-    assert captured.value.code == "ROUTER_NO_CANDIDATE"
-    assert captured.value.message == "本轮没有可供路由的能力"
+    assert result == {"resolved_capability_id": None, "task_action": None}
     assert model.captured_messages == []
 
 
@@ -599,7 +641,7 @@ def test_router_rejects_parent_state_without_human_message() -> None:
             "confidence": 0.8,
         }
     )
-    router = StageOneRouter(model)
+    router = build_router(model)
 
     with pytest.raises(RouterError) as captured:
         asyncio.run(
@@ -624,7 +666,7 @@ def test_router_is_usable_as_parent_graph_route_node() -> None:
     from agent_runtime.graph.router import StageOneRouter
 
     invoked_capabilities: list[tuple[str | None, str | None]] = []
-    router = StageOneRouter(
+    router = build_router(
         FakeStructuredChatModel(
             response={
                 "capability_id": "en_to_zh",

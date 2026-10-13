@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4, uuid5
@@ -21,19 +22,36 @@ from agent_runtime.api.schemas.chat import (
     ErrorEventData,
     MessageEventData,
 )
-from agent_runtime.capabilities.en_to_zh.adapter import EnglishToChineseAdapter
-from agent_runtime.capabilities.en_to_zh.graph import EnglishToChineseCapability
-from agent_runtime.capabilities.general_chat.adapter import GeneralChatAdapter
-from agent_runtime.capabilities.general_chat.agent import GeneralChatCapability
-from agent_runtime.capabilities.invocation_service import CapabilityInvocationService
+from agent_runtime.capabilities.invocation_gateway import (
+    CapabilityInvocationGateway,
+)
+from agent_runtime.capabilities.invocation_service import (
+    CapabilityInvocationService,
+)
 from agent_runtime.capabilities.manifest import validate_capability_id
+from agent_runtime.capabilities.persistence import (
+    CapabilityOperationRepository,
+    CapabilityTaskContextRepository,
+    CapabilityTaskRepository,
+    UserCapabilityPermissionRepository,
+)
 from agent_runtime.capabilities.recovery import (
     CapabilityRecoveryError,
     CapabilityRecoveryDecision,
     CapabilityRecoveryPolicyEvaluator,
+    OpenInvocationResolver,
     OpenInvocationRecoveryContext,
 )
 from agent_runtime.capabilities.regeneration import RegenerateSubmissionValidator
+from agent_runtime.capabilities.registry import CapabilityRegistry
+from agent_runtime.capabilities.routing import (
+    CapabilityPermissionService,
+    RouterCandidateProvider,
+)
+from agent_runtime.capabilities.source import (
+    CapabilityManifestDocument,
+    LocalYamlCapabilitySource,
+)
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
@@ -51,7 +69,7 @@ from agent_runtime.graph.config import (
 from agent_runtime.graph.parent import build_parent_graph
 from agent_runtime.graph.router import StageOneRouter
 from agent_runtime.history import MessageHistoryAdapter, MessagePage
-from agent_runtime.persistence.checkpointers import open_stage_one_checkpointers
+from agent_runtime.persistence.checkpointers import open_runtime_checkpointers
 from agent_runtime.persistence.parent_state import PostgresParentStateStore
 from agent_runtime.regeneration import CheckpointForker
 from agent_runtime.runs import (
@@ -148,6 +166,18 @@ class PreparedChatTurn:
     resume_payload: dict[str, JsonValue] | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _LoadedCapabilitySource:
+    """固定一次启动扫描结果，避免分配 saver 后再次读取变化中的目录。"""
+
+    documents: tuple[CapabilityManifestDocument, ...]
+
+    def load(self) -> list[CapabilityManifestDocument]:
+        """返回 Registry 本次启动应消费的稳定 Manifest 来源快照。"""
+
+        return list(self.documents)
+
+
 class ChatService:
     """查询 Session、准备聊天请求并维护 Parent Graph 公共消息。"""
 
@@ -172,6 +202,7 @@ class ChatService:
         capability_recovery_policy_evaluator: (
             CapabilityRecoveryPolicyEvaluator | None
         ) = None,
+        open_invocation_resolver: OpenInvocationResolver | None = None,
         regenerate_submission_validator: (
             RegenerateSubmissionValidator | None
         ) = None,
@@ -206,6 +237,7 @@ class ChatService:
         self._capability_recovery_policy_evaluator = (
             capability_recovery_policy_evaluator
         )
+        self._open_invocation_resolver = open_invocation_resolver
         self._regenerate_submission_validator = regenerate_submission_validator
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
@@ -752,6 +784,7 @@ class ChatService:
         )
         started_at = perf_counter()
         capability_id: CapabilityId | None = None
+        parent_final_checkpoint_persisted = False
         log_business_event(
             logger,
             "持久Run执行开始",
@@ -882,9 +915,14 @@ class ChatService:
                 )
                 return
             completion_status = await self.get_completion_status(turn)
-            await self._require_nonempty_persistent_message(
+            persistent_message = await self._require_nonempty_persistent_message(
                 run=run,
                 expected_status=completion_status,
+            )
+            parent_final_checkpoint_persisted = True
+            capability_id = self._message_capability_id(
+                persistent_message,
+                fallback=capability_id,
             )
             async with coordinator.claim_guard(run.run_id):
                 current = await repository.get(run.run_id)
@@ -899,6 +937,12 @@ class ChatService:
                     return
                 if current.status != "running":
                     return
+                if completion_status == "completed":
+                    await self._complete_open_invocation(
+                        run=run,
+                        sequencer=sequencer,
+                        expected_capability_id=capability_id,
+                    )
                 await self._session_service.touch_session(
                     session_id=run.session_id
                 )
@@ -935,6 +979,24 @@ class ChatService:
                     )
             return
         except Exception as error:
+            if parent_final_checkpoint_persisted:
+                log_business_event(
+                    logger,
+                    "Parent终态已落盘但Run投影尚未完成",
+                    level=logging.ERROR,
+                    run_id=run.run_id,
+                    request_id=run.request_id,
+                    session_id=run.session_id,
+                    message_id=run.response_message_id,
+                    capability_id=capability_id,
+                    error_code=(
+                        error.code
+                        if isinstance(error, ApplicationError)
+                        else None
+                    ),
+                    error_type=type(error).__name__,
+                )
+                raise
             public_error = (
                 error
                 if isinstance(error, ApplicationError)
@@ -974,6 +1036,11 @@ class ChatService:
                         and not turn.is_resume
                         and turn.human_message is not None
                     ),
+                )
+                await self._fail_open_invocation(
+                    run=run,
+                    sequencer=sequencer,
+                    error_code=public_error.code,
                 )
                 await sequencer.emit(
                     self._runtime_event_draft(
@@ -1096,6 +1163,10 @@ class ChatService:
             "cancel_requested",
         }:
             return current
+        await self._cancel_open_invocation(
+            run=run,
+            sequencer=sequencer,
+        )
         if not await event_repository.has_event_type(
             run_id=run.run_id,
             event_type="message.finalized",
@@ -1562,6 +1633,94 @@ class ChatService:
             error_code="CAPABILITY_MANUAL_RECOVERY_REQUIRED",
         )
 
+    async def _complete_open_invocation(
+        self,
+        *,
+        run: Run,
+        sequencer: RunSequencer,
+        expected_capability_id: CapabilityId | None,
+    ) -> None:
+        """在 Parent 完成消息落盘后幂等关闭本次 open Invocation。"""
+
+        resolver = self._open_invocation_resolver
+        if resolver is None:
+            return
+        invocation = await resolver.resolve(run_id=run.run_id)
+        if invocation is None:
+            return
+        task = invocation.task
+        if (
+            expected_capability_id is None
+            or invocation.capability_id != expected_capability_id
+            or task is None
+            or invocation.effective_task_action is None
+        ):
+            raise ChatRuntimeError(
+                code="CAPABILITY_INVOCATION_COMPLETION_INVALID",
+                message="Capability 完成投影缺少一致的持久调用上下文",
+                retryable=False,
+            )
+        await CapabilityInvocationService(sequencer=sequencer).complete(
+            invocation_id=invocation.invocation_id,
+            capability_id=invocation.capability_id,
+            task_id=task.task_id,
+            requested_task_action=invocation.requested_task_action,
+            effective_task_action=invocation.effective_task_action,
+            state_scope=invocation.state_scope,
+            state_schema_version=task.state_schema_version,
+            outcome="completed",
+            created_at=datetime.now(UTC),
+        )
+
+    async def _cancel_open_invocation(
+        self,
+        *,
+        run: Run,
+        sequencer: RunSequencer,
+    ) -> None:
+        """在 stopped Checkpoint 落盘后幂等关闭当前 open Invocation。"""
+
+        resolver = self._open_invocation_resolver
+        if resolver is None:
+            return
+        invocation = await resolver.resolve(run_id=run.run_id)
+        if invocation is None:
+            return
+        task = invocation.task
+        await CapabilityInvocationService(sequencer=sequencer).cancel(
+            invocation_id=invocation.invocation_id,
+            capability_id=invocation.capability_id,
+            task_id=None if task is None else task.task_id,
+            requested_task_action=invocation.requested_task_action,
+            effective_task_action=invocation.effective_task_action,
+            state_scope=invocation.state_scope,
+            state_schema_version=(
+                None if task is None else task.state_schema_version
+            ),
+            created_at=datetime.now(UTC),
+        )
+
+    async def _fail_open_invocation(
+        self,
+        *,
+        run: Run,
+        sequencer: RunSequencer,
+        error_code: str,
+    ) -> None:
+        """在 incomplete Checkpoint 落盘后幂等关闭当前 open Invocation。"""
+
+        resolver = self._open_invocation_resolver
+        if resolver is None:
+            return
+        invocation = await resolver.resolve(run_id=run.run_id)
+        if invocation is None:
+            return
+        await self._close_recovery_invocation(
+            invocation=invocation,
+            sequencer=sequencer,
+            error_code=error_code,
+        )
+
     @staticmethod
     async def _close_recovery_invocation(
         *,
@@ -1648,6 +1807,12 @@ class ChatService:
                     )
                 )
             if final_message.runtime_status in {"completed", "unsupported"}:
+                if final_message.runtime_status == "completed":
+                    await self._complete_open_invocation(
+                        run=run,
+                        sequencer=sequencer,
+                        expected_capability_id=final_message.capability_id,
+                    )
                 await sequencer.transition_run(
                     target_status="completed",
                     event=self._runtime_event_draft(
@@ -1677,6 +1842,12 @@ class ChatService:
                     if manual_recovery
                     else "进程中断前的未完成回复已恢复。"
                 )
+                if not manual_recovery:
+                    await self._fail_open_invocation(
+                        run=run,
+                        sequencer=sequencer,
+                        error_code=error_code,
+                    )
                 await sequencer.transition_run(
                     target_status="failed",
                     event=self._runtime_event_draft(
@@ -1769,6 +1940,11 @@ class ChatService:
             runtime_status="incomplete",
             capability_id=None,
             include_human=(turn.human_message is not None),
+        )
+        await self._fail_open_invocation(
+            run=run,
+            sequencer=sequencer,
+            error_code="RUN_RECOVERY_EXHAUSTED",
         )
         if not await event_repository.has_event_type(
             run_id=run.run_id,
@@ -1884,7 +2060,7 @@ class ChatService:
         *,
         run: Run,
         expected_status: CompletionStatus,
-    ) -> None:
+    ) -> AIMessage:
         """确认 Graph 已用预分配消息 ID 保存非空完成或不支持回复。"""
 
         parent_state = await self._parent_graph.aget_state(
@@ -1912,6 +2088,7 @@ class ChatService:
                 message="聊天运行未形成非空终态回复",
                 retryable=False,
             )
+        return final_message
 
     def _persistent_runtime_dependencies(
         self,
@@ -2028,6 +2205,34 @@ class ChatService:
                 request_id=run.request_id,
                 input_message_id=run.input_message_id,
             )
+            if (
+                "capability_id" in run.input_payload
+                or "task_action" in run.input_payload
+            ):
+                try:
+                    regenerate_capability_id = validate_capability_id(
+                        run.input_payload["capability_id"]
+                    )
+                    regenerate_task_action = run.input_payload["task_action"]
+                except (KeyError, TypeError, ValueError) as error:
+                    raise ChatRuntimeError(
+                        code="RUN_INPUT_INVALID",
+                        message="Regenerate Run 的 Capability 执行上下文不完整",
+                        retryable=False,
+                    ) from error
+                if regenerate_task_action != "continue":
+                    raise ChatRuntimeError(
+                        code="RUN_INPUT_INVALID",
+                        message=(
+                            "Regenerate Run 的 Capability Task 动作必须是 continue"
+                        ),
+                        retryable=False,
+                    )
+                config["metadata"] = {
+                    **config.get("metadata", {}),
+                    "capability_id": regenerate_capability_id,
+                    "task_action": regenerate_task_action,
+                }
         else:
             try:
                 content = str(run.input_payload["message"]["content"])
@@ -3178,7 +3383,7 @@ async def open_chat_service(
     *,
     model: BaseChatModel | None = None,
 ) -> AsyncIterator[ChatService]:
-    """初始化运行所需数据库结构，并组装固定 Parent/Child 链路。"""
+    """初始化运行所需数据库结构，并组装 Registry 驱动的执行链路。"""
 
     log_business_event(logger, "聊天服务初始化开始")
     session_repository = PostgresSessionRepository(settings)
@@ -3189,6 +3394,18 @@ async def open_chat_service(
     await run_repository.setup()
     runtime_event_repository = PostgresRuntimeEventRepository(settings)
     await runtime_event_repository.setup()
+    capability_task_repository = CapabilityTaskRepository(settings)
+    await capability_task_repository.setup()
+    capability_task_context_repository = CapabilityTaskContextRepository(
+        settings
+    )
+    await capability_task_context_repository.setup()
+    capability_operation_repository = CapabilityOperationRepository(settings)
+    await capability_operation_repository.setup()
+    capability_permission_repository = UserCapabilityPermissionRepository(
+        settings
+    )
+    await capability_permission_repository.setup()
     run_interrupt_repository = PostgresRunInterruptRepository(settings)
     runtime_event_publisher = RedisStreamPublisher.from_url(
         settings.redis_connection_string,
@@ -3211,7 +3428,24 @@ async def open_chat_service(
         cancel_grace_seconds=settings.run_cancel_grace_seconds,
     )
     parent_state_store = PostgresParentStateStore(settings)
-    async with open_stage_one_checkpointers(settings) as checkpointers:
+    capability_source: _LoadedCapabilitySource | None = None
+    child_checkpointer_count = 0
+    if not settings.runtime_demo_mode:
+        manifest_documents = tuple(
+            LocalYamlCapabilitySource(
+                Path(__file__).resolve().parent / "capabilities"
+            ).load()
+        )
+        capability_source = _LoadedCapabilitySource(manifest_documents)
+        child_checkpointer_count = len(manifest_documents)
+    async with open_runtime_checkpointers(
+        settings,
+        child_count=child_checkpointer_count,
+    ) as checkpointers:
+        registry: CapabilityRegistry | None = None
+        capability_recovery_policy_evaluator = None
+        open_invocation_resolver = None
+        regenerate_submission_validator = None
         if settings.runtime_demo_mode:
             parent_graph = build_runtime_demo_graph(
                 checkpointer=checkpointers.parent
@@ -3222,25 +3456,74 @@ async def open_chat_service(
                 runtime_demo_mode=True,
             )
         else:
+            assert capability_source is not None
             runtime_model = model or build_chat_model(settings)
-            router = StageOneRouter(runtime_model)
-            general_chat = GeneralChatAdapter(
-                capability=GeneralChatCapability(
-                    scope_model=runtime_model,
-                    response_model=runtime_model,
-                    checkpointer=checkpointers.general_chat,
+            available_child_checkpointers = iter(checkpointers.children)
+            child_checkpointer_by_capability: dict[str, object] = {}
+
+            def allocate_child_checkpointer(manifest):
+                """为每个启用 Manifest 分配本次进程内唯一的 saver 句柄。"""
+
+                checkpointer = next(available_child_checkpointers)
+                child_checkpointer_by_capability[
+                    manifest.capability_id
+                ] = checkpointer
+                return checkpointer
+
+            registry = await CapabilityRegistry.build(
+                capability_source,
+                child_checkpointer_factory=allocate_child_checkpointer,
+                model_factory=lambda: runtime_model,
+                health_ttl_seconds=settings.capability_health_ttl_seconds,
+            )
+            permission_service = CapabilityPermissionService(
+                capability_permission_repository
+            )
+            router = StageOneRouter(
+                runtime_model,
+                candidate_provider=RouterCandidateProvider(
+                    registry=registry,
+                    permission_service=permission_service,
+                ),
+                user_id=settings.local_user_id,
+            )
+            capability_gateway = CapabilityInvocationGateway(
+                registry=registry,
+                permission_service=permission_service,
+                task_repository=capability_task_repository,
+                operation_repository=capability_operation_repository,
+                child_checkpointer_provider=(
+                    child_checkpointer_by_capability.__getitem__
+                ),
+                sequencer_factory=lambda run_id, response_message_id: (
+                    RunSequencer.for_run(
+                        run_id=run_id,
+                        response_message_id=response_message_id,
+                        repository=runtime_event_repository,
+                        publisher=runtime_event_publisher,
+                    )
+                ),
+            )
+            open_invocation_resolver = OpenInvocationResolver(
+                event_repository=runtime_event_repository,
+                task_repository=capability_task_repository,
+                operation_repository=capability_operation_repository,
+            )
+            capability_recovery_policy_evaluator = (
+                CapabilityRecoveryPolicyEvaluator(
+                    registry=registry,
+                    invocation_resolver=open_invocation_resolver,
                 )
             )
-            en_to_zh = EnglishToChineseAdapter(
-                capability=EnglishToChineseCapability(
-                    scope_model=runtime_model,
-                    translation_model=runtime_model,
-                    checkpointer=checkpointers.en_to_zh,
-                )
+            regenerate_submission_validator = RegenerateSubmissionValidator(
+                registry=registry,
+                permission_service=permission_service,
+                task_context_repository=capability_task_context_repository,
+                task_repository=capability_task_repository,
             )
 
             async def invoke_capability(state, config):
-                """只在两个固定 Stage 1 Adapter 之间分发。"""
+                """把 Parent 的动态选择统一交给 Invocation Gateway。"""
 
                 configured_run_id = run_id_from_parent_config(config)
 
@@ -3252,21 +3535,11 @@ async def open_chat_service(
                         )
                     )
 
-                if state["resolved_capability_id"] == "general_chat":
-                    return await general_chat.invoke(
-                        state,
-                        config,
-                        cancellation_probe=cancellation_probe,
-                    )
-                if state["resolved_capability_id"] == "en_to_zh":
-                    return await en_to_zh.invoke(
-                        state,
-                        config,
-                        cancellation_probe=cancellation_probe,
-                    )
-                raise ChatRuntimeError(
-                    code="CHAT_CAPABILITY_INVALID",
-                    message="Parent Graph 选择了非法的 Stage 1 能力",
+                return await capability_gateway.invoke(
+                    state,
+                    config,
+                    user_id=settings.local_user_id,
+                    cancellation_probe=cancellation_probe,
                 )
 
             parent_graph = build_parent_graph(
@@ -3322,6 +3595,11 @@ async def open_chat_service(
             runtime_event_gateway=runtime_event_gateway,
             run_interrupt_repository=run_interrupt_repository,
             run_coordinator=run_coordinator,
+            capability_recovery_policy_evaluator=(
+                capability_recovery_policy_evaluator
+            ),
+            open_invocation_resolver=open_invocation_resolver,
+            regenerate_submission_validator=regenerate_submission_validator,
         )
         try:
             await run_coordinator.start(service.execute_persistent_run)
@@ -3331,6 +3609,8 @@ async def open_chat_service(
             log_business_event(logger, "聊天服务关闭开始")
             await run_coordinator.close()
             await service.close()
+            if registry is not None:
+                await registry.close()
             await runtime_event_publisher.aclose()
             await runtime_event_reader.aclose()
             log_business_event(logger, "聊天服务关闭完成")

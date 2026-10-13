@@ -1,4 +1,4 @@
-"""Stage 1 Parent Graph 的固定调度与有限回流控制。"""
+"""Parent Graph 的动态 Capability 调度与有限回流控制。"""
 
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 import logging
@@ -17,6 +17,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Checkpointer, Command
 
+from agent_runtime.capabilities.manifest import validate_capability_id
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.graph.child_result import CapabilityInvocation
@@ -24,7 +25,6 @@ from agent_runtime.graph.config import public_message_id_from_parent_config
 from agent_runtime.graph.state import ParentState
 
 UNSUPPORTED_REPLY = "抱歉，当前能力无法处理这个请求。"
-_CAPABILITY_IDS = ("general_chat", "en_to_zh")
 logger = logging.getLogger(__name__)
 
 
@@ -152,11 +152,13 @@ def build_parent_graph(
                 status="unsupported",
             )
             return update
-        if capability_id not in _CAPABILITY_IDS:
+        try:
+            capability_id = validate_capability_id(capability_id)
+        except (TypeError, ValueError) as error:
             raise ParentGraphError(
                 code="PARENT_INVALID_CAPABILITY",
-                message="Router 未返回 Stage 1 允许的能力",
-            )
+                message="Router 未返回合法的 Capability 标识",
+            ) from error
         if capability_id in state["rejected_capability_ids"]:
             raise ParentGraphError(
                 code="PARENT_RESELECTED_CAPABILITY",
@@ -186,11 +188,13 @@ def build_parent_graph(
         """消费标准 ChildResult，并决定完成、重路由或 unsupported。"""
 
         capability_id = state.get("resolved_capability_id")
-        if capability_id not in _CAPABILITY_IDS:
+        try:
+            capability_id = validate_capability_id(capability_id)
+        except (TypeError, ValueError) as error:
             raise ParentGraphError(
                 code="PARENT_INVALID_CAPABILITY",
-                message="Parent Graph 缺少可调用的 Stage 1 能力",
-            )
+                message="Parent Graph 缺少可调用的 Capability 标识",
+            ) from error
         if capability_id in state["rejected_capability_ids"]:
             raise ParentGraphError(
                 code="PARENT_CAPABILITY_ALREADY_REJECTED",
@@ -280,12 +284,7 @@ def build_parent_graph(
             )
         rejected_capability_ids = [*state["rejected_capability_ids"]]
         rejected_capability_ids.append(capability_id)
-        remaining_capability_ids = [
-            candidate
-            for candidate in _CAPABILITY_IDS
-            if candidate not in rejected_capability_ids
-        ]
-        next_node = "route" if remaining_capability_ids else "unsupported"
+        next_node = "route"
         log_business_event(
             logger,
             "能力调用拒绝",

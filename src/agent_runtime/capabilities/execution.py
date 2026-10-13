@@ -280,7 +280,10 @@ class CapabilityErrorMapper:
 
         if isinstance(error, asyncio.CancelledError):
             raise error
-        if isinstance(error, CapabilityError) and error.code in _PUBLIC_ERRORS:
+        if (
+            isinstance(error, (CapabilityError, ApplicationError))
+            and error.code in _PUBLIC_ERRORS
+        ):
             code = error.code
         else:
             code = "CAPABILITY_EXECUTION_FAILED"

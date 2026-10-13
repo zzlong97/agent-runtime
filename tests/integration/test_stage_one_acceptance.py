@@ -5,7 +5,7 @@ import json
 import os
 from dataclasses import dataclass, replace
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -37,6 +37,11 @@ from agent_runtime.sessions.models import Session
 from agent_runtime.sessions.repository import SessionNotFoundError
 from agent_runtime.sessions.service import SessionService
 from agent_runtime.streaming.sse import stream_chat_sse
+
+from ..capability_fixtures import (
+    allow_builtin_capabilities,
+    cleanup_capability_runtime_for_session,
+)
 
 
 def _latest_user_content(messages: list[BaseMessage]) -> str:
@@ -119,6 +124,12 @@ class StageOneAcceptanceFakeModel(BaseChatModel):
         """返回普通聊天模型实际收到的完整消息列表。"""
 
         return self._general_generation_calls
+
+    @property
+    def translation_generation_calls(self) -> list[list[BaseMessage]]:
+        """返回英译汉模型实际收到的完整消息列表。"""
+
+        return self._translation_generation_calls
 
     def bind_tools(self, tools, *, tool_choice=None, **kwargs):
         """保持同一 Fake Model，并由 System Prompt 决定结构化结果类型。"""
@@ -322,7 +333,39 @@ class InMemoryRuntime:
 
 
 def _build_in_memory_runtime() -> InMemoryRuntime:
-    """按生产拓扑组装仅替换持久化介质和模型的 Stage 1 Runtime。"""
+    """组装保留 Stage 1 行为基线的内存回归 Runtime。"""
+
+    from agent_runtime.capabilities.registry import RouterProjection
+
+    class AcceptanceCandidateProvider:
+        """为历史行为回归显式提供动态候选。"""
+
+        async def get_candidates(
+            self,
+            *,
+            user_id: str,
+            rejected_capability_ids,
+        ):
+            assert user_id == "stage-one-acceptance-user"
+            rejected = set(rejected_capability_ids)
+            return tuple(
+                projection
+                for projection in (
+                    RouterProjection(
+                        capability_id="general_chat",
+                        name="普通聊天",
+                        description="处理普通聊天，不处理翻译。",
+                        enabled=True,
+                    ),
+                    RouterProjection(
+                        capability_id="en_to_zh",
+                        name="英译汉",
+                        description="忠实完整地执行英译汉。",
+                        enabled=True,
+                    ),
+                )
+                if projection.capability_id not in rejected
+            )
 
     settings = Settings(
         local_user_id="stage-one-acceptance-user",
@@ -335,7 +378,11 @@ def _build_in_memory_runtime() -> InMemoryRuntime:
     parent_saver = InMemorySaver()
     general_saver = InMemorySaver()
     translation_saver = InMemorySaver()
-    router = StageOneRouter(model)
+    router = StageOneRouter(
+        model,
+        candidate_provider=AcceptanceCandidateProvider(),
+        user_id=settings.local_user_id,
+    )
     general_chat = GeneralChatAdapter(
         capability=GeneralChatCapability(
             scope_model=model,
@@ -352,7 +399,7 @@ def _build_in_memory_runtime() -> InMemoryRuntime:
     )
 
     async def invoke_capability(state, config):
-        """保持与生产代码相同的两个固定能力分发规则。"""
+        """仅为历史 Stage 1 行为回归调用原 Adapter。"""
 
         if state["resolved_capability_id"] == "general_chat":
             return await general_chat.invoke(state, config)
@@ -650,18 +697,252 @@ def _run_on_psycopg_compatible_loop(coroutine) -> None:
     os.getenv("RUN_POSTGRES_TESTS") != "1",
     reason="设置 RUN_POSTGRES_TESTS=1 后运行 PostgreSQL 集成测试",
 )
+def test_postgres_formal_runtime_all_capabilities_reject_once() -> None:
+    """正式 Registry/Gateway 链路全拒绝后只形成 Parent unsupported 终态。"""
+
+    from agent_runtime.chat import open_chat_service
+    from agent_runtime.persistence.database import open_database_connection
+    from agent_runtime.runtime.event_repository import (
+        PostgresRuntimeEventRepository,
+    )
+    from agent_runtime.runtime.repository import PostgresRunRepository
+
+    base_settings = Settings()
+    settings = Settings(
+        database_url=base_settings.database_url,
+        redis_url="redis://127.0.0.1:1/0",
+        redis_socket_timeout_seconds=0.05,
+        local_user_id=f"s3-12-all-rejected-{uuid4()}",
+        run_coordinator_scan_interval_seconds=0.02,
+        _env_file=None,
+    )
+    session_id: UUID | None = None
+
+    async def exercise() -> None:
+        nonlocal session_id
+        model = StageOneAcceptanceFakeModel()
+        try:
+            await allow_builtin_capabilities(settings)
+            async with open_chat_service(settings, model=model) as service:
+                app = create_app(settings, chat_service=service)
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url="http://stage-one.test",
+                ) as client:
+                    response = await client.post(
+                        "/api/v1/chat/completions",
+                        json={
+                            "request_id": str(uuid4()),
+                            "message": {"content": "把“你好”翻译成英文"},
+                        },
+                    )
+                    assert response.status_code == 202, response.text
+                    summary = response.json()
+                    run_id = UUID(str(summary["run_id"]))
+                    session_id = UUID(str(summary["session_id"]))
+
+                    run_repository = PostgresRunRepository(settings)
+                    for _ in range(300):
+                        run = await run_repository.get(run_id)
+                        if run.status in {"completed", "failed", "cancelled"}:
+                            break
+                        await asyncio.sleep(0.01)
+                    else:
+                        raise AssertionError("全拒绝 Run 未在限定时间内完成")
+
+                    assert run.status == "completed"
+                    history_response = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+                    assert history_response.status_code == 200
+                    history_items = history_response.json()["items"]
+
+            public_events = await PostgresRuntimeEventRepository(
+                settings
+            ).list_public(run_id=run_id, after_seq=0, limit=100)
+            finalized_events = [
+                event
+                for event in public_events
+                if event.event_type == "message.finalized"
+            ]
+            assert len(finalized_events) == 1
+            assert finalized_events[0].payload == {
+                "response_message_id": summary["response_message_id"],
+                "runtime_status": "unsupported",
+                "capability_id": None,
+            }
+            assert [
+                event.event_type
+                for event in public_events
+                if event.event_type
+                in {"run.completed", "run.failed", "run.cancelled"}
+            ] == ["run.completed"]
+
+            assert history_items[-1]["role"] == "assistant"
+            assert history_items[-1]["content"] == UNSUPPORTED_REPLY
+            assert history_items[-1]["runtime_status"] == "unsupported"
+            assert [call[2] for call in model.route_calls] == [
+                "general_chat",
+                "en_to_zh",
+            ]
+            assert model.general_scope_calls == [("把“你好”翻译成英文", True)]
+            assert model.translation_scope_calls == [
+                ("把“你好”翻译成英文", False)
+            ]
+            assert model.general_generation_calls == []
+            assert model.translation_generation_calls == []
+
+            async with open_database_connection(settings) as connection:
+                invocation_cursor = await connection.execute(
+                    """
+                    SELECT event_type, payload
+                    FROM runtime_events
+                    WHERE run_id = %s
+                      AND event_type IN (
+                          'internal.capability.invocation.started',
+                          'internal.capability.invocation.completed'
+                      )
+                    ORDER BY seq
+                    """,
+                    (run_id,),
+                )
+                invocation_rows = await invocation_cursor.fetchall()
+                count_cursor = await connection.execute(
+                    """
+                    SELECT
+                        (SELECT COUNT(*) FROM capability_tasks
+                         WHERE session_id = %s) AS task_count,
+                        (SELECT COUNT(*) FROM capability_task_contexts
+                         WHERE session_id = %s) AS context_count,
+                        (SELECT COUNT(*) FROM capability_operations
+                         WHERE run_id = %s) AS operation_count
+                    """,
+                    (session_id, session_id, run_id),
+                )
+                counts = await count_cursor.fetchone()
+
+            started_rows = [
+                row
+                for row in invocation_rows
+                if row["event_type"]
+                == "internal.capability.invocation.started"
+            ]
+            completed_rows = [
+                row
+                for row in invocation_rows
+                if row["event_type"]
+                == "internal.capability.invocation.completed"
+            ]
+            assert [row["payload"]["capability_id"] for row in started_rows] == [
+                "general_chat",
+                "en_to_zh",
+            ]
+            assert [
+                (
+                    row["payload"]["capability_id"],
+                    row["payload"]["outcome"],
+                )
+                for row in completed_rows
+            ] == [
+                ("general_chat", "rejected"),
+                ("en_to_zh", "rejected"),
+            ]
+            assert len(
+                {
+                    row["payload"]["invocation_id"]
+                    for row in completed_rows
+                }
+            ) == 2
+            assert counts == {
+                "task_count": 0,
+                "context_count": 0,
+                "operation_count": 0,
+            }
+        finally:
+            if session_id is not None:
+                await cleanup_capability_runtime_for_session(
+                    settings,
+                    session_id,
+                )
+                async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM runtime_events WHERE run_id IN "
+                        "(SELECT run_id FROM runs WHERE session_id = %s)",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM runs WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM sessions WHERE session_id = %s",
+                        (session_id,),
+                    )
+                    await connection.commit()
+                async with AsyncPostgresSaver.from_conn_string(
+                    settings.database_connection_string
+                ) as checkpointer:
+                    await checkpointer.adelete_thread(str(session_id))
+
+    _run_on_psycopg_compatible_loop(exercise())
+
+
+@pytest.mark.postgres
+@pytest.mark.skipif(
+    os.getenv("RUN_POSTGRES_TESTS") != "1",
+    reason="设置 RUN_POSTGRES_TESTS=1 后运行 PostgreSQL 集成测试",
+)
 def test_postgres_restart_restores_session_parent_and_isolated_children() -> None:
     """验证 HTTP 会话重启后续用当前能力并恢复三类独立状态。"""
 
     from agent_runtime.chat import open_chat_service
     from agent_runtime.persistence.database import open_database_connection
 
-    settings = Settings()
+    base_settings = Settings()
+    settings = Settings(
+        database_url=base_settings.database_url,
+        redis_url="redis://127.0.0.1:1/0",
+        redis_socket_timeout_seconds=0.05,
+        local_user_id=f"s3-12-restart-{uuid4()}",
+        run_coordinator_scan_interval_seconds=0.02,
+        _env_file=None,
+    )
     session_id: UUID | None = None
 
     async def exercise() -> None:
         nonlocal session_id
+        from agent_runtime.runtime.repository import PostgresRunRepository
+
+        async def submit_and_wait(
+            client: httpx.AsyncClient,
+            content: str,
+            *,
+            existing_session_id: UUID | None = None,
+        ) -> dict[str, object]:
+            payload: dict[str, object] = {
+                "request_id": str(uuid4()),
+                "message": {"content": content},
+            }
+            if existing_session_id is not None:
+                payload["session_id"] = str(existing_session_id)
+            response = await client.post(
+                "/api/v1/chat/completions",
+                json=payload,
+            )
+            assert response.status_code == 202
+            summary = response.json()
+            repository = PostgresRunRepository(settings)
+            for _ in range(300):
+                run = await repository.get(UUID(summary["run_id"]))
+                if run.status in {"completed", "failed", "cancelled"}:
+                    assert run.status == "completed"
+                    return summary
+                await asyncio.sleep(0.01)
+            raise AssertionError("持久 Run 未在限定时间内完成")
+
         try:
+            await allow_builtin_capabilities(settings)
             first_model = StageOneAcceptanceFakeModel()
             async with open_chat_service(settings, model=first_model) as service:
                 app = create_app(settings, chat_service=service)
@@ -670,8 +951,11 @@ def test_postgres_restart_restores_session_parent_and_isolated_children() -> Non
                     transport=transport,
                     base_url="http://stage-one.test",
                 ) as client:
-                    first_events = await _post_message(client, "介绍一下 LangGraph")
-                session_id = UUID(str(first_events[0][1]["session_id"]))
+                    first_summary = await submit_and_wait(
+                        client,
+                        "介绍一下 LangGraph",
+                    )
+                session_id = UUID(str(first_summary["session_id"]))
                 assert first_model.route_calls[-1][2] == "general_chat"
 
             restarted_model = StageOneAcceptanceFakeModel()
@@ -682,40 +966,86 @@ def test_postgres_restart_restores_session_parent_and_isolated_children() -> Non
                     transport=transport,
                     base_url="http://stage-one.test",
                 ) as client:
-                    continued_events = await _post_message(
+                    await submit_and_wait(
                         client,
                         "再介绍一下 LangGraph",
-                        session_id=session_id,
+                        existing_session_id=session_id,
                     )
-                    switched_events = await _post_message(
+                    await submit_and_wait(
                         client,
                         'Translate "How are you?" into Chinese',
-                        session_id=session_id,
+                        existing_session_id=session_id,
                     )
-                assert _event_reply(continued_events).startswith("LangGraph")
-                assert _event_reply(switched_events) == "你好吗？"
+                    history_response = await client.get(
+                        f"/api/v1/chat/sessions/{session_id}/messages"
+                    )
+                    assert history_response.status_code == 200
+                    history_items = history_response.json()["items"]
+                assert history_items[-3]["content"].startswith("LangGraph")
+                assert history_items[-1]["content"] == "你好吗？"
                 assert [call[2] for call in restarted_model.route_calls] == ["en_to_zh"]
 
             assert session_id is not None
+            async with open_database_connection(settings) as connection:
+                cursor = await connection.execute(
+                    """
+                    SELECT e.run_id, e.payload
+                    FROM runtime_events AS e
+                    INNER JOIN runs AS r ON r.run_id = e.run_id
+                    WHERE r.session_id = %s
+                      AND e.event_type =
+                          'internal.capability.invocation.completed'
+                      AND e.payload ->> 'outcome' = 'completed'
+                    ORDER BY e.created_at, e.seq
+                    """,
+                    (session_id,),
+                )
+                invocation_rows = await cursor.fetchall()
+            from agent_runtime.capabilities.state_scope import (
+                ChildThreadIdFactory,
+            )
+
+            thread_factory = ChildThreadIdFactory()
             async with AsyncPostgresSaver.from_conn_string(
                 settings.database_connection_string
             ) as checkpointer:
                 parent_checkpoint = await checkpointer.aget_tuple(
                     parent_thread_config(session_id)
                 )
-                general_checkpoint = await checkpointer.aget_tuple(
-                    child_thread_config(session_id, "general_chat")
-                )
-                translation_checkpoint = await checkpointer.aget_tuple(
-                    child_thread_config(session_id, "en_to_zh")
-                )
+                child_values: dict[str, list[dict]] = {
+                    "general_chat": [],
+                    "en_to_zh": [],
+                }
+                for row in invocation_rows:
+                    payload = row["payload"]
+                    thread_id = thread_factory.build(
+                        state_scope=payload["state_scope"],
+                        session_id=session_id,
+                        capability_id=payload["capability_id"],
+                        state_schema_version=payload["state_schema_version"],
+                        run_id=UUID(str(row["run_id"])),
+                        invocation_id=UUID(str(payload["invocation_id"])),
+                        task_id=UUID(str(payload["task_id"])),
+                    )
+                    checkpoint = await checkpointer.aget_tuple(
+                        {
+                            "configurable": {
+                                "thread_id": thread_id,
+                                "checkpoint_ns": "",
+                            }
+                        }
+                    )
+                    assert checkpoint is not None
+                    child_values[payload["capability_id"]].append(
+                        checkpoint.checkpoint["channel_values"]
+                    )
 
                 assert parent_checkpoint is not None
-                assert general_checkpoint is not None
-                assert translation_checkpoint is not None
                 parent_values = parent_checkpoint.checkpoint["channel_values"]
-                general_values = general_checkpoint.checkpoint["channel_values"]
-                translation_values = translation_checkpoint.checkpoint["channel_values"]
+                assert len(child_values["general_chat"]) == 2
+                assert len(child_values["en_to_zh"]) == 1
+                general_values = child_values["general_chat"][-1]
+                translation_values = child_values["en_to_zh"][0]
                 assert parent_values["resolved_capability_id"] == "en_to_zh"
                 assert [message.content for message in parent_values["messages"]] == [
                     "介绍一下 LangGraph",
@@ -739,7 +1069,20 @@ def test_postgres_restart_restores_session_parent_and_isolated_children() -> Non
                 assert translation_values["draft_translation"] == "你好吗？"
         finally:
             if session_id is not None:
+                await cleanup_capability_runtime_for_session(
+                    settings,
+                    session_id,
+                )
                 async with open_database_connection(settings) as connection:
+                    await connection.execute(
+                        "DELETE FROM runtime_events WHERE run_id IN "
+                        "(SELECT run_id FROM runs WHERE session_id = %s)",
+                        (session_id,),
+                    )
+                    await connection.execute(
+                        "DELETE FROM runs WHERE session_id = %s",
+                        (session_id,),
+                    )
                     await connection.execute(
                         "DELETE FROM sessions WHERE session_id = %s",
                         (session_id,),

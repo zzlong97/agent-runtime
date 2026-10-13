@@ -6,6 +6,11 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from agent_runtime.capabilities.contracts import (
+    AgentResult,
+    AgentResultMetadata,
+    HealthResult,
+)
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.graph.child_result import ChildResult
 from agent_runtime.runtime.agent_contract import (
@@ -64,14 +69,24 @@ class GeneralChatCapability:
             name="general_chat",
         )
 
-    async def run(
+    async def initialize(self) -> None:
+        """普通聊天当前没有额外异步资源需要初始化。"""
+
+    async def health_check(self) -> HealthResult:
+        """返回仅表示本地实例已完成构造的稳定健康结果。"""
+
+        return HealthResult(
+            status="healthy",
+            summary_code="CAPABILITY_READY",
+        )
+
+    async def invoke(
         self,
-        *,
         run_context: RunContext,
         agent_context: AgentContext,
         task_input: TaskInput,
-    ) -> ChildResult:
-        """执行范围守卫；仅对范围内请求生成并转发消息事件。"""
+    ) -> AgentResult:
+        """执行范围守卫，并返回包含规范全文的 Stage 3 AgentResult。"""
 
         messages = list(task_input.messages)
         latest_message = next(
@@ -110,11 +125,16 @@ class GeneralChatCapability:
             ) from error
 
         if decision.is_translation_request:
-            return ChildResult(
+            return AgentResult(
                 status="rejected",
-                control_signal="OUT_OF_SCOPE",
+                content="",
+                metadata=AgentResultMetadata(
+                    control_signal="OUT_OF_SCOPE",
+                    task_transition="keep_active",
+                ),
             )
 
+        content_parts: list[str] = []
         try:
             async for event in self._agent.astream(
                 {"messages": messages},
@@ -125,10 +145,30 @@ class GeneralChatCapability:
                 message, _metadata = event
                 text = str(message.text)
                 if text:
+                    content_parts.append(text)
                     run_context.events.emit(AgentTextEvent(text=text))
         except Exception as error:
             raise GeneralChatError(
                 code="GENERAL_CHAT_CALL_FAILED",
                 message="普通聊天模型调用失败",
             ) from error
-        return ChildResult(status="completed", control_signal=None)
+        return AgentResult(
+            status="completed",
+            content="".join(content_parts),
+            metadata=AgentResultMetadata(),
+        )
+
+    async def run(
+        self,
+        *,
+        run_context: RunContext,
+        agent_context: AgentContext,
+        task_input: TaskInput,
+    ) -> ChildResult:
+        """执行范围守卫；仅对范围内请求生成并转发消息事件。"""
+
+        result = await self.invoke(run_context, agent_context, task_input)
+        return ChildResult(
+            status=result.status,
+            control_signal=result.metadata.control_signal,
+        )

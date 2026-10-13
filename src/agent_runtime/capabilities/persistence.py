@@ -199,7 +199,8 @@ FROM runtime_events
 WHERE run_id = %s
   AND event_type IN (
       'internal.capability.task.created',
-      'internal.capability.task.current_changed'
+      'internal.capability.task.current_changed',
+      'internal.capability.task.continue_degraded_to_new'
   )
   AND payload ->> 'task_id' = %s
 ORDER BY seq ASC
