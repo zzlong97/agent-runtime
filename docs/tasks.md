@@ -20,9 +20,9 @@ VERIFIED
 
 ```text
 Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-13（IN_PROGRESS）
-Last Verified Task: S3-12
-Last Verified Commit: 待生成 S3-12 验收提交
+Current Task: S3-14（IN_PROGRESS）
+Last Verified Task: S3-13
+Last Verified Commit: 待生成 S3-13 验收提交
 Blockers: None
 ```
 
@@ -3201,7 +3201,7 @@ Regenerate 安全矩阵、真实 Checkpointer 集成、Review、负责人验收�
 
 ## S3-13 Session 删除与动态 Child Checkpoint 清理
 
-**Status:** IN_PROGRESS
+**Status:** VERIFIED
 
 **Dependencies:** S3-05, S3-09, S3-12
 
@@ -3237,12 +3237,12 @@ SessionDeletionService integration
 
 ### Acceptance
 
-- [ ] 活动 Run 先取消并终止
-- [ ] 四张 S3 表中该 Session 相关数据全部删除
-- [ ] invocation/run/session scope checkpoint 全部删除
-- [ ] 遗留 `{session_id}:{capability_id}` checkpoint 兼容清理
-- [ ] 任一步失败不提前删除 Session，重试可完成
-- [ ] 其他 Session 和 Registry 不受影响
+- [x] 活动 Run 先取消并终止
+- [x] 四张 S3 表中该 Session 相关数据全部删除
+- [x] invocation/run/session scope checkpoint 全部删除
+- [x] 遗留 `{session_id}:{capability_id}` checkpoint 兼容清理
+- [x] 任一步失败不提前删除 Session，重试可完成
+- [x] 其他 Session 和 Registry 不受影响
 
 ### Test Requirements
 
@@ -3255,6 +3255,25 @@ SessionDeletionService integration
 - S2.5 Interrupt/Event/Run/Feedback/Parent checkpoint 删除
 - Redis 不可用不阻塞 PostgreSQL
 
+### Verification Notes
+
+- 2026-10-13：新增 `SessionCapabilityDataDeleter` 和
+  `DynamicChildThreadCollector`；删除前稳定收集 Run、Task 与实际 Child
+  thread 标识，并按 Context → Operation → Task → Runtime → Child
+  Checkpoint → Parent / Feedback → Session 的已确认顺序执行可重试硬删除。
+- 2026-10-13：真实 PostgreSQL + Checkpointer + Redis 删除矩阵和相关回归
+  `25 passed`；覆盖多 Run、多 Task、多 Capability、三种 State Scope、
+  遗留 thread、Redis Stream、其他 Session 隔离与权限记录保留。
+- 2026-10-13：Context、Operation、Task 三个事务步骤及上层各删除步骤
+  已完成确定性故障注入；失败时不提交不删除 Session，同一请求重试可完成。
+- 2026-10-13：默认全量套件 `642 passed, 70 skipped`；启用真实
+  PostgreSQL + Redis 的全量套件 `711 passed, 1 skipped`，唯一跳过项为显式
+  可选的真实百炼 smoke test。
+- 2026-10-13：S3-13 实现与自验完成，任务更新为 `DONE`，等待
+  Reviewer 复审；不标记 `VERIFIED`，不开始 S3-14。
+- 2026-10-13：Reviewer 复审与负责人验收通过，任务更新为
+  `VERIFIED`；按工程流程提交并同步 GitHub、Gitee 后进入 S3-14。
+
 ### Definition of Done
 
 完整删除矩阵、故障重试、Review、负责人验收和双远程同步完成。
@@ -3263,7 +3282,7 @@ SessionDeletionService integration
 
 ## S3-14 Stage 3 集成验收 Gate
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 
 **Dependencies:** S3-02 ~ S3-13
 

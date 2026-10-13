@@ -77,6 +77,11 @@ from agent_runtime.capabilities.state_scope import (
     ChildThreadIdFactory,
     StateCompatibilityPolicy,
 )
+from agent_runtime.capabilities.session_deletion import (
+    DynamicChildThreadCollector,
+    SessionCapabilityDataDeleter,
+    SessionCapabilityDeletionError,
+)
 from agent_runtime.capabilities.task_service import (
     CapabilityTaskService,
     CheckpointerThreadStore,
@@ -119,12 +124,15 @@ __all__ = [
     "CheckpointerThreadStore",
     "ChildCheckpointStore",
     "ChildThreadIdFactory",
+    "DynamicChildThreadCollector",
     "HealthResult",
     "HealthSnapshot",
     "ManifestCapabilityId",
     "RouterProjection",
     "RouterCandidateProvider",
     "ServiceabilityDecision",
+    "SessionCapabilityDataDeleter",
+    "SessionCapabilityDeletionError",
     "StateCompatibilityPolicy",
     "UserCapabilityPermission",
     "UserCapabilityPermissionRepository",

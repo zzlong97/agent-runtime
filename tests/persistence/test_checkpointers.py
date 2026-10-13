@@ -52,8 +52,6 @@ def test_runtime_checkpointers_open_isolated_child_savers(monkeypatch) -> None:
             child_count=2,
         ) as opened:
             assert opened.parent is savers[0]
-            assert opened.general_chat is savers[1]
-            assert opened.en_to_zh is savers[1]
             assert opened.cleanup is savers[1]
             assert opened.children == (savers[2], savers[3])
             assert opened.children[0] is not opened.children[1]

@@ -48,6 +48,10 @@ from agent_runtime.capabilities.routing import (
     CapabilityPermissionService,
     RouterCandidateProvider,
 )
+from agent_runtime.capabilities.session_deletion import (
+    DynamicChildThreadCollector,
+    SessionCapabilityDataDeleter,
+)
 from agent_runtime.capabilities.source import (
     CapabilityManifestDocument,
     LocalYamlCapabilitySource,
@@ -3406,6 +3410,8 @@ async def open_chat_service(
         settings
     )
     await capability_permission_repository.setup()
+    capability_data_deleter = SessionCapabilityDataDeleter(settings)
+    child_thread_collector = DynamicChildThreadCollector(settings)
     run_interrupt_repository = PostgresRunInterruptRepository(settings)
     runtime_event_publisher = RedisStreamPublisher.from_url(
         settings.redis_connection_string,
@@ -3568,11 +3574,12 @@ async def open_chat_service(
         deletion_service = SessionDeletionService(
             settings=settings,
             parent_checkpointer=checkpointers.parent,
-            general_chat_checkpointer=checkpointers.general_chat,
-            en_to_zh_checkpointer=checkpointers.en_to_zh,
+            child_checkpointer=checkpointers.cleanup,
             feedback_store=feedback_store,
             session_repository=session_repository,
             runtime_store=run_repository,
+            capability_data_deleter=capability_data_deleter,
+            child_thread_collector=child_thread_collector,
             redis_stream_cleaner=runtime_event_publisher,
         )
         checkpoint_forker = CheckpointForker(

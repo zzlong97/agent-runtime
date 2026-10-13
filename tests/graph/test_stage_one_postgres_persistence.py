@@ -120,7 +120,7 @@ def test_stage_one_runtime_restores_parent_and_isolates_child_checkpoints() -> N
                             responses=[False],
                         ),
                         response_model=FakeResponseChatModel(responses=["我记住了。"]),
-                        checkpointer=first_savers.general_chat,
+                        checkpointer=first_savers.cleanup,
                     ),
                     message_id_factory=lambda: UUID(
                         "00000000-0000-0000-0000-000000000201"
@@ -157,7 +157,7 @@ def test_stage_one_runtime_restores_parent_and_isolates_child_checkpoints() -> N
                         response_model=FakeResponseChatModel(
                             responses=["不应生成普通聊天回复"]
                         ),
-                        checkpointer=restarted_savers.general_chat,
+                        checkpointer=restarted_savers.cleanup,
                     )
                 )
                 translation_message_ids = iter(
@@ -174,7 +174,7 @@ def test_stage_one_runtime_restores_parent_and_isolates_child_checkpoints() -> N
                             responses=[True, True],
                         ),
                         translation_model=restarted_translation_model,
-                        checkpointer=restarted_savers.en_to_zh,
+                        checkpointer=restarted_savers.cleanup,
                     ),
                     message_id_factory=translation_message_ids.__next__,
                 )
@@ -208,10 +208,10 @@ def test_stage_one_runtime_restores_parent_and_isolates_child_checkpoints() -> N
                     pass
 
                 restored_parent = await restarted_parent.aget_state(parent_config)
-                general_checkpoint = await restarted_savers.general_chat.aget_tuple(
+                general_checkpoint = await restarted_savers.cleanup.aget_tuple(
                     child_thread_config(session_id, "general_chat")
                 )
-                translation_checkpoint = await restarted_savers.en_to_zh.aget_tuple(
+                translation_checkpoint = await restarted_savers.cleanup.aget_tuple(
                     child_thread_config(session_id, "en_to_zh")
                 )
                 assert general_checkpoint is not None
@@ -266,9 +266,9 @@ def test_stage_one_runtime_restores_parent_and_isolates_child_checkpoints() -> N
         finally:
             async with open_stage_one_checkpointers(settings) as cleanup_savers:
                 await cleanup_savers.parent.adelete_thread(str(session_id))
-                await cleanup_savers.general_chat.adelete_thread(
+                await cleanup_savers.cleanup.adelete_thread(
                     f"{session_id}:general_chat"
                 )
-                await cleanup_savers.en_to_zh.adelete_thread(f"{session_id}:en_to_zh")
+                await cleanup_savers.cleanup.adelete_thread(f"{session_id}:en_to_zh")
 
     run_on_psycopg_compatible_loop(exercise())

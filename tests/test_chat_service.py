@@ -2233,6 +2233,14 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         async def setup(self) -> None:
             events.append(self.event_name)
 
+    class FakeCapabilityDataDeleter:
+        def __init__(self, settings):
+            captured["capability_data_deleter"] = self
+
+    class FakeChildThreadCollector:
+        def __init__(self, settings):
+            captured["child_thread_collector"] = self
+
     class FakeRuntimeEventPublisher:
         @classmethod
         def from_url(cls, *args, **kwargs):
@@ -2276,10 +2284,13 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
     class FakeSessionDeletionService:
         def __init__(self, **kwargs):
             captured["delete_parent"] = kwargs["parent_checkpointer"]
-            captured["delete_general_chat"] = kwargs[
-                "general_chat_checkpointer"
+            captured["delete_child"] = kwargs["child_checkpointer"]
+            captured["delete_capability_data"] = kwargs[
+                "capability_data_deleter"
             ]
-            captured["delete_en_to_zh"] = kwargs["en_to_zh_checkpointer"]
+            captured["delete_child_threads"] = kwargs[
+                "child_thread_collector"
+            ]
             captured["delete_feedback_store"] = kwargs["feedback_store"]
             captured["delete_session_repository"] = kwargs[
                 "session_repository"
@@ -2305,8 +2316,6 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
             parent=None,
             cleanup=None,
             children=(),
-            general_chat=None,
-            en_to_zh=None,
         )
         events.append("checkpointers_closed")
 
@@ -2354,6 +2363,16 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         chat_module,
         "UserCapabilityPermissionRepository",
         FakeCapabilityRepository,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "SessionCapabilityDataDeleter",
+        FakeCapabilityDataDeleter,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "DynamicChildThreadCollector",
+        FakeChildThreadCollector,
     )
     monkeypatch.setattr(
         chat_module,
@@ -2432,8 +2451,15 @@ def test_open_chat_service_closes_active_runs_before_checkpointers(
         is captured["chat_run_registry"]
     )
     assert captured["delete_parent"] is None
-    assert captured["delete_general_chat"] is None
-    assert captured["delete_en_to_zh"] is None
+    assert captured["delete_child"] is None
+    assert (
+        captured["delete_capability_data"]
+        is captured["capability_data_deleter"]
+    )
+    assert (
+        captured["delete_child_threads"]
+        is captured["child_thread_collector"]
+    )
     assert captured["delete_feedback_store"] is captured["feedback_store"]
     assert captured["delete_session_repository"] is not None
     assert captured["chat_deletion_service"] is not None

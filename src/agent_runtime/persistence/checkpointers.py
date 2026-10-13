@@ -17,18 +17,6 @@ class RuntimeCheckpointers:
     cleanup: AsyncPostgresSaver
     children: tuple[AsyncPostgresSaver, ...]
 
-    @property
-    def general_chat(self) -> AsyncPostgresSaver:
-        """兼容 S3-13 前仍按遗留线程名清理的普通聊天入口。"""
-
-        return self.cleanup
-
-    @property
-    def en_to_zh(self) -> AsyncPostgresSaver:
-        """兼容 S3-13 前仍按遗留线程名清理的英译汉入口。"""
-
-        return self.cleanup
-
 
 StageOneCheckpointers = RuntimeCheckpointers
 

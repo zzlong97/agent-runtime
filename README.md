@@ -23,8 +23,9 @@ Scope、S3-06 权限、动态 Router 候选与公开 capability_id 均已验收�
 S3-08 Capability 单进程并发、两阶段超时取消与稳定错误映射、S3-09 Operation
 Ledger 与 `ctx.operation()` 均已完成验收并同步两个远程；S3-10 Capability 恢复
 策略与 Checkpoint 对账、S3-11 Regenerate Capability 安全门禁均已通过验收并同步
-两个远程；S3-12 两个测试 Capability 的标准 Runtime 迁移已通过验收，当前进入
-S3-13 Session 删除与动态 Child Checkpoint 清理。
+两个远程；S3-12 两个测试 Capability 的标准 Runtime 迁移、S3-13
+Session 删除与动态 Child Checkpoint 清理均已通过验收，当前进入
+S3-14 Stage 3 集成验收 Gate。
 具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
@@ -550,7 +551,7 @@ npm run test:e2e
 
 当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
 
-S3-12 已通过验收；当前进入 S3-13 Session 删除与动态 Child Checkpoint 清理；
+S3-13 已通过验收；当前进入 S3-14 Stage 3 集成验收 Gate；
 任何 S3 任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、

@@ -51,6 +51,15 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
     """活动 Run 停止后按顺序清除三类状态、反馈和 Session 行。"""
 
     from agent_runtime.chat import ChatService
+    from agent_runtime.capabilities.persistence import (
+        CapabilityOperationRepository,
+        CapabilityTaskContextRepository,
+        CapabilityTaskRepository,
+    )
+    from agent_runtime.capabilities.session_deletion import (
+        DynamicChildThreadCollector,
+        SessionCapabilityDataDeleter,
+    )
     from agent_runtime.core.config import Settings
     from agent_runtime.feedback import FeedbackService, PostgresFeedbackStore
     from agent_runtime.graph.child_result import CapabilityInvocation, ChildResult
@@ -77,6 +86,9 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
         await session_repository.setup()
         await feedback_store.setup()
         await parent_state_store.setup()
+        await CapabilityTaskRepository(settings).setup()
+        await CapabilityTaskContextRepository(settings).setup()
+        await CapabilityOperationRepository(settings).setup()
         session_service = SessionService(
             settings=settings,
             session_repository=session_repository,
@@ -131,11 +143,11 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
         try:
             async with open_stage_one_checkpointers(settings) as checkpointers:
                 await _store_child_checkpoint(
-                    checkpointers.general_chat,
+                    checkpointers.cleanup,
                     thread_id=f"{session_id}:general_chat",
                 )
                 await _store_child_checkpoint(
-                    checkpointers.en_to_zh,
+                    checkpointers.cleanup,
                     thread_id=f"{session_id}:en_to_zh",
                 )
                 async def route(state, config):
@@ -167,10 +179,15 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
                 deletion_service = SessionDeletionService(
                     settings=settings,
                     parent_checkpointer=checkpointers.parent,
-                    general_chat_checkpointer=checkpointers.general_chat,
-                    en_to_zh_checkpointer=checkpointers.en_to_zh,
+                    child_checkpointer=checkpointers.cleanup,
                     feedback_store=feedback_store,
                     session_repository=session_repository,
+                    capability_data_deleter=(
+                        SessionCapabilityDataDeleter(settings)
+                    ),
+                    child_thread_collector=DynamicChildThreadCollector(
+                        settings
+                    ),
                 )
                 pausing_deletion_service = PausingDeletionService(
                     deletion_service
@@ -309,10 +326,10 @@ def test_delete_session_stops_run_and_removes_all_postgres_data() -> None:
                     settings
                 ) as checkpointers:
                     await checkpointers.parent.adelete_thread(str(session_id))
-                    await checkpointers.general_chat.adelete_thread(
+                    await checkpointers.cleanup.adelete_thread(
                         f"{session_id}:general_chat"
                     )
-                    await checkpointers.en_to_zh.adelete_thread(
+                    await checkpointers.cleanup.adelete_thread(
                         f"{session_id}:en_to_zh"
                     )
 
