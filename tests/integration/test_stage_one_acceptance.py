@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -164,9 +165,11 @@ class StageOneAcceptanceFakeModel(BaseChatModel):
         request = str(messages[-1].content)
         content = _latest_user_content(messages)
         candidates = tuple(
-            capability_id
-            for capability_id in ("general_chat", "en_to_zh")
-            if f"- {capability_id}:" in request
+            re.findall(
+                r"^- ([a-z][a-z0-9_]{0,63}):",
+                request,
+                flags=re.MULTILINE,
+            )
         )
         if len(candidates) == 1:
             capability_id = candidates[0]

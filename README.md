@@ -15,7 +15,7 @@ AgentRuntime 是一个基于 **FastAPI + LangGraph 1.0+ + PostgreSQL** 构建的
 
 当前项目已经验收通过 **Stage 1：最小 Agent Runtime**、
 **Stage 2：完整聊天产品能力与演示页面** 和
-**Stage 2.5：持久化 Run 与可恢复 Runtime**。当前进入
+**Stage 2.5：持久化 Run 与可恢复 Runtime** 和
 **Stage 3：Capability Runtime**。S3-01 架构文档与任务树已经验收并完成双远程同步，
 S3-02 Manifest Schema 与 Local CapabilitySource、S3-03 Capability 协议、Bootstrap
 与静态 Registry、S3-04 持久化基础设施、S3-05 Invocation、Task Service 与 State
@@ -24,8 +24,8 @@ S3-08 Capability 单进程并发、两阶段超时取消与稳定错误映射、
 Ledger 与 `ctx.operation()` 均已完成验收并同步两个远程；S3-10 Capability 恢复
 策略与 Checkpoint 对账、S3-11 Regenerate Capability 安全门禁均已通过验收并同步
 两个远程；S3-12 两个测试 Capability 的标准 Runtime 迁移、S3-13
-Session 删除与动态 Child Checkpoint 清理均已通过验收，当前进入
-S3-14 Stage 3 集成验收 Gate。
+Session 删除与动态 Child Checkpoint 清理均已通过验收。S3-14 Stage 3 集成验收
+Gate 已通过独立复审与负责人验收，Stage 3 开发完成，当前暂不进入下一阶段。
 具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
@@ -267,8 +267,8 @@ S2.5-11 与 Stage 2.5 整体验收通过：
 
 - S3-00 架构基线已经确认
 - S3-01 架构文档与任务树已经验收并同步 GitHub、Gitee
-- S3-02 已实现严格 Manifest Schema、本地 YAML `CapabilitySource` 和两个测试
-  Capability 的静态 Manifest，已经验收但尚未接入 Registry 或执行链路
+- S3-02 已实现并验收严格 Manifest Schema、本地 YAML `CapabilitySource` 和两个测试
+  Capability 的静态 Manifest；S3-12 已将其接入 Registry 与正式执行链路
 - S3-03 已验收关闭结果协议、只读 Bootstrap、同步 entrypoint 校验、静态 Registry、
   局部故障隔离、启动健康结果、逆序幂等 cleanup 和四字段 Router Projection；S3-12
   已把该 Registry Snapshot 接入正式执行主链路
@@ -298,6 +298,11 @@ S2.5-11 与 Stage 2.5 整体验收通过：
   时则在 stopped Checkpoint 对账中关闭 open Invocation，Runtime 失败时也在 incomplete
   Checkpoint 后关闭 Invocation；正式链路不再按固定 ID 分发，并由真实 PostgreSQL
   自动化覆盖两个 Capability 全部拒绝与 provisional Task 回滚
+- S3-13 已通过验收并完成双远程同步：Session 删除覆盖四张 S3 数据表、动态三种
+  State Scope Child Checkpoint、遗留 thread、Runtime 数据与 Redis Stream
+- S3-14 已通过 Stage 3 集成门禁验收：默认与真实依赖全量回归、第三个协议测试 ID
+  正式产品链路、前端 Vitest/build、系统 Edge Playwright、Schema/日志/范围审计均通过，
+  当前为 `VERIFIED`，Stage 3 开发完成
 
 ### Stage 3：Capability Runtime
 
@@ -549,10 +554,9 @@ npm run test:e2e
 4. `docs/decisions.md`
 5. `docs/tasks.md`
 
-当前只允许执行 `docs/tasks.md` 中标记的 **Stage 3 当前任务**。
-
-S3-13 已通过验收；当前进入 S3-14 Stage 3 集成验收 Gate；
-任何 S3 任务都不得顺手实现热加载、Workflow、多实例、RBAC、RAG 等 Future 能力。
+S3-14 与 Stage 3 已通过验收；当前没有已授权的下一阶段开发任务。后续工作开始前仍须
+先在 `docs/tasks.md` 中明确任务范围，不得直接实现热加载、Workflow、多实例、RBAC、
+RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、
 `LLM_BASE_URL` 和 `LLM_MODEL`；不得提交真实密钥。

@@ -28,14 +28,50 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: PostgresDsn = PostgresDsn(
-        "postgresql://postgres:postgres@localhost:5432/agent_runtime"
+    database_url: PostgresDsn = Field(
+        default=PostgresDsn(
+            "postgresql://postgres:postgres@localhost:5432/agent_runtime"
+        ),
+        description=(
+            "Runtime、Session、Run、事件和 Checkpoint 共用的 PostgreSQL 连接地址；"
+            "只允许 postgres、postgresql 或 postgresql+asyncpg 协议，不得写入业务日志。"
+        ),
     )
-    dashscope_api_key: SecretStr | None = None
-    llm_base_url: AnyHttpUrl | None = None
-    llm_model: str | None = None
-    local_user_id: str = "local-user"
-    log_level: str = "INFO"
+    dashscope_api_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "阿里云百炼模型调用使用的可选密钥；自动化测试默认使用 Fake Model，"
+            "真实联调时才配置，任何日志和公开协议均不得输出该值。"
+        ),
+    )
+    llm_base_url: AnyHttpUrl | None = Field(
+        default=None,
+        description=(
+            "阿里云百炼 OpenAI 兼容接口的可选基础 URL；默认测试不依赖该地址，"
+            "真实模型联调时必须与所选模型服务匹配。"
+        ),
+    )
+    llm_model: str | None = Field(
+        default=None,
+        description=(
+            "真实模型联调使用的百炼模型标识；默认测试为 null 并注入 Fake Model，"
+            "不得把具体模型设为自动化测试硬依赖。"
+        ),
+    )
+    local_user_id: str = Field(
+        default="local-user",
+        description=(
+            "单用户可信环境中的固定本地用户标识；Stage 3 不接受客户端覆盖，"
+            "并用它约束 Session 所有权和 Capability 权限。"
+        ),
+    )
+    log_level: str = Field(
+        default="INFO",
+        description=(
+            "Python 与中文业务日志的最低输出级别；只允许 CRITICAL、ERROR、"
+            "WARNING、INFO 或 DEBUG，读取后统一规范为大写。"
+        ),
+    )
     log_dir: Path = Field(
         default=Path("logs"),
         description=(

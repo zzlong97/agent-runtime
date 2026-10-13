@@ -19,10 +19,10 @@ VERIFIED
 # 当前工作状态
 
 ```text
-Current Stage: Stage 3（IN_PROGRESS）
-Current Task: S3-14（IN_PROGRESS）
-Last Verified Task: S3-13
-Last Verified Commit: 待生成 S3-13 验收提交
+Current Stage: Stage 3（VERIFIED）
+Current Task: None（暂不进入下一阶段）
+Last Verified Task: S3-14
+Last Verified Commit: S3-14 验收提交（GitHub/Gitee master 当前提交）
 Blockers: None
 ```
 
@@ -3282,7 +3282,7 @@ SessionDeletionService integration
 
 ## S3-14 Stage 3 集成验收 Gate
 
-**Status:** IN_PROGRESS
+**Status:** VERIFIED
 
 **Dependencies:** S3-02 ~ S3-13
 
@@ -3318,21 +3318,21 @@ SessionDeletionService integration
 
 ### Acceptance
 
-- [ ] Manifest 严格校验、重复隔离、局部故障隔离通过
-- [ ] Registry Snapshot、动态 Router 与权限双检通过
-- [ ] Task 生命周期、OUT_OF_SCOPE 回滚和三种 State Scope 通过
-- [ ] State Schema 兼容与不兼容拒绝通过
-- [ ] Regenerate 只允许 invocation + none，其他组合在 Run 创建前 409
-- [ ] Health TTL、degraded、并发、timeout 与 Cancel 竞态通过
-- [ ] automatic 恢复、manual 安全失败和 Operation Ledger 崩溃窗口通过
-- [ ] 两个标准测试 Capability 和第三个协议测试 ID 通过完整产品链路
-- [ ] Session 删除覆盖四表和全部 Child checkpoint
-- [ ] `/chat` 可观察通用 capability_id，终态仍回读 Parent 历史
-- [ ] 默认 Fake Model、真实 PostgreSQL/Redis、Vitest、构建和 Playwright 通过
-- [ ] 真实百炼仅作为负责人配置后的可选 smoke
-- [ ] Stage 1 / 2 / 2.5 无回归
-- [ ] 未实现 S3 非目标
-- [ ] README、AGENTS 和全部 docs 与实现一致
+- [x] Manifest 严格校验、重复隔离、局部故障隔离通过
+- [x] Registry Snapshot、动态 Router 与权限双检通过
+- [x] Task 生命周期、OUT_OF_SCOPE 回滚和三种 State Scope 通过
+- [x] State Schema 兼容与不兼容拒绝通过
+- [x] Regenerate 只允许 invocation + none，其他组合在 Run 创建前 409
+- [x] Health TTL、degraded、并发、timeout 与 Cancel 竞态通过
+- [x] automatic 恢复、manual 安全失败和 Operation Ledger 崩溃窗口通过
+- [x] 两个标准测试 Capability 和第三个协议测试 ID 通过完整产品链路
+- [x] Session 删除覆盖四表和全部 Child checkpoint
+- [x] `/chat` 可观察通用 capability_id，终态仍回读 Parent 历史
+- [x] 默认 Fake Model、真实 PostgreSQL/Redis、Vitest、构建和 Playwright 通过
+- [x] 真实百炼仅作为负责人配置后的可选 smoke
+- [x] Stage 1 / 2 / 2.5 无回归
+- [x] 未实现 S3 非目标
+- [x] README、AGENTS 和全部 docs 与实现一致
 
 ### Test Requirements
 
@@ -3345,6 +3345,29 @@ SessionDeletionService integration
 ### Regression Scope
 
 完整 Stage 1、Stage 2、Stage 2.5 产品与技术回归。
+
+### Verification Notes
+
+- 2026-10-13：补充第三个协议测试 ID `weather_lookup` 的正式产品链路验收；使用
+  Fake Model、显式权限、启动期 Manifest Source、Registry、通用 Invocation
+  Gateway、真实 PostgreSQL/Redis、HTTP 202、GET SSE 与 Parent 历史完成端到端
+  验证。专项结果 `1 passed`，同时确认 `continue → new` Task 降级事实、公开
+  `capability_id` 与 Invocation 事件，并在结束后清理测试 Session 数据。
+- 2026-10-13：默认后端全量 `642 passed, 71 skipped`；启用真实 PostgreSQL 与
+  Redis 后全量 `712 passed, 1 skipped`，唯一跳过项为负责人显式启用的真实百炼
+  smoke test。PostgreSQL 与 Redis 容器均为 healthy。
+- 2026-10-13：前端 Vitest `5 files / 26 tests passed`，生产构建通过；系统 Edge
+  Playwright `2 passed`，覆盖 Runtime 主链路与延迟 HTTP 202 的重复提交互斥。
+- 2026-10-13：`uv lock --check`、`uv pip check`、Python `compileall`、`uv build`、
+  `docker compose config --quiet`、wheel 必需资源检查和 `git diff --check` 均通过。
+- 2026-10-13：Pydantic Schema 全模块审计结果为 `0` 个缺失 description；业务日志
+  调用未发现敏感字段直写；范围审计只发现 FastAPI 静态资源 mount 和 Manifest
+  文案中的禁止动态 mount 说明，未实现热加载、动态卸载、Remote、多实例、RBAC、
+  Workflow、自动迁移、Saga、管理平台或文件/RAG。
+- 2026-10-13：S3-14 实现与自验完成，任务更新为 `DONE`，提交 Reviewer 复审；
+  不自行标记 `VERIFIED`，负责人验收前不提交本任务、不进入后续阶段。
+- 2026-10-13：Reviewer 复审与负责人验收通过，S3-14 更新为 `VERIFIED`；Stage 3
+  开发完成，按工程流程提交并同步 GitHub、Gitee，暂不进入下一阶段。
 
 ### Definition of Done
 
