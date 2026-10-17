@@ -1,9 +1,9 @@
 schema_version: 1
 task_id: TEAM-001
-state_version: 5
+state_version: 6
 status: 已验收
 current_role: dev-team-controller
-next_action: 按负责人明确授权完成新鲜验证并提交当前全部未提交成果；提交后记录实际 commit SHA，双远程同步仍等待单独授权
+next_action: 本地任务提交已完成；等待负责人明确授权将当前提交同步到 GitHub 和 Gitee，远程门禁满足前不启动下一阶段任务
 baselines:
   requirements:
     path: docs/requirements.md
@@ -77,10 +77,10 @@ current_operation:
   name: 提交已验收工作区成果
   kind: 外部操作
   operation_key: sha256:bdb3ee648d4fb71f0f63e041cd888b9a5f28e37fa681878a14853a932bc32a11
-  status: 执行中
+  status: 已完成
   inputs_ref: .dev-team/tasks/TEAM-001/evidence/commit-inputs.json
-  result_ref: null
-latest_handoff: .dev-team/tasks/TEAM-001/handoffs/0002-review.md
+  result_ref: .dev-team/tasks/TEAM-001/handoffs/0003-commit.md
+latest_handoff: .dev-team/tasks/TEAM-001/handoffs/0003-commit.md
 resume_from: null
 blocked_reason: null
 project_gates:
@@ -88,10 +88,10 @@ project_gates:
     status: 已满足
     evidence_ref: .dev-team/tasks/TEAM-001/evidence/owner-acceptance.md
   - name: 任务提交
-    status: 待满足
-    evidence_ref: null
+    status: 已满足
+    evidence_ref: .dev-team/tasks/TEAM-001/handoffs/0003-commit.md
   - name: 双远程同步
     status: 待满足
     evidence_ref: null
 updated_by: dev-team-controller
-updated_at: '2026-10-17T20:52:40+08:00'
+updated_at: '2026-10-17T20:56:27+08:00'
