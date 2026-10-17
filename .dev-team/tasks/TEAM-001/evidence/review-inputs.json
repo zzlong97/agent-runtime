@@ -1,0 +1,24 @@
+{
+  "task_id": "TEAM-001",
+  "operation": "迁移独立审核",
+  "inputs": {
+    "acceptance": ["MIG-001", "MIG-002", "MIG-003", "MIG-004", "MIG-005", "MIG-006"],
+    "task_version": "sha256:26b4f86cc88dff83a74d8ad0cff8a8dbd0bdf18bd850202fd17623860f2dae81",
+    "index_version": "sha256:4aa72604c2d0eb0534e4c6426532403fdddad58fb8ef4d8790963332c80fea8c",
+    "baselines": {
+      "requirements": "sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c",
+      "architecture": "sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1",
+      "decisions": "sha256:c919ad658aafd8d18abcabbcb7deac3db44939e8aee9f4d0b363ed416d82e005"
+    },
+    "delivery": {
+      "AGENTS.md": "sha256:42b07029752d3ae8350754ed9278d3e13e4bbcebcd712b653fbf6dcc893ba7c6",
+      "README.md": "sha256:4831b0ab7e80e9ed593bb5151b20514d8b87361f27fca0b3a09278d94c623cca",
+      "docs/tasks.md": "sha256:6c8f7254eef54a988ec57def517482e246cca218106756d47a431552add7a6bc",
+      ".dev-team/project.md": "sha256:7a59657e9e3846758f8c24a0d2cf8257cad7b747fb1efb31d9577cfc625cec9b"
+    },
+    "development_handoff": "sha256:db71cf62f302ad61e5b733d61f7d47d67a5024d382145f950fba73a84f5ca342",
+    "development_evidence": "sha256:1b922c6d702ccaf5817df10215087c16a24b5afd39ca804e2fbd82a159a1f18e",
+    "installed_skills_snapshot": "sha256:a11aab03c03297e336796cdf333d27cfeb9496326c09bf1c6529552417d50d21",
+    "backup_bundle": "sha256:ebf4116f611937f43a500f3aec96191c9ac796e99ab6b3994edfa7e6eff0fc10"
+  }
+}

@@ -26,7 +26,12 @@ Ledger 与 `ctx.operation()` 均已完成验收并同步两个远程；S3-10 Cap
 两个远程；S3-12 两个测试 Capability 的标准 Runtime 迁移、S3-13
 Session 删除与动态 Child Checkpoint 清理均已通过验收。S3-14 Stage 3 集成验收
 Gate 已通过独立复审与负责人验收，Stage 3 开发完成，当前暂不进入下一阶段。
-具体边界、当前任务和最新证据以 `docs/tasks.md` 为准。
+历史阶段验收见 `docs/tasks.md`；切换后的任务入口为
+`.dev-team/index.yaml`，当前状态与最新证据以各任务 `state.yaml` 的引用为准。
+
+第三方 Agent 接入请使用
+[Capability 开发者接入手册](docs/capability_development_guide.md)。该手册覆盖当前
+Stage 3 已实现的 Manifest、标准接口、注册、授权、运行、恢复和测试流程。
 
 项目继续面向单用户可信环境，使用 Python 3.12 和 `uv`。模型通过阿里云百炼
 的 OpenAI 兼容接口接入；自动化测试默认使用 Fake Model，真实模型只用于
@@ -306,7 +311,7 @@ S2.5-11 与 Stage 2.5 整体验收通过：
 
 ### Stage 3：Capability Runtime
 
-Stage 3 能力演进范围如下，已完成项和当前门禁以 `docs/tasks.md` 为准：
+Stage 3 能力演进范围如下，历史已完成项见 `docs/tasks.md`，后续任务与门禁见 `.dev-team/`：
 
 - Capability Task、Invocation、三种 State Scope 和 State Schema 兼容
 - 仅 `invocation + none` Capability 可使用的安全 Regenerate 门禁
@@ -540,22 +545,20 @@ npm run test:e2e
 - [docs/requirements.md](./docs/requirements.md)：需求与阶段边界
 - [docs/architecture.md](./docs/architecture.md)：技术架构与实现约束
 - [docs/decisions.md](./docs/decisions.md)：已裁决的架构决策
-- [docs/tasks.md](./docs/tasks.md)：任务执行与验收状态
+- [.dev-team/project.md](./.dev-team/project.md)：团队接管导航、基线来源与项目门禁
+- [.dev-team/index.yaml](./.dev-team/index.yaml)：切换后任务索引；实时状态在各任务 state.yaml
+- [docs/tasks.md](./docs/tasks.md)：切换前冻结的任务与验收历史
 
 ---
 
 ## 8. 当前开发规则
 
-任何开发开始前必须先阅读：
-
-1. `AGENTS.md`
-2. `docs/requirements.md`
-3. `docs/architecture.md`
-4. `docs/decisions.md`
-5. `docs/tasks.md`
+任何开发开始前必须先完整阅读 `AGENTS.md`，再从 `.dev-team/index.yaml` 定位
+任务的 `task.md` 和 `state.yaml`，按引用读取相关需求、架构、决策及必要代码。
+首次接管或规则变化时读取 `.dev-team/project.md`；历史 tasks 仅在追溯时读取。
 
 S3-14 与 Stage 3 已通过验收；当前没有已授权的下一阶段开发任务。后续工作开始前仍须
-先在 `docs/tasks.md` 中明确任务范围，不得直接实现热加载、Workflow、多实例、RBAC、
+先经负责人批准范围并在 `.dev-team/tasks/<任务编号>/` 登记，不得直接实现热加载、Workflow、多实例、RBAC、
 RAG 等 Future 能力。
 
 真实百炼联调时在项目根目录 `.env` 配置 `DASHSCOPE_API_KEY`、

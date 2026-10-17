@@ -1,0 +1,7 @@
+schema_version: 1
+tasks:
+  TEAM-001:
+    title: 个人开发团队存量接管
+    state_file: .dev-team/tasks/TEAM-001/state.yaml
+    parent_task: null
+    depends_on: []

@@ -2,12 +2,14 @@
 
 本文件是 AgentRuntime 项目的 Agent / Codex 工程操作说明书。
 
-任何自动化编码 Agent 在修改代码前都必须完整阅读本文件，以及：
+任何自动化编码 Agent 开始任务前必须完整阅读本文件，再读 `.dev-team/index.yaml`
+及当前任务的 `task.md`、`state.yaml`。首次接管或项目规则变化时，读取
+`.dev-team/project.md` 的项目导航与门禁。
 
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/decisions.md`
-- `docs/tasks.md`
+需求、架构、决策正文继续在 `docs/requirements.md`、`docs/architecture.md`、
+`docs/decisions.md`；按当前任务引用、关键词和直接相关约束定向读取，只有影响范围
+不明确时才扩大，不要求每次加载全部文档和历史。`docs/tasks.md` 冻结为切换前历史，
+仅在核对历史批准、验收或阶段边界时读取，不再更新任务状态。
 
 如果当前实现与文档冲突，**先停止扩展实现，优先以文档中的已确认决策为准**。
 
@@ -51,18 +53,22 @@ uv 管理依赖
 1. docs/decisions.md
 2. docs/requirements.md
 3. docs/architecture.md
-4. docs/tasks.md
+4. 当前任务 task.md 中经批准的范围与验收引用
 5. README.md
 6. 当前代码实现
 ```
 
-如果文档之间发生明显冲突，不允许自行猜测，应将冲突记录到 `docs/tasks.md` 的 Blockers 区域并停止相关扩展。
+`.dev-team/tasks/<编号>/state.yaml` 是当前执行状态的唯一权威索引，不高于需求、
+架构和决策；代码现状不能覆盖已批准基线。`index.yaml` 只登记任务位置和依赖。
+如果文档之间发生明显冲突，不允许自行猜测，应在当前任务记录问题、将状态置为
+已阻塞或待负责人决策，并停止相关扩展。没有任务时先由总控登记。
 
 ---
 
 # 3. Stage 约束
 
-当前只能实现 `docs/tasks.md` 中标记为当前 Stage 的任务。
+当前只能实现当前任务明确引用的已批准 Stage 范围。接管时 Stage 3 已有历史验收，
+没有已授权的下一阶段业务任务；团队切换本身不授权新业务或新 Stage。
 
 禁止：
 
@@ -517,19 +523,24 @@ Stage 3 禁止实现：
 每次任务执行：
 
 ```text
-1. 阅读 docs/tasks.md
-2. 确认当前 Task
-3. 阅读相关 requirements / architecture / decisions
-4. 仅实现该 Task
-5. 补测试
-6. 执行验收
-7. 更新 tasks.md 状态
-8. 记录验证结果
-9. 负责人验收通过后，提交当前任务代码
-10. 将提交推送到 GitHub 和 Gitee 两个远程仓库
+1. 阅读 .dev-team/index.yaml，定位当前 task.md / state.yaml
+2. 核对当前角色、精确批准基线、依赖和项目门禁
+3. 按任务读取相关 requirements / architecture / decisions 及必要代码
+4. 对已有成果和证据核对版本，跳过有效完成部分，仅继续未完成或受影响内容
+5. 仅实现该 Task，补充与影响相称的测试或验证
+6. 保存产物与精确版本，再保存验证证据、交接，最后更新 state.yaml
+7. 独立审核；Reviewer 通过不等于负责人最终验收
+8. 负责人验收通过后，再按授权提交当前任务文件
+9. 按授权将同一提交同步到 GitHub 和 Gitee，保存实际回执
+10. 总控核实项目门禁后才闭环；未满足时停止受约束的后续任务
 ```
 
 禁止一次提交跨多个未关联 Task 的大范围重构。
+
+五个员工 Skill 分别为 dev-team-controller、dev-team-requirements-analyst、
+dev-team-architect、dev-team-developer、dev-team-reviewer。员工不相互调用，越界
+返回总控或手动调用者。手动调用与自动调度使用同一份 state；context 只是按需视图。
+副作用结果不确定时先核对实际结果，不盲目重试或更换 operation_key 重做。
 
 进入下一阶段前，当前阶段必须已经完成提交，且同一提交已成功推送到 GitHub 和
 Gitee。任一远程推送失败时，不得开始下一阶段，应先修复同步问题并确认两个远程
@@ -541,7 +552,7 @@ Gitee。任一远程推送失败时，不得开始下一阶段，应先修复同
 
 Codex 可以：
 
-- 更新 `docs/tasks.md` 状态
+- 按当前角色权限更新 `.dev-team/tasks/<编号>/` 中的任务状态与交接
 - 增加验收记录
 - 增加发现的问题
 
@@ -552,7 +563,8 @@ Codex 不可以未经负责人明确裁决直接修改：
 - 核心技术选型
 - Parent / Child 状态隔离原则
 
-如果需要调整，先在 `docs/tasks.md` 中记录 Proposed Change，不直接实施。
+如果需要调整，先在当前任务中记录候选变更，返回相应角色并等待负责人明确批准，
+不直接实施或以实现现状替换需求与架构。历史批准仅对其记录的版本有效。
 
 ---
 
@@ -566,11 +578,17 @@ Codex 不可以未经负责人明确裁决直接修改：
 实现完成
 + 自动化测试通过
 + 验收标准通过
-+ tasks.md 已更新
++ 当前任务 state.yaml 与版本绑定的证据、交接已保存
 + 未引入当前 Stage 之外的功能
 + 负责人验收通过后已提交代码
 + GitHub 与 Gitee 已同步到同一提交
 ```
+
+这些附加门禁在当前任务 state.yaml 的 project_gates 中逐项记录，由总控依据
+真实批准和可核对回执更新。Reviewer 只给技术验收结论；需要负责人终验时，
+审核通过后主状态为待负责人决策、resume_from=已验收。后续即使主状态已验收，
+提交或同步门禁仍未满足也不算完整闭环。对 docs/协作流程任务使用对应文档验证，
+不伪造业务测试结果；其他完成条件不因此免除。本次切换不自动提交或推送。
 
 ---
 

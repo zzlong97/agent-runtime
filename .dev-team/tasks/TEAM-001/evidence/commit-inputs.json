@@ -1,0 +1,17 @@
+{
+  "task_id": "TEAM-001",
+  "operation": "提交已验收工作区成果",
+  "inputs": {
+    "authorization": "当前代码全部审核通过，将未提交的代码提交到git仓库中。",
+    "branch": "master",
+    "head_before": "29dcca1e71d3b4faa7517fc95e5468ea6a826bb0",
+    "scope": [
+      "AGENTS.md",
+      "README.md",
+      "docs/tasks.md",
+      "docs/capability_development_guide.md",
+      "src/agent_runtime/core/model.py",
+      ".dev-team/"
+    ]
+  }
+}

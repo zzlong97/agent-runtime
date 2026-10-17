@@ -30,4 +30,5 @@ def build_chat_model(settings: Settings) -> ChatOpenAI:
         base_url=str(settings.llm_base_url),
         model=settings.llm_model,
         streaming=True,
+        extra_body={"enable_thinking": False},
     )

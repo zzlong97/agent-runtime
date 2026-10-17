@@ -1,0 +1,97 @@
+schema_version: 1
+task_id: TEAM-001
+state_version: 5
+status: 已验收
+current_role: dev-team-controller
+next_action: 按负责人明确授权完成新鲜验证并提交当前全部未提交成果；提交后记录实际 commit SHA，双远程同步仍等待单独授权
+baselines:
+  requirements:
+    path: docs/requirements.md
+    version: sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c
+    approval:
+      status: 已批准
+      approved_by: 项目负责人（历史记录）
+      source_ref: git:29dcca1e71d3b4faa7517fc95e5468ea6a826bb0:docs/tasks.md#S3-00-S3-01-Notes
+      approved_at: null
+  architecture:
+    path: docs/architecture.md
+    version: sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1
+    approval:
+      status: 已批准
+      approved_by: 项目负责人（历史记录）
+      source_ref: git:29dcca1e71d3b4faa7517fc95e5468ea6a826bb0:docs/tasks.md#S3-00-S3-01-Notes
+      approved_at: null
+artifacts: &delivery
+  - path: AGENTS.md
+    version: sha256:42b07029752d3ae8350754ed9278d3e13e4bbcebcd712b653fbf6dcc893ba7c6
+  - path: README.md
+    version: sha256:4831b0ab7e80e9ed593bb5151b20514d8b87361f27fca0b3a09278d94c623cca
+  - path: docs/tasks.md
+    version: sha256:6c8f7254eef54a988ec57def517482e246cca218106756d47a431552add7a6bc
+  - path: .dev-team/project.md
+    version: sha256:7a59657e9e3846758f8c24a0d2cf8257cad7b747fb1efb31d9577cfc625cec9b
+checkpoints:
+  - boundary: 开发交付
+    handoff: .dev-team/tasks/TEAM-001/handoffs/0001-development.md
+    operation_key: sha256:e64dc9a3550cf8dc083a1faea715136655aa3e6fb8b406f46f0b8d31ace92540
+    baseline_versions:
+      requirements: sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c
+      architecture: sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1
+    artifact_versions: *delivery
+    evidence_refs:
+      - path: .dev-team/tasks/TEAM-001/evidence/migration-check.md
+        version: sha256:1b922c6d702ccaf5817df10215087c16a24b5afd39ca804e2fbd82a159a1f18e
+    validation_status: 已确认有效
+  - boundary: 开发验收
+    handoff: .dev-team/tasks/TEAM-001/handoffs/0002-review.md
+    operation_key: sha256:e849dec9e1e1a5f1225a56d56f1abdee1112323f72bd0dc73b10e8eb3f50c749
+    baseline_versions:
+      requirements: sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c
+      architecture: sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1
+    artifact_versions:
+      - path: AGENTS.md
+        version: sha256:42b07029752d3ae8350754ed9278d3e13e4bbcebcd712b653fbf6dcc893ba7c6
+      - path: README.md
+        version: sha256:4831b0ab7e80e9ed593bb5151b20514d8b87361f27fca0b3a09278d94c623cca
+      - path: docs/tasks.md
+        version: sha256:6c8f7254eef54a988ec57def517482e246cca218106756d47a431552add7a6bc
+      - path: .dev-team/project.md
+        version: sha256:7a59657e9e3846758f8c24a0d2cf8257cad7b747fb1efb31d9577cfc625cec9b
+      - path: .dev-team/index.yaml
+        version: sha256:4aa72604c2d0eb0534e4c6426532403fdddad58fb8ef4d8790963332c80fea8c
+      - path: .dev-team/tasks/TEAM-001/task.md
+        version: sha256:26b4f86cc88dff83a74d8ad0cff8a8dbd0bdf18bd850202fd17623860f2dae81
+    evidence_refs:
+      - path: .dev-team/tasks/TEAM-001/evidence/review-check.md
+        version: sha256:9933c785048e9e0f56ae4fb1e99c82be19843d9365439e6a258d63ad6665521c
+      - path: .dev-team/tasks/TEAM-001/evidence/review-inputs.json
+        version: sha256:ef2f65cd7049ff390abc31607a2d8ddc20e37ee720676f0a14c463719bdd0c8d
+      - path: .dev-team/tasks/TEAM-001/evidence/review_validate.py
+        version: sha256:e978d11ceb4c532b2384b1308eb7750c66d2abb5a69bea2cd10c4a92941ea985
+      - path: .dev-team/tasks/TEAM-001/handoffs/0001-development.md
+        version: sha256:db71cf62f302ad61e5b733d61f7d47d67a5024d382145f950fba73a84f5ca342
+      - path: .dev-team/tasks/TEAM-001/handoffs/0002-review.md
+        version: sha256:abf9ba237158774cae5c245bd550c8589f26e4d8f6fdc5acfbfe976e37e4d140
+    validation_status: 已确认有效
+current_operation:
+  name: 提交已验收工作区成果
+  kind: 外部操作
+  operation_key: sha256:bdb3ee648d4fb71f0f63e041cd888b9a5f28e37fa681878a14853a932bc32a11
+  status: 执行中
+  inputs_ref: .dev-team/tasks/TEAM-001/evidence/commit-inputs.json
+  result_ref: null
+latest_handoff: .dev-team/tasks/TEAM-001/handoffs/0002-review.md
+resume_from: null
+blocked_reason: null
+project_gates:
+  - name: 负责人终验
+    status: 已满足
+    evidence_ref: .dev-team/tasks/TEAM-001/evidence/owner-acceptance.md
+  - name: 任务提交
+    status: 待满足
+    evidence_ref: null
+  - name: 双远程同步
+    status: 待满足
+    evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-17T20:52:40+08:00'
