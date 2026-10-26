@@ -1,0 +1,234 @@
+{
+  "task_id": "UI-001",
+  "mode": "开发验收",
+  "result": "通过",
+  "source_state_version": 9,
+  "recorded_at": "2026-10-18T05:08:26.2901175+08:00",
+  "operation_key": "UI-001:review:e7ac1b25343781b933bce7f08c3500868c78a25026eb5ca2d9b92ed07819ba27",
+  "version_checks": [
+    {
+      "path": "frontend/src/components/ChatWorkspace.jsx",
+      "expected": "sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f",
+      "actual": "sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f",
+      "match": true
+    },
+    {
+      "path": "frontend/src/styles/app.css",
+      "expected": "sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65",
+      "actual": "sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65",
+      "match": true
+    },
+    {
+      "path": "frontend/src/App.test.jsx",
+      "expected": "sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66",
+      "actual": "sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66",
+      "match": true
+    },
+    {
+      "path": "frontend/e2e/chat.spec.js",
+      "expected": "sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698",
+      "actual": "sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698",
+      "match": true
+    },
+    {
+      "path": "src/agent_runtime/static/index.html",
+      "expected": "sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f",
+      "actual": "sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f",
+      "match": true
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+      "expected": "sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05",
+      "actual": "sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05",
+      "match": true
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-B3KNrXbB.css",
+      "expected": "sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35",
+      "actual": "sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35",
+      "match": true
+    },
+    {
+      "path": "frontend/src/App.jsx",
+      "expected": "sha256:68a44c0446c2c17bacad184d9e839470189e955ef6cc22db8926357ea5065796",
+      "actual": "sha256:68a44c0446c2c17bacad184d9e839470189e955ef6cc22db8926357ea5065796",
+      "match": true
+    },
+    {
+      "path": "frontend/src/components/MessageList.jsx",
+      "expected": "sha256:b0e67d03fd796be9bd40cef7eccb5b7d36ee92dcdbf1ba632df9d5f2837b4387",
+      "actual": "sha256:b0e67d03fd796be9bd40cef7eccb5b7d36ee92dcdbf1ba632df9d5f2837b4387",
+      "match": true
+    },
+    {
+      "path": "frontend/playwright.config.js",
+      "expected": "sha256:4e59d18676ef803549b6d2ba01c403be8a518cb3c0ee6dc30b316bb2333eb0dd",
+      "actual": "sha256:4e59d18676ef803549b6d2ba01c403be8a518cb3c0ee6dc30b316bb2333eb0dd",
+      "match": true
+    },
+    {
+      "path": "tests/e2e/server.py",
+      "expected": "sha256:04a276c0da1dbcd49227edf5b1cf1be7e2f37f51b714db4afaa7cabe878bef30",
+      "actual": "sha256:04a276c0da1dbcd49227edf5b1cf1be7e2f37f51b714db4afaa7cabe878bef30",
+      "match": true
+    },
+    {
+      "path": "docs/requirements.md",
+      "expected": "sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c",
+      "actual": "sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c",
+      "match": true
+    },
+    {
+      "path": "docs/architecture.md",
+      "expected": "sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1",
+      "actual": "sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1",
+      "match": true
+    },
+    {
+      "path": "docs/decisions.md",
+      "expected": "sha256:c919ad658aafd8d18abcabbcb7deac3db44939e8aee9f4d0b363ed416d82e005",
+      "actual": "sha256:c919ad658aafd8d18abcabbcb7deac3db44939e8aee9f4d0b363ed416d82e005",
+      "match": true
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/task.md",
+      "expected": "sha256:ca8a060146b02fb2cead01fb829c56fbc95601448e3bc32078804e00a073f5fd",
+      "actual": "sha256:ca8a060146b02fb2cead01fb829c56fbc95601448e3bc32078804e00a073f5fd",
+      "match": true
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0001-red-reproduction.md",
+      "expected": "sha256:5ef4acae3fbf0d98515cdedf6a4cc15ecc1d2441407efc21dacab5788a92c6cd",
+      "actual": "sha256:5ef4acae3fbf0d98515cdedf6a4cc15ecc1d2441407efc21dacab5788a92c6cd",
+      "match": true
+    }
+  ],
+  "artifact_versions": [
+    {
+      "path": "frontend/src/components/ChatWorkspace.jsx",
+      "version": "sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f"
+    },
+    {
+      "path": "frontend/src/styles/app.css",
+      "version": "sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65"
+    },
+    {
+      "path": "frontend/src/App.test.jsx",
+      "version": "sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66"
+    },
+    {
+      "path": "frontend/e2e/chat.spec.js",
+      "version": "sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698"
+    },
+    {
+      "path": "src/agent_runtime/static/index.html",
+      "version": "sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f"
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+      "version": "sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05"
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-B3KNrXbB.css",
+      "version": "sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35"
+    }
+  ],
+  "evidence_refs": [
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0001-red-reproduction.md",
+      "version": "sha256:5ef4acae3fbf0d98515cdedf6a4cc15ecc1d2441407efc21dacab5788a92c6cd"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0002-development-validation.md",
+      "version": "sha256:6479d83d98cf8337fbe8cee3e9f63bd7959cfb0ce55e7005ba6063281da93051"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0005-tested-versions.json",
+      "version": "sha256:29a92949c5291fb8d5e1b5df33ab27a8c2b1c08e68f71b8dec03eae87c75ce24"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0007-review-validation.md",
+      "version": "sha256:e57b77e8f5b99dc63739d60a008e396a910adaae88913f1707b242960506d6c5"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0015-rework-cancel-validation.md",
+      "version": "sha256:f957afe29a57a75c48ec38cc294bfa872d30684bbe6b9f7a23b7fe363bda158a"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0016-rework-versions.json",
+      "version": "sha256:b3e66447caed4c082d888087e4b93badd8b7a3e62dca0b84ccda6afba615c0e1"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0017-rework-cancel-trace.zip",
+      "version": "sha256:174fe3366f815e5a3fa0c704d9ee450d9f294a55df6ea74687ff3a1197638818"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0018-review-rework-validation.md",
+      "version": "sha256:05771013b59b8363c726b995018680bbdd4994e39098214d0d1554c4193f73ca"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0020-final-playwright-results.json",
+      "version": "sha256:5b8a80c73ceda57562f195cee774b3f6837168f6260bd39fdb912d7ed8584fa1"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0021-final-empty-desktop.png",
+      "version": "sha256:b5c2d832949264914de92d78c805e3ccd575d9cae4215252de91171062c544e4"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0022-final-empty-mobile.png",
+      "version": "sha256:01884e0f59c0e83abd29ae3d99b4d601a72f74288836399c064ba6dda6438c87"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0023-final-scroll-measurement.json",
+      "version": "sha256:3d3ab58837f691b709f1dbf9488fe2b1e93ccbc5dcb86ccf88a8e9e892a65656"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/handoffs/0005-review.md",
+      "version": "sha256:fbed35279f47bc163d1fbc8673f38463aaa4bdcf0299166dbebfc7471237e0c0"
+    }
+  ],
+  "issue_closure": {
+    "id": "UI-001-REV-001",
+    "status": "已关闭",
+    "scope": "仅修订Cancel测试同步，产品未变；当前完整6项一次通过"
+  },
+  "validation": {
+    "command": "npm run test:e2e -- --timeout=60000 --reporter=list,json --output=test-results/ui001-review-final-20261018-a852f6d1",
+    "cwd": "D:/workspace/agent_runtime/frontend",
+    "exit_code": 0,
+    "result": "生产构建通过；6 passed (1.1m)",
+    "startTime": "2026-10-17T21:05:39.389Z",
+    "duration": 68218.25300000001,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "port": 18776,
+    "run_id": "ui001-review-final-20261018-a852f6d1",
+    "channel": "msedge",
+    "model": "Runtime Demo/Fake Agent，无真实模型",
+    "build_hashes_unchanged": true,
+    "cleanup": {
+      "dedicated_user_remaining_sessions": 0,
+      "port_listeners": 0
+    }
+  },
+  "reused_validation": {
+    "frontend_tests": 29,
+    "static_pytests": 2,
+    "independently_rerun_this_review": false,
+    "reason": "产品、单测与静态产物未变，复用原同版有效证据"
+  },
+  "uia": {
+    "UIA-001": "通过",
+    "UIA-002": "通过",
+    "UIA-003": "通过",
+    "UIA-004": "通过",
+    "UIA-005": "通过"
+  },
+  "limitations": [
+    "只覆盖msedge及直接影响的分页/阅读场景",
+    "未验证用户现有服务已加载构建",
+    "负责人终验、提交和双远程同步仍待满足"
+  ]
+}

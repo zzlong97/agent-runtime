@@ -10,3 +10,8 @@ tasks:
     state_file: .dev-team/tasks/DB-001/state.yaml
     parent_task: null
     depends_on: []
+  UI-001:
+    title: 修复流式结束后闪烁并跳到会话开头
+    state_file: .dev-team/tasks/UI-001/state.yaml
+    parent_task: null
+    depends_on: []

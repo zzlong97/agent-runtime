@@ -1,0 +1,163 @@
+{
+  "task_id": "UI-001",
+  "issue_id": "UI-001-REV-001",
+  "source_state_version": 6,
+  "recorded_at": "2026-10-18T05:03:42+08:00",
+  "artifact_versions": [
+    {
+      "path": "frontend/src/components/ChatWorkspace.jsx",
+      "version": "sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f"
+    },
+    {
+      "path": "frontend/src/styles/app.css",
+      "version": "sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65"
+    },
+    {
+      "path": "frontend/src/App.test.jsx",
+      "version": "sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66"
+    },
+    {
+      "path": "frontend/e2e/chat.spec.js",
+      "version": "sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698"
+    },
+    {
+      "path": "src/agent_runtime/static/index.html",
+      "version": "sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f"
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+      "version": "sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05"
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-B3KNrXbB.css",
+      "version": "sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35"
+    }
+  ],
+  "version_checks": [
+    {
+      "path": "frontend/src/components/ChatWorkspace.jsx",
+      "previous": "sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f",
+      "version": "sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f",
+      "unchanged": true
+    },
+    {
+      "path": "frontend/src/styles/app.css",
+      "previous": "sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65",
+      "version": "sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65",
+      "unchanged": true
+    },
+    {
+      "path": "frontend/src/App.test.jsx",
+      "previous": "sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66",
+      "version": "sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66",
+      "unchanged": true
+    },
+    {
+      "path": "frontend/e2e/chat.spec.js",
+      "previous": "sha256:4599ce5ba51ef3efe4d59ac00c3f960eb77dc2ffd13a537f2805941f92ae7fd6",
+      "version": "sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698",
+      "unchanged": false
+    },
+    {
+      "path": "src/agent_runtime/static/index.html",
+      "previous": "sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f",
+      "version": "sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f",
+      "unchanged": true
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+      "previous": "sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05",
+      "version": "sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05",
+      "unchanged": true
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-B3KNrXbB.css",
+      "previous": "sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35",
+      "version": "sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35",
+      "unchanged": true
+    },
+    {
+      "path": "frontend/src/App.jsx",
+      "previous": "sha256:68a44c0446c2c17bacad184d9e839470189e955ef6cc22db8926357ea5065796",
+      "version": "sha256:68a44c0446c2c17bacad184d9e839470189e955ef6cc22db8926357ea5065796",
+      "unchanged": true
+    },
+    {
+      "path": "frontend/src/components/MessageList.jsx",
+      "previous": "sha256:b0e67d03fd796be9bd40cef7eccb5b7d36ee92dcdbf1ba632df9d5f2837b4387",
+      "version": "sha256:b0e67d03fd796be9bd40cef7eccb5b7d36ee92dcdbf1ba632df9d5f2837b4387",
+      "unchanged": true
+    },
+    {
+      "path": "frontend/playwright.config.js",
+      "previous": "sha256:4e59d18676ef803549b6d2ba01c403be8a518cb3c0ee6dc30b316bb2333eb0dd",
+      "version": "sha256:4e59d18676ef803549b6d2ba01c403be8a518cb3c0ee6dc30b316bb2333eb0dd",
+      "unchanged": true
+    },
+    {
+      "path": "tests/e2e/server.py",
+      "previous": "sha256:04a276c0da1dbcd49227edf5b1cf1be7e2f37f51b714db4afaa7cabe878bef30",
+      "version": "sha256:04a276c0da1dbcd49227edf5b1cf1be7e2f37f51b714db4afaa7cabe878bef30",
+      "unchanged": true
+    },
+    {
+      "path": "docs/requirements.md",
+      "previous": "sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c",
+      "version": "sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c",
+      "unchanged": true
+    },
+    {
+      "path": "docs/architecture.md",
+      "previous": "sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1",
+      "version": "sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1",
+      "unchanged": true
+    },
+    {
+      "path": "docs/decisions.md",
+      "previous": "sha256:c919ad658aafd8d18abcabbcb7deac3db44939e8aee9f4d0b363ed416d82e005",
+      "version": "sha256:c919ad658aafd8d18abcabbcb7deac3db44939e8aee9f4d0b363ed416d82e005",
+      "unchanged": true
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/task.md",
+      "previous": "sha256:ca8a060146b02fb2cead01fb829c56fbc95601448e3bc32078804e00a073f5fd",
+      "version": "sha256:ca8a060146b02fb2cead01fb829c56fbc95601448e3bc32078804e00a073f5fd",
+      "unchanged": true
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0001-red-reproduction.md",
+      "previous": "sha256:5ef4acae3fbf0d98515cdedf6a4cc15ecc1d2441407efc21dacab5788a92c6cd",
+      "version": "sha256:5ef4acae3fbf0d98515cdedf6a4cc15ecc1d2441407efc21dacab5788a92c6cd",
+      "unchanged": true
+    }
+  ],
+  "review_basis": [
+    ".dev-team/tasks/UI-001/handoffs/0003-review.md",
+    ".dev-team/tasks/UI-001/evidence/0007-review-validation.md",
+    "docs/decisions.md#D-047"
+  ],
+  "validation": {
+    "command": "npx playwright test -g '真实浏览器完成 S2.5' --timeout=60000 --trace=on --output=test-results/ui001-rework-cancel-20261018-c47e831f",
+    "cwd": "D:/workspace/agent_runtime/frontend",
+    "exit_code": 0,
+    "result": "1 passed (19.0s)",
+    "port": 18775,
+    "run_id": "ui001-rework-cancel-20261018-c47e831f",
+    "fake": "现有Runtime Demo确定性Fake Agent；无真实模型请求"
+  },
+  "cancel": {
+    "run_id": "b79a8e02-7638-4613-8135-e6275a7ee30b",
+    "session_id": "5265fb25-12bc-400e-9166-258ce6f49d4b",
+    "response_message_id": "61c90818-ad43-4d66-b3be-25a982df068a",
+    "http_status": 202,
+    "accepted_status": "cancel_requested",
+    "page_terminal_status": "cancelled",
+    "authoritative_message_status": "stopped",
+    "authoritative_content_nonempty": true
+  },
+  "reused_validation": "产品、单测和静态资源无变化，复用29项单测、2项静态资源验证；另5项浏览器用例按0007独立验证复用，后续Reviewer统一复跑新测试文件6项。",
+  "trace": {
+    "path": ".dev-team/tasks/UI-001/evidence/0017-rework-cancel-trace.zip",
+    "version": "sha256:174fe3366f815e5a3fa0c704d9ee450d9f294a55df6ea74687ff3a1197638818"
+  }
+}

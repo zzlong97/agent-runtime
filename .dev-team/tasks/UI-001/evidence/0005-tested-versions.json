@@ -1,0 +1,119 @@
+{
+  "task_id": "UI-001",
+  "recorded_at": "2026-10-17T23:08:30+08:00",
+  "workspace_head": "7b493182d034ea5247f8fc2cb63dd67e1154ea20",
+  "artifact_versions": [
+    {
+      "path": "frontend/src/components/ChatWorkspace.jsx",
+      "version": "sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f"
+    },
+    {
+      "path": "frontend/src/styles/app.css",
+      "version": "sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65"
+    },
+    {
+      "path": "frontend/src/App.test.jsx",
+      "version": "sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66"
+    },
+    {
+      "path": "frontend/e2e/chat.spec.js",
+      "version": "sha256:4599ce5ba51ef3efe4d59ac00c3f960eb77dc2ffd13a537f2805941f92ae7fd6"
+    },
+    {
+      "path": "src/agent_runtime/static/index.html",
+      "version": "sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f"
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+      "version": "sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05"
+    },
+    {
+      "path": "src/agent_runtime/static/assets/index-B3KNrXbB.css",
+      "version": "sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35"
+    }
+  ],
+  "related_input_versions": [
+    {
+      "path": "frontend/src/App.jsx",
+      "version": "sha256:68a44c0446c2c17bacad184d9e839470189e955ef6cc22db8926357ea5065796"
+    },
+    {
+      "path": "frontend/src/components/MessageList.jsx",
+      "version": "sha256:b0e67d03fd796be9bd40cef7eccb5b7d36ee92dcdbf1ba632df9d5f2837b4387"
+    },
+    {
+      "path": "frontend/playwright.config.js",
+      "version": "sha256:4e59d18676ef803549b6d2ba01c403be8a518cb3c0ee6dc30b316bb2333eb0dd"
+    },
+    {
+      "path": "tests/e2e/server.py",
+      "version": "sha256:04a276c0da1dbcd49227edf5b1cf1be7e2f37f51b714db4afaa7cabe878bef30"
+    },
+    {
+      "path": "docs/requirements.md",
+      "version": "sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c"
+    },
+    {
+      "path": "docs/architecture.md",
+      "version": "sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1"
+    },
+    {
+      "path": "docs/decisions.md",
+      "version": "sha256:c919ad658aafd8d18abcabbcb7deac3db44939e8aee9f4d0b363ed416d82e005"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/task.md",
+      "version": "sha256:ca8a060146b02fb2cead01fb829c56fbc95601448e3bc32078804e00a073f5fd"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0001-red-reproduction.md",
+      "version": "sha256:5ef4acae3fbf0d98515cdedf6a4cc15ecc1d2441407efc21dacab5788a92c6cd"
+    }
+  ],
+  "removed_build_artifacts": [
+    "src/agent_runtime/static/assets/index-CEs-UOgj.js",
+    "src/agent_runtime/static/assets/index-CVqfVnZG.css"
+  ],
+  "validation": [
+    {
+      "command": "npm test",
+      "cwd": "D:/workspace/agent_runtime/frontend",
+      "exit_code": 0,
+      "result": "5 个文件、29 个测试通过",
+      "scope": "最终 JSX 与测试；之后仅修改 CSS 的窄屏高度修复，由最终浏览器完整覆盖"
+    },
+    {
+      "command": "npm run test:e2e -- --timeout=60000",
+      "cwd": "D:/workspace/agent_runtime/frontend",
+      "exit_code": 0,
+      "result": "生产构建通过；6 个 msedge 浏览器用例通过",
+      "environment": {
+        "port": 18761,
+        "run_id": "ui001-final-20261017",
+        "fake": "runtime_demo_mode=True；确定性 Fake Agent，无真实模型"
+      }
+    },
+    {
+      "command": "uv run pytest tests/test_static_chat.py -q",
+      "cwd": "D:/workspace/agent_runtime",
+      "exit_code": 0,
+      "result": "最终构建后 2 passed in 3.38s"
+    },
+    {
+      "command": "git diff --check",
+      "cwd": "D:/workspace/agent_runtime",
+      "exit_code": 0,
+      "result": "通过；只有已有行尾规范提示"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0003-empty-desktop.png",
+      "version": "sha256:b5c2d832949264914de92d78c805e3ccd575d9cae4215252de91171062c544e4"
+    },
+    {
+      "path": ".dev-team/tasks/UI-001/evidence/0004-empty-mobile.png",
+      "version": "sha256:01884e0f59c0e83abd29ae3d99b4d601a72f74288836399c064ba6dda6438c87"
+    }
+  ]
+}

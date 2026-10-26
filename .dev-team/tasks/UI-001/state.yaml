@@ -1,0 +1,151 @@
+schema_version: 1
+task_id: UI-001
+state_version: 11
+status: 已验收
+current_role: dev-team-controller
+next_action: 负责人终验已通过，按明确授权执行本地提交并保存实际回执，远程同步待后续授权
+baselines:
+  requirements:
+    path: docs/requirements.md
+    version: sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c
+    approval:
+      status: 已批准
+      approved_by: 项目负责人（历史记录）
+      source_ref: git:29dcca1e71d3b4faa7517fc95e5468ea6a826bb0:docs/tasks.md#S3-00-S3-01-Notes
+      approved_at: null
+  architecture:
+    path: docs/architecture.md
+    version: sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1
+    approval:
+      status: 已批准
+      approved_by: 项目负责人（历史记录）
+      source_ref: git:29dcca1e71d3b4faa7517fc95e5468ea6a826bb0:docs/tasks.md#S3-00-S3-01-Notes
+      approved_at: null
+artifacts:
+  - path: frontend/src/components/ChatWorkspace.jsx
+    version: sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f
+  - path: frontend/src/styles/app.css
+    version: sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65
+  - path: frontend/src/App.test.jsx
+    version: sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66
+  - path: frontend/e2e/chat.spec.js
+    version: sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698
+  - path: src/agent_runtime/static/index.html
+    version: sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f
+  - path: src/agent_runtime/static/assets/index-Bz0BVo3w.js
+    version: sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05
+  - path: src/agent_runtime/static/assets/index-B3KNrXbB.css
+    version: sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35
+checkpoints:
+  - boundary: 开发交付
+    handoff: .dev-team/tasks/UI-001/handoffs/0004-development.md
+    operation_key: UI-001:rework:UI-001-REV-001:4599ce5ba51ef3efe4d59ac00c3f960eb77dc2ffd13a537f2805941f92ae7fd6
+    baseline_versions:
+      requirements: sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c
+      architecture: sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1
+    artifact_versions:
+      - path: frontend/src/components/ChatWorkspace.jsx
+        version: sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f
+      - path: frontend/src/styles/app.css
+        version: sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65
+      - path: frontend/src/App.test.jsx
+        version: sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66
+      - path: frontend/e2e/chat.spec.js
+        version: sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698
+      - path: src/agent_runtime/static/index.html
+        version: sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f
+      - path: src/agent_runtime/static/assets/index-Bz0BVo3w.js
+        version: sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05
+      - path: src/agent_runtime/static/assets/index-B3KNrXbB.css
+        version: sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35
+    evidence_refs:
+      - path: .dev-team/tasks/UI-001/evidence/0001-red-reproduction.md
+        version: sha256:5ef4acae3fbf0d98515cdedf6a4cc15ecc1d2441407efc21dacab5788a92c6cd
+      - path: .dev-team/tasks/UI-001/evidence/0002-development-validation.md
+        version: sha256:6479d83d98cf8337fbe8cee3e9f63bd7959cfb0ce55e7005ba6063281da93051
+      - path: .dev-team/tasks/UI-001/evidence/0003-empty-desktop.png
+        version: sha256:b5c2d832949264914de92d78c805e3ccd575d9cae4215252de91171062c544e4
+      - path: .dev-team/tasks/UI-001/evidence/0004-empty-mobile.png
+        version: sha256:01884e0f59c0e83abd29ae3d99b4d601a72f74288836399c064ba6dda6438c87
+      - path: .dev-team/tasks/UI-001/evidence/0005-tested-versions.json
+        version: sha256:29a92949c5291fb8d5e1b5df33ab27a8c2b1c08e68f71b8dec03eae87c75ce24
+      - path: .dev-team/tasks/UI-001/evidence/0006-interruption-recovery.json
+        version: sha256:dbc655e99f20b6c11e6e9c8bbaf75149a4a8e777e25ecbfa5dc9bd0fc2c66b35
+      - path: .dev-team/tasks/UI-001/evidence/0015-rework-cancel-validation.md
+        version: sha256:f957afe29a57a75c48ec38cc294bfa872d30684bbe6b9f7a23b7fe363bda158a
+      - path: .dev-team/tasks/UI-001/evidence/0016-rework-versions.json
+        version: sha256:b3e66447caed4c082d888087e4b93badd8b7a3e62dca0b84ccda6afba615c0e1
+      - path: .dev-team/tasks/UI-001/evidence/0017-rework-cancel-trace.zip
+        version: sha256:174fe3366f815e5a3fa0c704d9ee450d9f294a55df6ea74687ff3a1197638818
+    validation_status: 已确认有效
+  - boundary: 开发验收
+    handoff: .dev-team/tasks/UI-001/handoffs/0005-review.md
+    operation_key: UI-001:review:e7ac1b25343781b933bce7f08c3500868c78a25026eb5ca2d9b92ed07819ba27
+    baseline_versions:
+      requirements: sha256:0d540b18e330aaf6cdce50dc30cab44ff4322c072a4e410d0d23bba6050bad7c
+      architecture: sha256:b7334cae078c1b09bcf8e5263146cf2c460d43e32b0dc6dfb0aead669e42f5c1
+    artifact_versions:
+      - path: frontend/src/components/ChatWorkspace.jsx
+        version: sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f
+      - path: frontend/src/styles/app.css
+        version: sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65
+      - path: frontend/src/App.test.jsx
+        version: sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66
+      - path: frontend/e2e/chat.spec.js
+        version: sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698
+      - path: src/agent_runtime/static/index.html
+        version: sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f
+      - path: src/agent_runtime/static/assets/index-Bz0BVo3w.js
+        version: sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05
+      - path: src/agent_runtime/static/assets/index-B3KNrXbB.css
+        version: sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35
+    evidence_refs:
+      - path: .dev-team/tasks/UI-001/evidence/0001-red-reproduction.md
+        version: sha256:5ef4acae3fbf0d98515cdedf6a4cc15ecc1d2441407efc21dacab5788a92c6cd
+      - path: .dev-team/tasks/UI-001/evidence/0002-development-validation.md
+        version: sha256:6479d83d98cf8337fbe8cee3e9f63bd7959cfb0ce55e7005ba6063281da93051
+      - path: .dev-team/tasks/UI-001/evidence/0005-tested-versions.json
+        version: sha256:29a92949c5291fb8d5e1b5df33ab27a8c2b1c08e68f71b8dec03eae87c75ce24
+      - path: .dev-team/tasks/UI-001/evidence/0007-review-validation.md
+        version: sha256:e57b77e8f5b99dc63739d60a008e396a910adaae88913f1707b242960506d6c5
+      - path: .dev-team/tasks/UI-001/evidence/0015-rework-cancel-validation.md
+        version: sha256:f957afe29a57a75c48ec38cc294bfa872d30684bbe6b9f7a23b7fe363bda158a
+      - path: .dev-team/tasks/UI-001/evidence/0016-rework-versions.json
+        version: sha256:b3e66447caed4c082d888087e4b93badd8b7a3e62dca0b84ccda6afba615c0e1
+      - path: .dev-team/tasks/UI-001/evidence/0017-rework-cancel-trace.zip
+        version: sha256:174fe3366f815e5a3fa0c704d9ee450d9f294a55df6ea74687ff3a1197638818
+      - path: .dev-team/tasks/UI-001/evidence/0018-review-rework-validation.md
+        version: sha256:05771013b59b8363c726b995018680bbdd4994e39098214d0d1554c4193f73ca
+      - path: .dev-team/tasks/UI-001/evidence/0020-final-playwright-results.json
+        version: sha256:5b8a80c73ceda57562f195cee774b3f6837168f6260bd39fdb912d7ed8584fa1
+      - path: .dev-team/tasks/UI-001/evidence/0021-final-empty-desktop.png
+        version: sha256:b5c2d832949264914de92d78c805e3ccd575d9cae4215252de91171062c544e4
+      - path: .dev-team/tasks/UI-001/evidence/0022-final-empty-mobile.png
+        version: sha256:01884e0f59c0e83abd29ae3d99b4d601a72f74288836399c064ba6dda6438c87
+      - path: .dev-team/tasks/UI-001/evidence/0023-final-scroll-measurement.json
+        version: sha256:3d3ab58837f691b709f1dbf9488fe2b1e93ccbc5dcb86ccf88a8e9e892a65656
+      - path: .dev-team/tasks/UI-001/evidence/0019-final-review-versions.json
+        version: sha256:c487608afe5a8097eb6583a9d51fa9f116672ae0a697cfa632f7b5db64d81a47
+    validation_status: 已确认有效
+current_operation:
+  name: 提交负责人终验的UI-001代码
+  kind: 外部操作
+  operation_key: sha256:e896742ca84bace5ba4af17e161359d6c84deece3a7089a6e2cc7c84ba1b047a
+  status: 执行中
+  inputs_ref: .dev-team/tasks/UI-001/evidence/提交输入.json
+  result_ref: null
+latest_handoff: .dev-team/tasks/UI-001/handoffs/0006-负责人终验与提交授权.md
+resume_from: null
+blocked_reason: null
+project_gates:
+  - name: 负责人终验
+    status: 已满足
+    evidence_ref: .dev-team/tasks/UI-001/handoffs/0006-负责人终验与提交授权.md
+  - name: 任务提交
+    status: 待满足
+    evidence_ref: null
+  - name: 双远程同步
+    status: 待满足
+    evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-26T21:30:31.0312237+08:00'

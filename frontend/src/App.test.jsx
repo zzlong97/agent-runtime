@@ -62,6 +62,65 @@ beforeEach(() => {
 });
 
 describe('RuntimeApp Stage 2.5', () => {
+  it.each(['completed', 'failed', 'cancelled'])(
+    '%s 终态回读历史期间保持已有消息列表，完成后用权威内容替换草稿',
+    async (terminalStatus) => {
+      const user = userEvent.setup();
+      const previous = {
+        message_id: 'earlier-answer', role: 'assistant', content: '已有的历史回答',
+        runtime_status: 'completed', capability_id: null, feedback: null,
+      };
+      let finishStream;
+      let resolveHistory;
+      chatApi.listSessions.mockResolvedValue({ items: [SESSION], next_cursor: null });
+      chatApi.listMessages
+        .mockResolvedValueOnce({ items: [previous], next_before: null })
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveHistory = resolve; }));
+      chatApi.streamRunEvents.mockImplementation((_runId, { onEvent }) => (
+        new Promise((resolve) => {
+          onEvent(event(1, 'message.started', { response_message_id: MESSAGE_ID, attempt: 1 }));
+          onEvent(event(2, 'message.delta', {
+            response_message_id: MESSAGE_ID, attempt: 1, delta: '流式草稿',
+          }));
+          finishStream = () => {
+            onEvent(event(3, `run.${terminalStatus}`, {
+              status: terminalStatus, message: '预期的失败场景',
+            }));
+            resolve({ lastEventId: 3, reason: 'terminal' });
+          };
+        })
+      ));
+
+      const { container } = render(<RuntimeApp />);
+      await user.click(await screen.findByText('Runtime 会话'));
+      await screen.findByText('已有的历史回答');
+      const messageList = container.querySelector('.message-list');
+      await user.type(
+        screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'),
+        '/demo normal{enter}',
+      );
+      await screen.findByText('流式草稿');
+      await act(async () => finishStream());
+      await waitFor(() => expect(chatApi.listMessages).toHaveBeenCalledTimes(2));
+
+      expect(messageList).toBeInTheDocument();
+      expect(screen.getByText('已有的历史回答')).toBeVisible();
+      expect(screen.getByText('流式草稿')).toBeVisible();
+      expect(screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行')).toBeDisabled();
+      await act(async () => resolveHistory({
+        items: [previous, {
+          message_id: MESSAGE_ID, role: 'assistant', content: '终态权威回答',
+          runtime_status: terminalStatus === 'cancelled' ? 'stopped' : 'completed',
+          capability_id: null, feedback: null,
+        }],
+        next_before: null,
+      }));
+      expect(await screen.findByText('终态权威回答')).toBeVisible();
+      expect(screen.queryByText('流式草稿')).not.toBeInTheDocument();
+      expect(container.querySelector('.message-list')).toBe(messageList);
+    },
+  );
+
   it('HTTP 202 返回前原子锁定提交入口并拒绝快速重复提交', async () => {
     const user = userEvent.setup();
     let resolveCreateRun;

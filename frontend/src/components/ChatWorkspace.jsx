@@ -73,7 +73,7 @@ export function ChatWorkspace({
       ) : null}
 
       <div className="conversation-body">
-        {messagesLoading ? (
+        {messagesLoading && messages.length === 0 ? (
           <div className="centered-state"><Spin description="正在读取活动分支" /></div>
         ) : (
           <MessageList

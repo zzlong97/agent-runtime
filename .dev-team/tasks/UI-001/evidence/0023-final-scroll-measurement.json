@@ -1,0 +1,43 @@
+{
+  "before": {
+    "outer": {
+      "top": 0,
+      "height": 358,
+      "viewport": 358
+    },
+    "inner": {
+      "top": 0,
+      "height": 2441,
+      "viewport": 310
+    }
+  },
+  "during": {
+    "detached": false,
+    "samples": [
+      {
+        "top": 0,
+        "height": 424,
+        "viewport": 424,
+        "hasList": true
+      },
+      {
+        "top": 0,
+        "height": 358,
+        "viewport": 358,
+        "hasList": true
+      },
+      {
+        "top": 0,
+        "height": 358,
+        "viewport": 358,
+        "hasList": true
+      }
+    ],
+    "listCount": 1
+  },
+  "after": {
+    "top": 0,
+    "height": 358,
+    "viewport": 358
+  }
+}

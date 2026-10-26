@@ -1,0 +1,57 @@
+{
+  "task_id": "UI-001",
+  "operation": "本地提交已终验交付",
+  "inputs": {
+    "authorization_text": "数据库注释和UI问题我已经验证，无问题，开始提交代码。",
+    "accepted_artifact_manifest": "sha256:b4251d2317daf1efc32bbd8bcbbf38d59f1ebfc3d33cb17ff41c0a917cc66185",
+    "accepted_artifacts": [
+      {
+        "path": "frontend/src/components/ChatWorkspace.jsx",
+        "version": "sha256:e9a6522d242654aca9ed9e05905a22ebc5af5601762dfe1e625cce4812cdc31f"
+      },
+      {
+        "path": "frontend/src/styles/app.css",
+        "version": "sha256:d2a04f62d342008dbd7d9e6941b4bdfad946be0198e07da5ba471e2cfa779c65"
+      },
+      {
+        "path": "frontend/src/App.test.jsx",
+        "version": "sha256:90d1dace738f9e739dbeab25f62f085997aa03db0668a40193892d3a24e69c66"
+      },
+      {
+        "path": "frontend/e2e/chat.spec.js",
+        "version": "sha256:bddc007bd81fe35347db299b8a49466ee066b0f976252cc38e634389fef1e698"
+      },
+      {
+        "path": "src/agent_runtime/static/index.html",
+        "version": "sha256:445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f"
+      },
+      {
+        "path": "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+        "version": "sha256:4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05"
+      },
+      {
+        "path": "src/agent_runtime/static/assets/index-B3KNrXbB.css",
+        "version": "sha256:d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35"
+      }
+    ],
+    "branch": "master",
+    "workflow_base_head": "7b493182d034ea5247f8fc2cb63dd67e1154ea20",
+    "scope": [
+      ".dev-team/tasks/UI-001/",
+      "frontend/src/components/ChatWorkspace.jsx",
+      "frontend/src/styles/app.css",
+      "frontend/src/App.test.jsx",
+      "frontend/e2e/chat.spec.js",
+      "src/agent_runtime/static/index.html",
+      "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+      "src/agent_runtime/static/assets/index-B3KNrXbB.css"
+    ],
+    "index_entry": "UI-001",
+    "commit_subject": "fix(ui): 修复流式结束后闪烁与滚动重置",
+    "remote_push_authorized": false,
+    "removed_build_artifacts": [
+      "src/agent_runtime/static/assets/index-CEs-UOgj.js",
+      "src/agent_runtime/static/assets/index-CVqfVnZG.css"
+    ]
+  }
+}

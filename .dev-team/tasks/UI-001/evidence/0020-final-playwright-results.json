@@ -1,0 +1,59 @@
+{
+  "task_id": "UI-001",
+  "run_id": "ui001-review-final-20261018-a852f6d1",
+  "port": 18776,
+  "browser_channel": "msedge",
+  "exit_code": 0,
+  "stats": {
+    "startTime": "2026-10-17T21:05:39.389Z",
+    "duration": 68218.25300000001,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "title": "空会话欢迎内容在桌面与窄屏可见",
+      "status": "passed",
+      "duration_ms": 1895,
+      "retry": 0,
+      "errors": 0
+    },
+    {
+      "title": "真实浏览器完成 S2.5 Run、刷新恢复、Resume、失败和 Cancel",
+      "status": "passed",
+      "duration_ms": 9772,
+      "retry": 0,
+      "errors": 0
+    },
+    {
+      "title": "HTTP 202 延迟期间重复提交只创建一个 Session 和 Run",
+      "status": "passed",
+      "duration_ms": 2724,
+      "retry": 0,
+      "errors": 0
+    },
+    {
+      "title": "多屏会话在流式结束与权威历史回读期间保留消息列表和阅读位置",
+      "status": "passed",
+      "duration_ms": 15067,
+      "retry": 0,
+      "errors": 0
+    },
+    {
+      "title": "主动阅读历史不被终态刷新打断，重新生成后仍显示最新回答",
+      "status": "passed",
+      "duration_ms": 18055,
+      "retry": 0,
+      "errors": 0
+    },
+    {
+      "title": "加载更早消息保持阅读锚点，切换会话保留初次加载状态",
+      "status": "passed",
+      "duration_ms": 13423,
+      "retry": 0,
+      "errors": 0
+    }
+  ]
+}
