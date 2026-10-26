@@ -1,9 +1,9 @@
 schema_version: 1
 task_id: UI-001
-state_version: 11
+state_version: 12
 status: 已验收
 current_role: dev-team-controller
-next_action: 负责人终验已通过，按明确授权执行本地提交并保存实际回执，远程同步待后续授权
+next_action: 本地提交已完成；双远程同步待负责人明确授权
 baselines:
   requirements:
     path: docs/requirements.md
@@ -131,10 +131,10 @@ current_operation:
   name: 提交负责人终验的UI-001代码
   kind: 外部操作
   operation_key: sha256:e896742ca84bace5ba4af17e161359d6c84deece3a7089a6e2cc7c84ba1b047a
-  status: 执行中
+  status: 已完成
   inputs_ref: .dev-team/tasks/UI-001/evidence/提交输入.json
-  result_ref: null
-latest_handoff: .dev-team/tasks/UI-001/handoffs/0006-负责人终验与提交授权.md
+  result_ref: .dev-team/tasks/UI-001/handoffs/0007-本地提交回执.md
+latest_handoff: .dev-team/tasks/UI-001/handoffs/0007-本地提交回执.md
 resume_from: null
 blocked_reason: null
 project_gates:
@@ -142,10 +142,10 @@ project_gates:
     status: 已满足
     evidence_ref: .dev-team/tasks/UI-001/handoffs/0006-负责人终验与提交授权.md
   - name: 任务提交
-    status: 待满足
-    evidence_ref: null
+    status: 已满足
+    evidence_ref: .dev-team/tasks/UI-001/handoffs/0007-本地提交回执.md
   - name: 双远程同步
     status: 待满足
     evidence_ref: null
 updated_by: dev-team-controller
-updated_at: '2026-10-26T21:30:31.0312237+08:00'
+updated_at: '2026-10-26T21:35:15.760057+08:00'
