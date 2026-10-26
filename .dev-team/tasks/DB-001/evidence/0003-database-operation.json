@@ -1,0 +1,11 @@
+{
+  "operation_key": "DB-001:isolated-postgres:db001_comments_7f6a83681c634b98a1500416e4f0cc24:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4",
+  "requirements_version": "sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4",
+  "architecture_version": "sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e",
+  "target": "项目 compose PostgreSQL / db001_comments_7f6a83681c634b98a1500416e4f0cc24",
+  "intent": "执行中：创建专用空测试库，验证正常 setup、新库注释、九表非空 fixture、旧注释覆盖、重跑、回滚及排除对象/结构/数据不变；finally 仅删除本次创建且核对名称的临时库。",
+  "query_identity": "pg_database.datname = db001_comments_7f6a83681c634b98a1500416e4f0cc24",
+  "receipt": ".dev-team/tasks/DB-001/evidence/0004-development-validation.md",
+  "result": "已确认完成：真实隔离库验证通过；最后一轮67项相关测试全部通过，其中包含1项真实PostgreSQL聚合用例；临时数据库已清理，实际pg_database复查剩余0。",
+  "snapshots": ".dev-team/tasks/DB-001/evidence/0005-isolated-snapshots.json"
+}

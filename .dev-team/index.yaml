@@ -5,3 +5,8 @@ tasks:
     state_file: .dev-team/tasks/TEAM-001/state.yaml
     parent_task: null
     depends_on: []
+  DB-001:
+    title: 补充并修正数据库表注释
+    state_file: .dev-team/tasks/DB-001/state.yaml
+    parent_task: null
+    depends_on: []

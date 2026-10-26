@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 _ACTIVE_RUN_INDEX_NAME = "runs_one_active_per_session_idx"
 
+_COMMENT_RUNS_TABLE = """
+COMMENT ON TABLE runs IS '保存每次普通消息或重新生成请求的持久执行生命周期、幂等与恢复投影；是 Run 状态的 PostgreSQL 权威数据源。'
+"""
+
 _CREATE_RUNS_TABLE = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id UUID PRIMARY KEY,
@@ -284,7 +288,7 @@ class PostgresRunRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """创建 Run 表和同 Session 单活动 Run 的部分唯一索引。"""
+        """幂等创建 Run 表和单活动 Run 索引，并补充或修正表注释。"""
 
         operation_started_at = perf_counter()
         log_business_event(logger, "Run持久化初始化开始")
@@ -292,6 +296,7 @@ class PostgresRunRepository:
             async with open_database_connection(self._settings) as connection:
                 await connection.execute(_CREATE_RUNS_TABLE)
                 await connection.execute(_CREATE_ACTIVE_RUN_INDEX)
+                await connection.execute(_COMMENT_RUNS_TABLE)
                 await connection.commit()
             await PostgresRunInterruptRepository(self._settings).setup()
         except Exception as error:

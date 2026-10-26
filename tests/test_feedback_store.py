@@ -41,7 +41,7 @@ def test_feedback_store_setup_creates_constrained_table_and_cleanup_index(
     asyncio.run(store.setup())
 
     assert connection.committed is True
-    assert len(statements) == 2
+    assert len(statements) == 3
     assert "CREATE TABLE IF NOT EXISTS message_feedback" in statements[0]
     for definition in (
         "user_id TEXT NOT NULL",

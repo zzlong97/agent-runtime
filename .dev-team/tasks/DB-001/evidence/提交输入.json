@@ -1,0 +1,85 @@
+{
+  "task_id": "DB-001",
+  "operation": "本地提交已终验交付",
+  "inputs": {
+    "authorization_text": "数据库注释和UI问题我已经验证，无问题，开始提交代码。",
+    "accepted_artifact_manifest": "sha256:ac32a0409a256bae67711d67b8efac4272e2713c9cc2001e4239c06e0750aa55",
+    "accepted_artifacts": [
+      {
+        "path": ".dev-team/tasks/DB-001/requirements.md",
+        "version": "sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4"
+      },
+      {
+        "path": ".dev-team/tasks/DB-001/architecture.md",
+        "version": "sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e"
+      },
+      {
+        "path": "src/agent_runtime/sessions/repository.py",
+        "version": "sha256:a91d1faf9c051fb990d73d82b091bb992e929b84a32b511152ef034eb6e7c3ea"
+      },
+      {
+        "path": "src/agent_runtime/feedback.py",
+        "version": "sha256:cffe1b0fa3dfb1297d268147a700531d3a703fe6c9db0600cfc86744748a92a2"
+      },
+      {
+        "path": "src/agent_runtime/runtime/repository.py",
+        "version": "sha256:c77deebe280e7cc6594d7c42f3a6d4cc2079666954326193f968177f32fcc58c"
+      },
+      {
+        "path": "src/agent_runtime/runtime/event_repository.py",
+        "version": "sha256:4e6b801eb386f3b3be7855e0cfdb51d65eee5ac0c80fbc523e28b4412509ca57"
+      },
+      {
+        "path": "src/agent_runtime/runtime/interrupts.py",
+        "version": "sha256:252537b927e665d68ea6e87ae232ab1bb715532e5112f0a9aa06829935aed782"
+      },
+      {
+        "path": "src/agent_runtime/capabilities/persistence.py",
+        "version": "sha256:a68f26d4f968582ef379fa3699ed8ec059117b8b270b4d190fe6276d75dac545"
+      },
+      {
+        "path": "tests/sessions/test_repository.py",
+        "version": "sha256:dce8916d1ecc83fab7e72219b8d0d291a91d90ed5855cbd05fa7421b1cdd763b"
+      },
+      {
+        "path": "tests/test_feedback_store.py",
+        "version": "sha256:e60798b96d767ac06d5dd6c3041a784d1680b681dd0cfc8befc14e6554cc6b98"
+      },
+      {
+        "path": "tests/persistence/table_comments_support.py",
+        "version": "sha256:138118d4b3155eff17f9d769222583b508cde1b6b06f8f65eef96b3da38bf853"
+      },
+      {
+        "path": "tests/persistence/test_table_comments.py",
+        "version": "sha256:525088f03931229fe9961c39fd63014e615ebaf288ade83b65812e2658081644"
+      },
+      {
+        "path": "tests/persistence/test_table_comments_postgres_integration.py",
+        "version": "sha256:1511b2a73ac89b6e748fcb1f56bca349b98a2e5abaaf20e7d37e58e08813f356"
+      },
+      {
+        "path": ".dev-team/tasks/DB-001/verify_table_comments.py",
+        "version": "sha256:471b6272e19007a9736ca88c9eb596c4060f9f67ffbe6cc2a28c7197f87b1593"
+      }
+    ],
+    "branch": "master",
+    "workflow_base_head": "7b493182d034ea5247f8fc2cb63dd67e1154ea20",
+    "scope": [
+      ".dev-team/tasks/DB-001/",
+      "src/agent_runtime/sessions/repository.py",
+      "src/agent_runtime/feedback.py",
+      "src/agent_runtime/runtime/repository.py",
+      "src/agent_runtime/runtime/event_repository.py",
+      "src/agent_runtime/runtime/interrupts.py",
+      "src/agent_runtime/capabilities/persistence.py",
+      "tests/sessions/test_repository.py",
+      "tests/test_feedback_store.py",
+      "tests/persistence/table_comments_support.py",
+      "tests/persistence/test_table_comments.py",
+      "tests/persistence/test_table_comments_postgres_integration.py"
+    ],
+    "index_entry": "DB-001",
+    "commit_subject": "fix(db): 补齐并修正业务表注释",
+    "remote_push_authorized": false
+  }
+}

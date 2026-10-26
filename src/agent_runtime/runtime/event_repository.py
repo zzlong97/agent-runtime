@@ -93,6 +93,10 @@ _ALLOWED_STATE_EVENT_TRANSITIONS = frozenset(
     }
 )
 
+_COMMENT_RUNTIME_EVENTS_TABLE = """
+COMMENT ON TABLE runtime_events IS '保存 Run 的持久公开事件和内部事件，按 Run 序号记录执行、Interrupt、Capability Invocation 与 Task 生命周期投影；不保存瞬时消息增量或完整 AI 消息正文。'
+"""
+
 _CREATE_RUNTIME_EVENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS runtime_events (
     event_id UUID PRIMARY KEY,
@@ -368,7 +372,7 @@ class PostgresRuntimeEventRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """创建 RuntimeEvent 表、公开回放索引与唯一终态约束。"""
+        """幂等创建 RuntimeEvent 表和索引，并补充或修正表注释。"""
 
         started_at = perf_counter()
         log_business_event(logger, "RuntimeEvent持久化初始化开始")
@@ -377,6 +381,7 @@ class PostgresRuntimeEventRepository:
                 await connection.execute(_CREATE_RUNTIME_EVENTS_TABLE)
                 await connection.execute(_CREATE_PUBLIC_REPLAY_INDEX)
                 await connection.execute(_CREATE_TERMINAL_EVENT_INDEX)
+                await connection.execute(_COMMENT_RUNTIME_EVENTS_TABLE)
                 await connection.commit()
         except Exception as error:
             log_business_event(

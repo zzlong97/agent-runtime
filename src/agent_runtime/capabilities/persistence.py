@@ -39,6 +39,22 @@ from agent_runtime.runtime.event_repository import (
 
 logger = logging.getLogger(__name__)
 
+_COMMENT_TASKS_TABLE = """
+COMMENT ON TABLE capability_tasks IS '保存 Capability Task 的生命周期、所属 Session 与 Capability、状态 Schema 版本及最近一次 Run/Invocation 投影；不保存业务载荷。'
+"""
+
+_COMMENT_CONTEXTS_TABLE = """
+COMMENT ON TABLE capability_task_contexts IS '保存每个 Session 与 Capability 当前选中的 active Capability Task 指针；没有当前 Task 时不保留记录。'
+"""
+
+_COMMENT_OPERATIONS_TABLE = """
+COMMENT ON TABLE capability_operations IS '保存 Capability 外部副作用操作的幂等账本状态，关联 Run、Invocation 和 Task；不保存业务响应载荷。'
+"""
+
+_COMMENT_PERMISSIONS_TABLE = """
+COMMENT ON TABLE user_capability_permissions IS '保存固定用户对 Capability 的显式允许或拒绝记录；无记录按拒绝处理，记录不随 Session 删除。'
+"""
+
 _CREATE_TASKS_TABLE = """
 CREATE TABLE IF NOT EXISTS capability_tasks (
     task_id UUID PRIMARY KEY,
@@ -496,7 +512,7 @@ async def _setup_schema(
     statements: Sequence[str],
     business_name: str,
 ) -> None:
-    """在同一事务内幂等创建一组表或索引。"""
+    """在同一事务内幂等创建表和索引，并补充或修正表注释。"""
 
     started_at = perf_counter()
     log_business_event(logger, f"{business_name}初始化开始")
@@ -533,7 +549,7 @@ class CapabilityTaskRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """幂等创建 Task 表和查询索引。"""
+        """幂等创建 Task 表和查询索引，并写入表注释。"""
 
         await _setup_schema(
             settings=self._settings,
@@ -541,6 +557,7 @@ class CapabilityTaskRepository:
                 _CREATE_TASKS_TABLE,
                 _CREATE_TASKS_LOOKUP_INDEX,
                 _CREATE_TASKS_LAST_RUN_INDEX,
+                _COMMENT_TASKS_TABLE,
             ),
             business_name="Capability Task持久化",
         )
@@ -1306,11 +1323,11 @@ class CapabilityTaskContextRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """幂等创建 current Task Context 表。"""
+        """幂等创建 current Task Context 表，并写入表注释。"""
 
         await _setup_schema(
             settings=self._settings,
-            statements=(_CREATE_CONTEXTS_TABLE,),
+            statements=(_CREATE_CONTEXTS_TABLE, _COMMENT_CONTEXTS_TABLE),
             business_name="Capability Task Context持久化",
         )
 
@@ -1425,7 +1442,7 @@ class CapabilityOperationRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """幂等创建 Operation 表和查询索引。"""
+        """幂等创建 Operation 表和查询索引，并写入表注释。"""
 
         await _setup_schema(
             settings=self._settings,
@@ -1433,6 +1450,7 @@ class CapabilityOperationRepository:
                 _CREATE_OPERATIONS_TABLE,
                 _CREATE_OPERATIONS_TASK_INDEX,
                 _CREATE_OPERATIONS_INVOCATION_INDEX,
+                _COMMENT_OPERATIONS_TABLE,
             ),
             business_name="Capability Operation持久化",
         )
@@ -1776,13 +1794,14 @@ class UserCapabilityPermissionRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """幂等创建最小用户级权限表和查询索引。"""
+        """幂等创建最小用户级权限表和查询索引，并写入表注释。"""
 
         await _setup_schema(
             settings=self._settings,
             statements=(
                 _CREATE_PERMISSIONS_TABLE,
                 _CREATE_PERMISSIONS_LOOKUP_INDEX,
+                _COMMENT_PERMISSIONS_TABLE,
             ),
             business_name="Capability权限持久化",
         )

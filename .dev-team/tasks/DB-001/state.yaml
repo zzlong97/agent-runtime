@@ -1,0 +1,203 @@
+schema_version: 1
+task_id: DB-001
+state_version: 13
+status: 已验收
+current_role: dev-team-controller
+next_action: 负责人终验已通过，按明确授权执行本地提交并保存实际回执，远程同步待后续授权
+baselines:
+  requirements:
+    path: .dev-team/tasks/DB-001/requirements.md
+    version: sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4
+    approval:
+      status: 已批准
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/DB-001/handoffs/0002-controller-approval.md
+      source_text: 确认（针对 9 条表注释及排除范围的需求基线确认）
+      approved_at: '2026-10-17T21:27:48+08:00'
+  architecture:
+    path: .dev-team/tasks/DB-001/architecture.md
+    version: sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e
+    approval:
+      status: 已批准
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/DB-001/handoffs/0004-controller-architecture-approval.md
+      source_text: 批准（针对 setup 写入 9 条注释及旧库、新库、重跑、失败与实际更新验证方案）
+      approved_at: '2026-10-17T21:37:07+08:00'
+artifacts:
+  - path: .dev-team/tasks/DB-001/requirements.md
+    version: sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4
+  - path: .dev-team/tasks/DB-001/architecture.md
+    version: sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e
+  - path: src/agent_runtime/sessions/repository.py
+    version: sha256:a91d1faf9c051fb990d73d82b091bb992e929b84a32b511152ef034eb6e7c3ea
+  - path: src/agent_runtime/feedback.py
+    version: sha256:cffe1b0fa3dfb1297d268147a700531d3a703fe6c9db0600cfc86744748a92a2
+  - path: src/agent_runtime/runtime/repository.py
+    version: sha256:c77deebe280e7cc6594d7c42f3a6d4cc2079666954326193f968177f32fcc58c
+  - path: src/agent_runtime/runtime/event_repository.py
+    version: sha256:4e6b801eb386f3b3be7855e0cfdb51d65eee5ac0c80fbc523e28b4412509ca57
+  - path: src/agent_runtime/runtime/interrupts.py
+    version: sha256:252537b927e665d68ea6e87ae232ab1bb715532e5112f0a9aa06829935aed782
+  - path: src/agent_runtime/capabilities/persistence.py
+    version: sha256:a68f26d4f968582ef379fa3699ed8ec059117b8b270b4d190fe6276d75dac545
+  - path: tests/sessions/test_repository.py
+    version: sha256:dce8916d1ecc83fab7e72219b8d0d291a91d90ed5855cbd05fa7421b1cdd763b
+  - path: tests/test_feedback_store.py
+    version: sha256:e60798b96d767ac06d5dd6c3041a784d1680b681dd0cfc8befc14e6554cc6b98
+  - path: tests/persistence/table_comments_support.py
+    version: sha256:138118d4b3155eff17f9d769222583b508cde1b6b06f8f65eef96b3da38bf853
+  - path: tests/persistence/test_table_comments.py
+    version: sha256:525088f03931229fe9961c39fd63014e615ebaf288ade83b65812e2658081644
+  - path: tests/persistence/test_table_comments_postgres_integration.py
+    version: sha256:1511b2a73ac89b6e748fcb1f56bca349b98a2e5abaaf20e7d37e58e08813f356
+  - path: .dev-team/tasks/DB-001/verify_table_comments.py
+    version: sha256:471b6272e19007a9736ca88c9eb596c4060f9f67ffbe6cc2a28c7197f87b1593
+checkpoints:
+  - boundary: 需求交付
+    handoff: .dev-team/tasks/DB-001/handoffs/0001-requirements.md
+    operation_key: sha256:f8d08c4641c586167b0de1743efad770811093060a16bd463d732339fc8451e9
+    baseline_versions:
+      requirements: sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4
+      architecture: null
+    artifact_versions:
+      - path: .dev-team/tasks/DB-001/requirements.md
+        version: sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4
+    evidence_refs:
+      - path: .dev-team/tasks/DB-001/evidence/0001-inventory.md
+        version: sha256:b3e6c9291ad8ea65f73c5535dbbc41349ca14aecc346e651c3138d4c34737a84
+    validation_status: 已确认有效
+  - boundary: 架构交付
+    handoff: .dev-team/tasks/DB-001/handoffs/0003-architecture.md
+    operation_key: sha256:0acf0dfc5a2a3e313f8ad14289d69542e79342272e043d1b78fc06baf64944bd
+    baseline_versions:
+      requirements: sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4
+      architecture: sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e
+    artifact_versions:
+      - path: .dev-team/tasks/DB-001/architecture.md
+        version: sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e
+    evidence_refs:
+      - path: .dev-team/tasks/DB-001/evidence/0002-architecture-validation.md
+        version: sha256:2d662f052bcd12340806c5591ba85744dddb3e5b8e769e5664443cfad5d3b1f4
+      - path: .dev-team/tasks/DB-001/evidence/0002-architecture-operation.json
+        version: sha256:c4448c737f6bf64e812a1ec18ce65a2bb97c1216b50811d72a375067514128bc
+    validation_status: 已确认有效
+  - boundary: 开发交付
+    handoff: .dev-team/tasks/DB-001/handoffs/0005-development.md
+    operation_key: DB-001:development:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e
+    baseline_versions:
+      requirements: sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4
+      architecture: sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e
+    artifact_versions:
+      - path: src/agent_runtime/sessions/repository.py
+        version: sha256:a91d1faf9c051fb990d73d82b091bb992e929b84a32b511152ef034eb6e7c3ea
+      - path: src/agent_runtime/feedback.py
+        version: sha256:cffe1b0fa3dfb1297d268147a700531d3a703fe6c9db0600cfc86744748a92a2
+      - path: src/agent_runtime/runtime/repository.py
+        version: sha256:c77deebe280e7cc6594d7c42f3a6d4cc2079666954326193f968177f32fcc58c
+      - path: src/agent_runtime/runtime/event_repository.py
+        version: sha256:4e6b801eb386f3b3be7855e0cfdb51d65eee5ac0c80fbc523e28b4412509ca57
+      - path: src/agent_runtime/runtime/interrupts.py
+        version: sha256:252537b927e665d68ea6e87ae232ab1bb715532e5112f0a9aa06829935aed782
+      - path: src/agent_runtime/capabilities/persistence.py
+        version: sha256:a68f26d4f968582ef379fa3699ed8ec059117b8b270b4d190fe6276d75dac545
+      - path: tests/sessions/test_repository.py
+        version: sha256:dce8916d1ecc83fab7e72219b8d0d291a91d90ed5855cbd05fa7421b1cdd763b
+      - path: tests/test_feedback_store.py
+        version: sha256:e60798b96d767ac06d5dd6c3041a784d1680b681dd0cfc8befc14e6554cc6b98
+      - path: tests/persistence/table_comments_support.py
+        version: sha256:138118d4b3155eff17f9d769222583b508cde1b6b06f8f65eef96b3da38bf853
+      - path: tests/persistence/test_table_comments.py
+        version: sha256:525088f03931229fe9961c39fd63014e615ebaf288ade83b65812e2658081644
+      - path: tests/persistence/test_table_comments_postgres_integration.py
+        version: sha256:1511b2a73ac89b6e748fcb1f56bca349b98a2e5abaaf20e7d37e58e08813f356
+      - path: .dev-team/tasks/DB-001/verify_table_comments.py
+        version: sha256:471b6272e19007a9736ca88c9eb596c4060f9f67ffbe6cc2a28c7197f87b1593
+    evidence_refs:
+      - path: .dev-team/tasks/DB-001/evidence/0003-database-operation.json
+        version: sha256:6b40091539b8ca08fc5459a4dca07eb9e863419488d4ac1d44b5854b6be94803
+      - path: .dev-team/tasks/DB-001/evidence/0004-development-validation.md
+        version: sha256:4507c6d75514d1a344317a47af5ecc37f1aaedd7196e1a44bd22af6befee3143
+      - path: .dev-team/tasks/DB-001/evidence/0005-isolated-snapshots.json
+        version: sha256:134718f93935a9fb2a8898f271a9db80591b3de619ba2f414f750163c11b2e81
+      - path: .dev-team/tasks/DB-001/evidence/0006-current-before.json
+        version: sha256:cba8c49cfe12d069da4ebe876d0f7c1c3a75e93a5e217427f22748ce8e7ee6d3
+      - path: .dev-team/tasks/DB-001/evidence/0007-current-idle-before.json
+        version: sha256:ae67f72665a80f5be18ab28ee4a78b32c8b2bc7ad3b02015bf4f1eececa192f4
+      - path: .dev-team/tasks/DB-001/evidence/0008-current-operation.json
+        version: sha256:3805d2f0f9ed771f41162e2df4044ea84769334acb9a14c3c7b3142fbfa95e88
+      - path: .dev-team/tasks/DB-001/evidence/0009-current-after.json
+        version: sha256:c85a611986115fb1bbf447dc96df05d8fb84087d1fc8a97680f86e9172e945de
+      - path: .dev-team/tasks/DB-001/evidence/0010-tested-versions.json
+        version: sha256:aa11c1042be1dddbf9052ed7f0088ea5eee56a9b77ea7ad3f486874726d75f77
+    validation_status: 已确认有效
+  - boundary: 开发验收
+    handoff: .dev-team/tasks/DB-001/handoffs/0006-review.md
+    operation_key: sha256:93d2bebc19c70b75549b959b2e4884aae0eba6bf28394433cf0aa94765e69d03
+    baseline_versions:
+      requirements: sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4
+      architecture: sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e
+    artifact_versions:
+      - path: src/agent_runtime/sessions/repository.py
+        version: sha256:a91d1faf9c051fb990d73d82b091bb992e929b84a32b511152ef034eb6e7c3ea
+      - path: src/agent_runtime/feedback.py
+        version: sha256:cffe1b0fa3dfb1297d268147a700531d3a703fe6c9db0600cfc86744748a92a2
+      - path: src/agent_runtime/runtime/repository.py
+        version: sha256:c77deebe280e7cc6594d7c42f3a6d4cc2079666954326193f968177f32fcc58c
+      - path: src/agent_runtime/runtime/event_repository.py
+        version: sha256:4e6b801eb386f3b3be7855e0cfdb51d65eee5ac0c80fbc523e28b4412509ca57
+      - path: src/agent_runtime/runtime/interrupts.py
+        version: sha256:252537b927e665d68ea6e87ae232ab1bb715532e5112f0a9aa06829935aed782
+      - path: src/agent_runtime/capabilities/persistence.py
+        version: sha256:a68f26d4f968582ef379fa3699ed8ec059117b8b270b4d190fe6276d75dac545
+      - path: tests/sessions/test_repository.py
+        version: sha256:dce8916d1ecc83fab7e72219b8d0d291a91d90ed5855cbd05fa7421b1cdd763b
+      - path: tests/test_feedback_store.py
+        version: sha256:e60798b96d767ac06d5dd6c3041a784d1680b681dd0cfc8befc14e6554cc6b98
+      - path: tests/persistence/table_comments_support.py
+        version: sha256:138118d4b3155eff17f9d769222583b508cde1b6b06f8f65eef96b3da38bf853
+      - path: tests/persistence/test_table_comments.py
+        version: sha256:525088f03931229fe9961c39fd63014e615ebaf288ade83b65812e2658081644
+      - path: tests/persistence/test_table_comments_postgres_integration.py
+        version: sha256:1511b2a73ac89b6e748fcb1f56bca349b98a2e5abaaf20e7d37e58e08813f356
+      - path: .dev-team/tasks/DB-001/verify_table_comments.py
+        version: sha256:471b6272e19007a9736ca88c9eb596c4060f9f67ffbe6cc2a28c7197f87b1593
+    evidence_refs:
+      - path: .dev-team/tasks/DB-001/evidence/0004-development-validation.md
+        version: sha256:4507c6d75514d1a344317a47af5ecc37f1aaedd7196e1a44bd22af6befee3143
+      - path: .dev-team/tasks/DB-001/evidence/0005-isolated-snapshots.json
+        version: sha256:134718f93935a9fb2a8898f271a9db80591b3de619ba2f414f750163c11b2e81
+      - path: .dev-team/tasks/DB-001/evidence/0007-current-idle-before.json
+        version: sha256:ae67f72665a80f5be18ab28ee4a78b32c8b2bc7ad3b02015bf4f1eececa192f4
+      - path: .dev-team/tasks/DB-001/evidence/0008-current-operation.json
+        version: sha256:3805d2f0f9ed771f41162e2df4044ea84769334acb9a14c3c7b3142fbfa95e88
+      - path: .dev-team/tasks/DB-001/evidence/0009-current-after.json
+        version: sha256:c85a611986115fb1bbf447dc96df05d8fb84087d1fc8a97680f86e9172e945de
+      - path: .dev-team/tasks/DB-001/evidence/0010-tested-versions.json
+        version: sha256:aa11c1042be1dddbf9052ed7f0088ea5eee56a9b77ea7ad3f486874726d75f77
+      - path: .dev-team/tasks/DB-001/evidence/0011-review-isolated-snapshots.json
+        version: sha256:2df39e0a25e004f23aa0e60e43ac8b7aa7f022cf6aa357706135e3d8f3e0e7c4
+      - path: .dev-team/tasks/DB-001/evidence/0012-independent-review.md
+        version: sha256:329e3ddcb24729c7f0efbd38e06058cea62e2143630ed0a769d5c968939ea2e4
+    validation_status: 已确认有效
+current_operation:
+  name: 提交负责人终验的DB-001代码
+  kind: 外部操作
+  operation_key: sha256:6eb01f2d8f7875de3654f5dc53b8654ba257417d618755ae2841f3b8ebbe802c
+  status: 执行中
+  inputs_ref: .dev-team/tasks/DB-001/evidence/提交输入.json
+  result_ref: null
+latest_handoff: .dev-team/tasks/DB-001/handoffs/0007-负责人终验与提交授权.md
+resume_from: null
+blocked_reason: null
+project_gates:
+  - name: 负责人终验
+    status: 已满足
+    evidence_ref: .dev-team/tasks/DB-001/handoffs/0007-负责人终验与提交授权.md
+  - name: 任务提交
+    status: 待满足
+    evidence_ref: null
+  - name: 双远程同步
+    status: 待满足
+    evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-26T21:30:31.0312237+08:00'

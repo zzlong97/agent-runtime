@@ -1,19 +1,28 @@
 """Stage 2 消息反馈应用服务与 PostgreSQL 存储。"""
 
+import logging
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from time import perf_counter
 from typing import Callable, Literal, Protocol, cast
 from uuid import UUID
 
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
+from agent_runtime.core.logging import log_business_event
 from agent_runtime.persistence.database import open_database_connection
 
 FeedbackAction = Literal["like", "dislike", "cancel"]
 FeedbackValue = Literal["like", "dislike"]
 
 _FEEDBACK_VALUES = frozenset({"like", "dislike"})
+
+logger = logging.getLogger(__name__)
+
+_COMMENT_FEEDBACK_TABLE = """
+COMMENT ON TABLE message_feedback IS '保存用户对已完成 AI 回答的最终点赞或点踩值；session_id 用于会话删除时清理。'
+"""
 
 _CREATE_FEEDBACK_TABLE = """
 CREATE TABLE IF NOT EXISTS message_feedback (
@@ -112,12 +121,31 @@ class PostgresFeedbackStore:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """创建反馈表及供后续 Session 清理使用的索引。"""
+        """幂等创建反馈表及清理索引，并补充或修正表注释。"""
 
-        async with open_database_connection(self._settings) as connection:
-            await connection.execute(_CREATE_FEEDBACK_TABLE)
-            await connection.execute(_CREATE_FEEDBACK_SESSION_INDEX)
-            await connection.commit()
+        started_at = perf_counter()
+        log_business_event(logger, "消息反馈持久化初始化开始")
+        try:
+            async with open_database_connection(self._settings) as connection:
+                await connection.execute(_CREATE_FEEDBACK_TABLE)
+                await connection.execute(_CREATE_FEEDBACK_SESSION_INDEX)
+                await connection.execute(_COMMENT_FEEDBACK_TABLE)
+                await connection.commit()
+        except Exception as error:
+            log_business_event(
+                logger,
+                "消息反馈持久化初始化失败",
+                level=logging.ERROR,
+                error_code="MESSAGE_FEEDBACK_SETUP_FAILED",
+                error_type=type(error).__name__,
+                duration_ms=round((perf_counter() - started_at) * 1000, 3),
+            )
+            raise
+        log_business_event(
+            logger,
+            "消息反馈持久化初始化完成",
+            duration_ms=round((perf_counter() - started_at) * 1000, 3),
+        )
 
     async def upsert(
         self,

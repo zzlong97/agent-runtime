@@ -1,12 +1,21 @@
 """Session 元数据的 PostgreSQL 持久化与产品查询。"""
 
+import logging
 from datetime import datetime
+from time import perf_counter
 from uuid import UUID
 
 from agent_runtime.core.config import Settings, get_settings
 from agent_runtime.core.errors import ApplicationError
+from agent_runtime.core.logging import log_business_event
 from agent_runtime.persistence.database import open_database_connection
 from agent_runtime.sessions.models import Session, SessionCursor
+
+logger = logging.getLogger(__name__)
+
+_COMMENT_SESSIONS_TABLE = """
+COMMENT ON TABLE sessions IS '保存 Session 业务元数据；每条记录标识一个固定用户的会话，并作为该会话业务数据与删除流程的根记录。'
+"""
 
 _CREATE_SESSIONS_TABLE = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -88,12 +97,31 @@ class PostgresSessionRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """在 Session 元数据表不存在时创建该表。"""
+        """幂等创建 Session 表和索引，并补充或修正表注释。"""
 
-        async with open_database_connection(self._settings) as connection:
-            await connection.execute(_CREATE_SESSIONS_TABLE)
-            await connection.execute(_CREATE_SESSION_LIST_INDEX)
-            await connection.commit()
+        started_at = perf_counter()
+        log_business_event(logger, "Session持久化初始化开始")
+        try:
+            async with open_database_connection(self._settings) as connection:
+                await connection.execute(_CREATE_SESSIONS_TABLE)
+                await connection.execute(_CREATE_SESSION_LIST_INDEX)
+                await connection.execute(_COMMENT_SESSIONS_TABLE)
+                await connection.commit()
+        except Exception as error:
+            log_business_event(
+                logger,
+                "Session持久化初始化失败",
+                level=logging.ERROR,
+                error_code="SESSION_PERSISTENCE_SETUP_FAILED",
+                error_type=type(error).__name__,
+                duration_ms=round((perf_counter() - started_at) * 1000, 3),
+            )
+            raise
+        log_business_event(
+            logger,
+            "Session持久化初始化完成",
+            duration_ms=round((perf_counter() - started_at) * 1000, 3),
+        )
 
     async def add(self, session: Session) -> None:
         """在图执行开始前持久化一个 Session。"""

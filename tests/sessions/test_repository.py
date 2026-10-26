@@ -41,7 +41,7 @@ def test_session_repository_setup_creates_minimal_table_and_commits(
     asyncio.run(session_repository.setup())
 
     assert connection.committed is True
-    assert len(statements) == 2
+    assert len(statements) == 3
     assert "CREATE TABLE IF NOT EXISTS sessions" in statements[0]
     for column in (
         "session_id UUID PRIMARY KEY",

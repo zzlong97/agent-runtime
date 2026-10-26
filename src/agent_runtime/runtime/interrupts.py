@@ -21,6 +21,10 @@ InterruptStatus = Literal["pending", "resumed", "cancelled"]
 
 logger = logging.getLogger(__name__)
 
+_COMMENT_RUN_INTERRUPTS_TABLE = """
+COMMENT ON TABLE run_interrupts IS '保存 Run 的中断及恢复幂等投影，包括中断状态、恢复输入和恢复请求标识；每个 Run 同时最多一个待处理中断。'
+"""
+
 _CREATE_RUN_INTERRUPTS_TABLE = """
 CREATE TABLE IF NOT EXISTS run_interrupts (
     run_id UUID NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
@@ -146,7 +150,7 @@ class PostgresRunInterruptRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """创建 Interrupt 表、pending 唯一约束和恢复请求唯一约束。"""
+        """幂等创建 Interrupt 表和唯一约束，并补充或修正表注释。"""
 
         started_at = perf_counter()
         log_business_event(logger, "Interrupt持久化初始化开始")
@@ -155,6 +159,7 @@ class PostgresRunInterruptRepository:
                 await connection.execute(_CREATE_RUN_INTERRUPTS_TABLE)
                 await connection.execute(_CREATE_PENDING_INTERRUPT_INDEX)
                 await connection.execute(_CREATE_RESUME_REQUEST_INDEX)
+                await connection.execute(_COMMENT_RUN_INTERRUPTS_TABLE)
                 await connection.commit()
         except Exception as error:
             log_business_event(

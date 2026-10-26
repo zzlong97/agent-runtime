@@ -1,0 +1,19 @@
+{
+  "operation_key": "DB-001:current-postgres:agent_runtime:9-table-comments:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e",
+  "requirements_version": "sha256:c84d441897d4412c7b72abbe9ea46e9cae66edcc1e6e8747a3d82ac345e2a2b4",
+  "architecture_version": "sha256:0018229383ac83955f932ec617706717a3e67f011ac6b3b4a5044bfa48064d7e",
+  "target": "项目 compose PostgreSQL / agent_runtime / public / 9张获批业务表，数据库角色runtime",
+  "intent": "执行中：复核无并发写入窗口和0007快照后，仅调用正常业务Repository setup应用9条获批表注释；执行后逐字复核注释并比较结构、数据摘要及排除对象注释。",
+  "before_snapshot": ".dev-team/tasks/DB-001/evidence/0007-current-idle-before.json",
+  "query_identity": "current_database()=agent_runtime；obj_description(public业务表OID, pg_class)",
+  "receipt": ".dev-team/tasks/DB-001/evidence/0009-current-after.json",
+  "result": "已确认完成，命令退出0：九表精确注释已更新；前后结构、业务数据摘要及排除对象注释无变化。保留原执行意图作为操作审计事实。",
+  "idle_window_facts": {
+    "historical_active_projection_count": 5,
+    "last_update_range": "2026-09-24至2026-10-12 UTC",
+    "database_connections": "7条全部idle，transaction_start=null；4条Runtime连接自12:09上海时间无活动",
+    "runtime_process": "Python进程20788监听127.0.0.1:8000，未停止或修改",
+    "consecutive_snapshots": "0006与0007间隔约1分钟，结构/九表数据摘要/所有注释相同",
+    "controller_confirmation": "总控根据只读事实确认支持已批准架构的空闲窗口，按既有授权推进"
+  }
+}
