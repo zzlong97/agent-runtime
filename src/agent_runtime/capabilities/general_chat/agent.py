@@ -59,7 +59,8 @@ class GeneralChatCapability:
         """分别绑定范围判断模型和用户可见回复模型。"""
 
         self._scope_model = scope_model.with_structured_output(
-            GeneralChatScopeDecision
+            # 与路由器一致，避免兼容端点忽略 json_schema 后自行猜测守卫字段。
+            GeneralChatScopeDecision, method="function_calling"
         )
         self._agent = create_agent(
             model=response_model,

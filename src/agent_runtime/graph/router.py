@@ -73,7 +73,10 @@ class StageOneRouter:
             or not user_id.strip()
         ):
             raise ValueError("动态 Router 必须提供 candidate_provider 与非空 user_id")
-        self._model = model.with_structured_output(RouterDecision)
+        # 兼容端点不保证支持 json_schema；通过工具定义传递完整约束，仍严格校验结果。
+        self._model = model.with_structured_output(
+            RouterDecision, method="function_calling"
+        )
         self._candidate_provider = candidate_provider
         self._user_id = user_id
 

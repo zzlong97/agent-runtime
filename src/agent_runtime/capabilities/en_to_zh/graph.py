@@ -94,7 +94,8 @@ class EnglishToChineseCapability:
         """分别绑定范围判断模型、翻译模型和独立 Checkpointer。"""
 
         self._scope_model = scope_model.with_structured_output(
-            EnglishToChineseScopeDecision
+            # 与路由器一致，避免兼容端点忽略 json_schema 后自行猜测守卫字段。
+            EnglishToChineseScopeDecision, method="function_calling"
         )
         self._graph = build_english_to_chinese_graph(
             model=translation_model,

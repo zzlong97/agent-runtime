@@ -1,0 +1,89 @@
+schema_version: 1
+task_id: RT-001
+state_version: 4
+status: 已验收
+current_role: dev-team-controller
+next_action: 负责人终验已通过；按明确授权本地提交并保存回执，远程同步待后续授权
+baselines:
+  requirements: null
+  architecture: null
+artifacts:
+  - path: src/agent_runtime/graph/router.py
+    version: sha256:a247f014039936bc1f6270246142aa7ea67bfe6085a501024954074e4bbbe1ac
+  - path: src/agent_runtime/capabilities/general_chat/agent.py
+    version: sha256:3f0e5656a178dc1538ee37a39b4ce3f042b87fd9f0ab0e0662a66b4e81a2b4fe
+  - path: src/agent_runtime/capabilities/en_to_zh/graph.py
+    version: sha256:901c543dc8b1c0fa038f208d551e2c8b1307c737963187094a45b86bf1653835
+  - path: tests/integration/test_openai_structured_output.py
+    version: sha256:c30086196f6dcff24d973a6ac48b8f9a9f67600251752ea7568bfeecb212f834
+  - path: tests/smoke/test_bailian_routing.py
+    version: sha256:402d0d9a730146a57cd531fbd17a38f64e66c41aca3d8a3ad544a29b1a92ff11
+  - path: .dev-team/tasks/RT-001/task.md
+    version: sha256:61bb89f0e2b277cb6c0aaac77e52ae69d6effd3d5f79749ccb17f61c7915bfd0
+checkpoints:
+  - boundary: 开发交付
+    handoff: .dev-team/tasks/RT-001/handoffs/0001-开发交付.md
+    operation_key: RT-001:development:sha256:a247f014039936bc1f6270246142aa7ea67bfe6085a501024954074e4bbbe1ac
+    baseline_versions: {requirements: null, architecture: null}
+    artifact_versions:
+      - path: src/agent_runtime/graph/router.py
+        version: sha256:a247f014039936bc1f6270246142aa7ea67bfe6085a501024954074e4bbbe1ac
+      - path: src/agent_runtime/capabilities/general_chat/agent.py
+        version: sha256:3f0e5656a178dc1538ee37a39b4ce3f042b87fd9f0ab0e0662a66b4e81a2b4fe
+      - path: src/agent_runtime/capabilities/en_to_zh/graph.py
+        version: sha256:901c543dc8b1c0fa038f208d551e2c8b1307c737963187094a45b86bf1653835
+      - path: tests/integration/test_openai_structured_output.py
+        version: sha256:c30086196f6dcff24d973a6ac48b8f9a9f67600251752ea7568bfeecb212f834
+      - path: tests/smoke/test_bailian_routing.py
+        version: sha256:402d0d9a730146a57cd531fbd17a38f64e66c41aca3d8a3ad544a29b1a92ff11
+      - path: .dev-team/tasks/RT-001/task.md
+        version: sha256:61bb89f0e2b277cb6c0aaac77e52ae69d6effd3d5f79749ccb17f61c7915bfd0
+    evidence_refs:
+      - path: .dev-team/tasks/RT-001/handoffs/0001-开发交付.md
+        version: sha256:69addc27a4602e698aa83425826dcb320ab431c9012fed1bb05a88eb763a1d5c
+    validation_status: 已确认有效
+  - boundary: 开发验收
+    handoff: .dev-team/tasks/RT-001/handoffs/0002-独立审核.md
+    operation_key: RT-001:review:sha256:59d4857fab1ad9281b00ee598ade151964d49e8f56c362fa0b4df30f75eefe15
+    baseline_versions: {requirements: null, architecture: null}
+    artifact_versions:
+      - path: src/agent_runtime/graph/router.py
+        version: sha256:a247f014039936bc1f6270246142aa7ea67bfe6085a501024954074e4bbbe1ac
+      - path: src/agent_runtime/capabilities/general_chat/agent.py
+        version: sha256:3f0e5656a178dc1538ee37a39b4ce3f042b87fd9f0ab0e0662a66b4e81a2b4fe
+      - path: src/agent_runtime/capabilities/en_to_zh/graph.py
+        version: sha256:901c543dc8b1c0fa038f208d551e2c8b1307c737963187094a45b86bf1653835
+      - path: tests/integration/test_openai_structured_output.py
+        version: sha256:c30086196f6dcff24d973a6ac48b8f9a9f67600251752ea7568bfeecb212f834
+      - path: tests/smoke/test_bailian_routing.py
+        version: sha256:402d0d9a730146a57cd531fbd17a38f64e66c41aca3d8a3ad544a29b1a92ff11
+      - path: .dev-team/tasks/RT-001/task.md
+        version: sha256:61bb89f0e2b277cb6c0aaac77e52ae69d6effd3d5f79749ccb17f61c7915bfd0
+    evidence_refs:
+      - path: .dev-team/tasks/RT-001/handoffs/0002-独立审核.md
+        version: sha256:fc699a4a565f01a3dc6b25841c38d1084cb0c054241f70bc41649d08ec95071b
+      - path: .dev-team/tasks/RT-001/handoffs/0001-开发交付.md
+        version: sha256:69addc27a4602e698aa83425826dcb320ab431c9012fed1bb05a88eb763a1d5c
+    validation_status: 已确认有效
+current_operation:
+  name: 提交负责人终验的RT-001代码
+  kind: 外部操作
+  operation_key: sha256:5e46def80b20abdac00a521afc33c7de23298e48d1fde26718c277f4853dc192
+  status: 执行中
+  inputs_ref: .dev-team/tasks/RT-001/handoffs/0003-负责人终验与提交授权.md
+  result_ref: null
+latest_handoff: .dev-team/tasks/RT-001/handoffs/0003-负责人终验与提交授权.md
+resume_from: null
+blocked_reason: null
+project_gates:
+  - name: 负责人终验
+    status: 已满足
+    evidence_ref: .dev-team/tasks/RT-001/handoffs/0003-负责人终验与提交授权.md
+  - name: 任务提交
+    status: 待满足
+    evidence_ref: null
+  - name: 双远程同步
+    status: 待满足
+    evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-26T21:57:47.052995+08:00'
