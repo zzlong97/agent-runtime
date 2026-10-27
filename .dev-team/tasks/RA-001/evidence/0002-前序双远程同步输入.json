@@ -1,0 +1,25 @@
+{
+  "task_id": "RA-001",
+  "operation": "同步前序已验收基线并解除启动门禁",
+  "inputs": {
+    "source_authorization": "同意（针对将 b3e855d 正常快进推送到两个远程 master 的明确问题）",
+    "source_ref": ".dev-team/tasks/RA-001/handoffs/0002-启动授权与前序门禁核对.md",
+    "target_commit": "b3e855d17234704b41c0be72f8e2a907a0f942f6",
+    "targets": [
+      {
+        "remote": "github",
+        "url": "https://github.com/zzlong97/agent-runtime.git",
+        "ref": "refs/heads/master"
+      },
+      {
+        "remote": "origin",
+        "url": "https://gitee.com/zzlong97/agent_runtime.git",
+        "ref": "refs/heads/master"
+      }
+    ],
+    "before": "7b493182d034ea5247f8fc2cb63dd67e1154ea20",
+    "force": false,
+    "push_tags": false,
+    "include_uncommitted": false
+  }
+}

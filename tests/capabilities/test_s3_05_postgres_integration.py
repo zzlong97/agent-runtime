@@ -40,7 +40,7 @@ def _manifest(
             "name": "测试能力",
             "description": "用于验证 Stage 3 Task 与 State Scope。",
             "enabled": True,
-            "entrypoint": "agent_runtime.capabilities.general_chat.adapter:factory",
+            "transport": {"type": "local", "entrypoint": "agent_runtime.capabilities.general_chat.adapter:factory"},
             "version": "1.0.0",
             "state_scope": state_scope,
             "state_schema_version": state_schema_version,

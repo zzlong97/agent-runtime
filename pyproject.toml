@@ -5,6 +5,7 @@ description = "A staged conversational agent runtime built with FastAPI and Lang
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "a2a-sdk==1.2.3",
     "fastapi==0.141.1",
     "langchain==1.4.0",
     "langchain-openai==1.6.2",

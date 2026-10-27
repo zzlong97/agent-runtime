@@ -54,7 +54,7 @@ def _recovery_manifest(
             "name": "恢复测试能力",
             "description": "仅验证恢复身份和 Operation Ledger。",
             "enabled": True,
-            "entrypoint": "tests.fake_capability:create_capability",
+            "transport": {"type": "local", "entrypoint": "tests.fake_capability:create_capability"},
             "version": "1.0.0",
             "state_scope": "session",
             "state_schema_version": "v1",

@@ -36,7 +36,7 @@ def _manifest(
             "name": "通用对话",
             "description": "用于验证重新生成安全门禁。",
             "enabled": True,
-            "entrypoint": "tests.fake_capability:create_capability",
+            "transport": {"type": "local", "entrypoint": "tests.fake_capability:create_capability"},
             "version": "1.0.0",
             "state_scope": state_scope,
             "state_schema_version": state_schema_version,
@@ -107,6 +107,17 @@ class _Registry:
         if not self.serviceable:
             return ()
         return (SimpleNamespace(capability_id=self.manifest.capability_id),)
+
+
+def test_remote_regenerate_is_rejected_even_without_side_effects():
+    from tests.fake_a2a import remote_transport
+    from agent_runtime.capabilities.regeneration import CapabilityRegeneratePolicy, CapabilityRegenerateUnsupportedError
+    raw = _manifest().model_dump()
+    raw["transport"] = remote_transport()
+    remote = CapabilityManifest.model_validate(raw)
+    with pytest.raises(CapabilityRegenerateUnsupportedError) as caught:
+        CapabilityRegeneratePolicy().require_supported(remote)
+    assert caught.value.code == "CAPABILITY_REGENERATE_UNSUPPORTED"
 
 
 class _PermissionService:

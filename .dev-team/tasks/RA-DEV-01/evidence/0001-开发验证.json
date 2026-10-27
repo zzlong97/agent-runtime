@@ -1,0 +1,238 @@
+{
+  "task_id": "RA-DEV-01",
+  "generated_at": "2026-10-27T09:45:32.4284708+08:00",
+  "base_commit": "b3e855d17234704b41c0be72f8e2a907a0f942f6",
+  "working_directory": "D:/workspace/agent_runtime",
+  "scope": "RA-AC-01；RA-AC-07 协议/安全单元部分，不含远程 Run 执行闭环或真实接入",
+  "red": [
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/capabilities/test_manifest.py -q -k 'transport_' -o addopts='' --tb=short",
+      "exit_code": 1,
+      "result": "2 failed, 58 deselected；新 transport 不被接受，旧顶层 entrypoint 未被拒绝"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/capabilities/test_remote_a2a_client.py -q -o addopts='' --tb=short",
+      "exit_code": 1,
+      "result": "19 failed；Client 模块尚不存在（缺失功能，非完成证据）"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/capabilities/test_remote_agent_card.py -q -o addopts='' --tb=no",
+      "exit_code": 1,
+      "result": "23 failed；Card/Client 模块尚不存在（缺失功能，非完成证据）"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/capabilities/test_regeneration_policy.py -k 'remote_regenerate' -q -o addopts='' --tb=short",
+      "exit_code": 1,
+      "result": "1 failed, 16 deselected；remote+invocation+none 被放行"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/capabilities/test_registry.py tests/core/test_config.py -q -k 'remote_' -o addopts='' --tb=short",
+      "exit_code": 1,
+      "result": "3 failed, 23 deselected；远程适配器与安全设置尚不存在"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/test_remote_service_bootstrap.py -q -o addopts='' --tb=short",
+      "exit_code": 1,
+      "result": "修正测试模型夹具后 1 failed, 1 passed；Registry 后组装失败未释放 HTTP Client"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/capabilities/test_remote_a2a_client.py -k 'telemetry' -q -o addopts='' --tb=short",
+      "exit_code": 1,
+      "result": "1 failed, 19 deselected；SDK 遥测记录非法枚举中的远程原始值"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/capabilities/test_remote_a2a_client.py -k 'business_logs' -q -o addopts='' --tb=short",
+      "exit_code": 1,
+      "result": "1 failed, 20 deselected；关键请求日志缺少已知 message_id"
+    }
+  ],
+  "green": [
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/capabilities/test_manifest.py tests/capabilities/test_registry.py tests/capabilities/test_health.py tests/capabilities/test_remote_a2a_client.py tests/capabilities/test_remote_agent_card.py tests/capabilities/test_regeneration_policy.py tests/capabilities/test_regeneration_submission.py tests/test_remote_service_bootstrap.py tests/core/test_config.py -q -o addopts='' --tb=short",
+      "exit_code": 0,
+      "result": "173 passed in 4.99s"
+    },
+    {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q -o addopts='' --tb=short",
+      "exit_code": 0,
+      "result": "743 passed, 74 skipped in 13.09s"
+    },
+    {
+      "command": "uvx ruff check --select F,E9 src/agent_runtime/capabilities/remote_a2a tests/fake_a2a.py tests/capabilities/test_remote_a2a_client.py tests/capabilities/test_remote_agent_card.py tests/test_remote_service_bootstrap.py",
+      "exit_code": 0,
+      "result": "All checks passed"
+    },
+    {
+      "command": "git -c core.autocrlf=false diff --check -- src tests docs/capability_development_guide.md pyproject.toml uv.lock",
+      "exit_code": 0,
+      "result": "无空白错误"
+    },
+    {
+      "command": "uv lock --check",
+      "exit_code": 0,
+      "result": "Resolved 83 packages"
+    },
+    {
+      "command": "uv pip check",
+      "exit_code": 0,
+      "result": "Checked 81 packages；All installed packages are compatible"
+    }
+  ],
+  "dependencies": {
+    "a2a-sdk": "1.2.3",
+    "protobuf": "7.36.2",
+    "httpx": "0.28.1",
+    "pydantic": "2.13.5",
+    "protocol": "A2A v1.0.1 / A2A-Version: 1.0",
+    "extras": []
+  },
+  "limitations": [
+    "74 项外部依赖/集成检查按默认条件跳过，未连接 PostgreSQL、Redis、真实模型或真实远程 Agent",
+    "远程 invoke 受控拒绝；未实现 Run 绑定、Operation 闭环、恢复/取消/删除屏障或文本 Interrupt/UI",
+    "没有运行真实接入、崩溃恢复 PostgreSQL 探针或成本验收；这些归后续任务",
+    "仅支持同源，不提供额外来源白名单；默认配置未添加远程 Manifest",
+    "未操作 Docker、服务重启、对方仓库；未提交、推送或发布；独立审核和负责人终验仍待完成"
+  ],
+  "artifacts": [
+    {
+      "version": "sha256:2d4684f8ac4351fddaa923180ac2bf83f5b3eb2c64ae223183c43062f3399e3b",
+      "path": "docs/capability_development_guide.md"
+    },
+    {
+      "version": "sha256:77dd36edda7f897552a2f30e6894d77688585ecf10654866da628f2c3badad8b",
+      "path": "pyproject.toml"
+    },
+    {
+      "version": "sha256:803769443264d1ac4ce9fc740c26c5ba84cd4bf0e2a411335af1acf54650a2be",
+      "path": "src/agent_runtime/capabilities/en_to_zh/manifest.yaml"
+    },
+    {
+      "version": "sha256:c37548450aaaccbbcf35b6b995dc56ae26edb0e3fe86e9322d4ee7023d042719",
+      "path": "src/agent_runtime/capabilities/general_chat/manifest.yaml"
+    },
+    {
+      "version": "sha256:d616d4966f6a099116218e9aeb5add40e877f4b406b2ededa38b90f79ac5cfcc",
+      "path": "src/agent_runtime/capabilities/manifest.py"
+    },
+    {
+      "version": "sha256:3dea817e7f77b6e264f59a1c07fd6d8e613b4ee42626821eeab32fc776bbc98e",
+      "path": "src/agent_runtime/capabilities/regeneration.py"
+    },
+    {
+      "version": "sha256:ae450ea10a08f7ba689c7b36c908cd29f76c1a4c53a7d9597da7e5f7224fd5d0",
+      "path": "src/agent_runtime/capabilities/registry.py"
+    },
+    {
+      "version": "sha256:4ca4699e3f0338a6f842503e89277ce5d4ee30083bf8136dd8cffd6f03148c6b",
+      "path": "src/agent_runtime/capabilities/remote_a2a/__init__.py"
+    },
+    {
+      "version": "sha256:e779a9f78c84419c8a93be4cb8559dd21bb69c449b567498ea67e284b1b4787b",
+      "path": "src/agent_runtime/capabilities/remote_a2a/capability.py"
+    },
+    {
+      "version": "sha256:7838ab63f9dc5046d9984274e667f228f0f91fc038887faf8d41ad2a5cd0fbe3",
+      "path": "src/agent_runtime/capabilities/remote_a2a/card.py"
+    },
+    {
+      "version": "sha256:bbee00bcecbda0a5d0b022970fff9192e40f7594baa1ef45d92c4cac02713b9c",
+      "path": "src/agent_runtime/capabilities/remote_a2a/client.py"
+    },
+    {
+      "version": "sha256:b746902fb7182bb813d6da08db7614cde12b07fc521d86d2eebe6b391a36c1a6",
+      "path": "src/agent_runtime/capabilities/remote_a2a/errors.py"
+    },
+    {
+      "version": "sha256:f7c5f84abfc1d98a66b12cb61be3a0d0b0617676bca6f6d2edd1b0d8c92bb4f0",
+      "path": "src/agent_runtime/chat.py"
+    },
+    {
+      "version": "sha256:5ddff82d643fe09e7390e98558e656753a80f3a8db4ca1fcf1608e24dda4fd0d",
+      "path": "src/agent_runtime/core/config.py"
+    },
+    {
+      "version": "sha256:110db86375881462e29be33050729a12c00b81cca7d1cc1578657309dd921188",
+      "path": "tests/capabilities/test_contracts.py"
+    },
+    {
+      "version": "sha256:4f92f399db44417ffb2600c57eb177f57bf2f4d4f2441e31383a06a5c341190b",
+      "path": "tests/capabilities/test_invocation_gateway.py"
+    },
+    {
+      "version": "sha256:3103136b39c5ec5bc4891d906b9020a8995329f40cb0d77385c7b2dd43954335",
+      "path": "tests/capabilities/test_manifest_source.py"
+    },
+    {
+      "version": "sha256:aa4742d58ee179ebc62957469f1bca43999aa4d49e030f756b7ad635492c6724",
+      "path": "tests/capabilities/test_manifest.py"
+    },
+    {
+      "version": "sha256:34f0bdbbe4bfe5a9a2a920f6b5ff3aacb364deeff03b8ac6e8e7f962b10a00ab",
+      "path": "tests/capabilities/test_recovery.py"
+    },
+    {
+      "version": "sha256:114c09acba71ce1d7f3046db5ebdac6bf7d21687bd635ac2facbb25e7d3c87f3",
+      "path": "tests/capabilities/test_regeneration_policy.py"
+    },
+    {
+      "version": "sha256:65cd25dc918ac302b545a504b2ee9d79eed32db443fc7b5fdc42c8d76eb65c04",
+      "path": "tests/capabilities/test_regeneration_submission.py"
+    },
+    {
+      "version": "sha256:006191badec951c7a1504796fa0ab52e8b9f49ebdd4e4847c0b994bd9a6795fd",
+      "path": "tests/capabilities/test_registry.py"
+    },
+    {
+      "version": "sha256:8950ce8c98516355997eb4d34828c330917a53ba79e36837c5baf4fc95c05ab5",
+      "path": "tests/capabilities/test_remote_a2a_client.py"
+    },
+    {
+      "version": "sha256:8ef4efaf59d0501a6f029d406465525559e510d54fc417c75c5b9221dc083188",
+      "path": "tests/capabilities/test_remote_agent_card.py"
+    },
+    {
+      "version": "sha256:077d3f2f7efbd43d92925ad665ff2cc2293273d2ff3712951d19d3bcddf2f154",
+      "path": "tests/capabilities/test_s3_05_postgres_integration.py"
+    },
+    {
+      "version": "sha256:1d380ea92341ddd54af53b003f8ba27ccdc28c9fcfdaed0024becd0895870717",
+      "path": "tests/capabilities/test_s3_08_postgres_integration.py"
+    },
+    {
+      "version": "sha256:2aef7bd73cb73bdaf117cd066477cae97662fe0c46c3c64ebd30d02918f9da5c",
+      "path": "tests/capabilities/test_s3_09_postgres_integration.py"
+    },
+    {
+      "version": "sha256:ec8b1cd8df6e28ab3369b0f338634aef96ca79a8edcfe12a018789be52832275",
+      "path": "tests/capabilities/test_s3_10_postgres_integration.py"
+    },
+    {
+      "version": "sha256:e6e82b6746d745cceae0c18b1b76db9a516371e793c0f781313bba2f7e6ba12f",
+      "path": "tests/capabilities/test_s3_11_postgres_integration.py"
+    },
+    {
+      "version": "sha256:137cd549caaed2861c5ed9e0d675e38be66d833aa81df5d0b2ad181c8a753526",
+      "path": "tests/capabilities/test_task_service.py"
+    },
+    {
+      "version": "sha256:2270f8b178a623fa86f0d2032a6d633a30d4045b35b0d2c941364cfdae1be2d5",
+      "path": "tests/core/test_config.py"
+    },
+    {
+      "version": "sha256:446bff13b269332026801a0bf388048c921c1a4491a9d4a8f24b50a268bc4e54",
+      "path": "tests/fake_a2a.py"
+    },
+    {
+      "version": "sha256:dccd75023ebb704453ded27f63af2ce47c89b86c7694d69bc56e76672da6b4d7",
+      "path": "tests/integration/test_stage_three_gate.py"
+    },
+    {
+      "version": "sha256:2f3d99fc8c9e568590bdee4a58f61b5aca8d62c657cb43ad2a668bbe84de7be2",
+      "path": "tests/test_remote_service_bootstrap.py"
+    },
+    {
+      "version": "sha256:1d879693c8d6b4b277d980598cd3d9f881bd2a835b3dccb5f7866c08126d4fa2",
+      "path": "uv.lock"
+    }
+  ]
+}

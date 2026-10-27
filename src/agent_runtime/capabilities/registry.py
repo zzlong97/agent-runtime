@@ -25,6 +25,7 @@ from agent_runtime.capabilities.contracts import (
 from agent_runtime.capabilities.execution import (
     CapabilityConcurrencyController,
 )
+from agent_runtime.capabilities.remote_a2a.capability import RemoteA2ACapability
 from agent_runtime.capabilities.manifest import (
     CapabilityManifest,
     ManifestCapabilityId,
@@ -51,6 +52,7 @@ type CapabilityRegistryStatus = Literal[
     "initialize_failed",
 ]
 type ChildCheckpointerFactory = Callable[[CapabilityManifest], object]
+type RemoteCapabilityFactory = Callable[[CapabilityManifest], Capability]
 
 
 class RouterProjection(BaseModel):
@@ -217,6 +219,7 @@ class CapabilityRegistry:
         capability_configs: Mapping[str, Mapping[str, object]] | None = None,
         health_ttl_seconds: float = 30.0,
         health_clock: HealthClock | None = None,
+        remote_capability_factory: RemoteCapabilityFactory | None = None,
     ) -> CapabilityRegistry:
         """收集全部来源、隔离冲突并顺序初始化可启用 Capability。"""
 
@@ -302,6 +305,7 @@ class CapabilityRegistry:
                         manifest.capability_id,
                         {},
                     ),
+                    remote_capability_factory=remote_capability_factory,
                 )
                 entries.append(
                     entry
@@ -490,20 +494,30 @@ async def _load_entry(
     child_checkpointer_factory: ChildCheckpointerFactory,
     model_factory: object,
     capability_config: Mapping[str, object],
+    remote_capability_factory: RemoteCapabilityFactory | None,
 ) -> tuple[CapabilityRegistryEntry, _CleanupGroup | None]:
     """导入、实例化并初始化一个 Capability，失败仅隔离当前来源。"""
 
     try:
-        factory = _load_factory(manifest.entrypoint)
-        child_checkpointer = child_checkpointer_factory(manifest)
-        bootstrap_context = CapabilityBootstrapContext(
-            manifest=manifest,
-            child_checkpointer=child_checkpointer,
-            model_factory=model_factory,
-            capability_config=capability_config,
-            register_cleanup=cleanup_group.register,
-        )
-        capability = factory(bootstrap_context)
+        if manifest.transport.type == "remote_a2a":
+            # 远程基础设施只在 Runtime 信任边界构造，不创建 Child State 或普通 Bootstrap。
+            capability = (
+                remote_capability_factory(manifest)
+                if remote_capability_factory
+                else RemoteA2ACapability(manifest=manifest)
+            )
+            cleanup_group.register(capability.close)
+        else:
+            factory = _load_factory(manifest.transport.entrypoint)
+            child_checkpointer = child_checkpointer_factory(manifest)
+            bootstrap_context = CapabilityBootstrapContext(
+                manifest=manifest,
+                child_checkpointer=child_checkpointer,
+                model_factory=model_factory,
+                capability_config=capability_config,
+                register_cleanup=cleanup_group.register,
+            )
+            capability = factory(bootstrap_context)
         if inspect.isawaitable(capability):
             close = getattr(capability, "close", None)
             if callable(close):

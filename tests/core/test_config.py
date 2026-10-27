@@ -2,6 +2,18 @@ import pytest
 from pydantic import ValidationError
 
 
+def test_remote_security_settings_default_closed_and_separate_from_demo():
+    from agent_runtime.core.config import Settings
+    defaults = Settings(_env_file=None)
+    assert defaults.remote_a2a_development_mode is False
+    assert defaults.remote_a2a_http_timeout_seconds == 10.0
+    demo = Settings(runtime_demo_mode=True, _env_file=None)
+    assert demo.remote_a2a_development_mode is False
+    for value in (0, -1, float("inf")):
+        with pytest.raises(ValidationError):
+            Settings(remote_a2a_http_timeout_seconds=value, _env_file=None)
+
+
 def test_settings_read_runtime_values_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
         "DATABASE_URL",

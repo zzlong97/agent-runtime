@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -44,6 +44,7 @@ from agent_runtime.capabilities.recovery import (
 )
 from agent_runtime.capabilities.regeneration import RegenerateSubmissionValidator
 from agent_runtime.capabilities.registry import CapabilityRegistry
+from agent_runtime.capabilities.remote_a2a.capability import RemoteA2ACapability
 from agent_runtime.capabilities.routing import (
     CapabilityPermissionService,
     RouterCandidateProvider,
@@ -3444,10 +3445,12 @@ async def open_chat_service(
         )
         capability_source = _LoadedCapabilitySource(manifest_documents)
         child_checkpointer_count = len(manifest_documents)
-    async with open_runtime_checkpointers(
-        settings,
-        child_count=child_checkpointer_count,
-    ) as checkpointers:
+    async with (
+        open_runtime_checkpointers(
+            settings, child_count=child_checkpointer_count
+        ) as checkpointers,
+        AsyncExitStack() as capability_resources,
+    ):
         registry: CapabilityRegistry | None = None
         capability_recovery_policy_evaluator = None
         open_invocation_resolver = None
@@ -3481,7 +3484,14 @@ async def open_chat_service(
                 child_checkpointer_factory=allocate_child_checkpointer,
                 model_factory=lambda: runtime_model,
                 health_ttl_seconds=settings.capability_health_ttl_seconds,
+                remote_capability_factory=lambda manifest: RemoteA2ACapability(
+                    manifest=manifest,
+                    development_mode=settings.remote_a2a_development_mode,
+                    http_timeout_seconds=settings.remote_a2a_http_timeout_seconds,
+                ),
             )
+            # Registry 构造后即登记清理，覆盖后续组装失败及正常关闭两个出口。
+            capability_resources.push_async_callback(registry.close)
             permission_service = CapabilityPermissionService(
                 capability_permission_repository
             )

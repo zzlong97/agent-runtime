@@ -30,7 +30,9 @@ capability_id: {capability_id}
 name: 测试能力
 description: 用于验证本地 Manifest Source 的测试能力。
 enabled: true
-entrypoint: agent_runtime.capabilities.{capability_id}.entrypoint:create_capability
+transport:
+  type: local
+  entrypoint: agent_runtime.capabilities.{capability_id}.entrypoint:create_capability
 version: 1.0.0
 state_scope: invocation
 state_schema_version: "1"

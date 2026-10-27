@@ -93,7 +93,8 @@ class CapabilityRegeneratePolicy:
         """不满足固定安全矩阵时返回提交前 HTTP 409 错误。"""
 
         if (
-            manifest.state_scope == "invocation"
+            manifest.transport.type == "local"
+            and manifest.state_scope == "invocation"
             and manifest.side_effect_policy == "none"
         ):
             return

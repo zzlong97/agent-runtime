@@ -78,7 +78,7 @@ def _raw_manifest(
         "name": f"{capability_id} 名称",
         "description": f"{capability_id} 的测试说明。",
         "enabled": enabled,
-        "entrypoint": entrypoint,
+        "transport": {"type": "local", "entrypoint": entrypoint},
         "version": "1.0.0",
         "state_scope": "invocation",
         "state_schema_version": "1",
@@ -137,6 +137,86 @@ async def _build_registry(
         health_ttl_seconds=health_ttl_seconds,
         health_clock=health_clock,
     )
+
+
+def test_remote_discovery_isolated_health_and_static_projection():
+    from tests.fake_a2a import FakeA2A, remote_transport
+    from agent_runtime.capabilities.remote_a2a.capability import RemoteA2ACapability
+    from agent_runtime.capabilities.manifest import CapabilityManifest
+    fake = FakeA2A()
+    bad = FakeA2A()
+    bad.card["supportedInterfaces"][0]["protocolVersion"] = "0.3"
+    now = datetime(2026, 10, 27, tzinfo=UTC)
+    transports = {"remote_good": fake.transport, "remote_bad": bad.transport}
+    documents = []
+    for name in transports:
+        raw = _raw_manifest(name, entrypoint="missing.module:create_capability")
+        raw["transport"] = remote_transport()
+        documents.append(_document(f"{name}/manifest.yaml", raw))
+    documents.extend(CapabilitySourceForBuiltin().load())
+
+    def remote_factory(manifest):
+        return RemoteA2ACapability(manifest=manifest, development_mode=True, http_transport=transports[manifest.capability_id])
+
+    async def run():
+        nonlocal now
+        from langgraph.checkpoint.memory import InMemorySaver
+        from tests.capabilities.test_builtin_capability_entrypoints import _BuiltinCapabilityFakeModel
+        registry = await CapabilityRegistry.build(FakeSource(documents), child_checkpointer_factory=lambda m: InMemorySaver(), model_factory=_BuiltinCapabilityFakeModel,
+            remote_capability_factory=remote_factory, health_ttl_seconds=1.0, health_clock=lambda: now)
+        try:
+            assert registry.get("remote_good") is not None
+            assert next(e for e in registry.entries if e.capability_id == "remote_bad").status == "initialize_failed"
+            projections = await registry.serviceable_router_projections()
+            assert {p.capability_id for p in projections} == {"general_chat", "en_to_zh", "remote_good"}
+            assert all(set(p.model_dump()) == {"capability_id", "name", "description", "enabled"} for p in projections)
+            fake.card["supportedInterfaces"][0]["url"] = "https://agent.example/changed"
+            now += timedelta(seconds=1)
+            assert "remote_good" not in {p.capability_id for p in await registry.serviceable_router_projections()}
+            assert registry.get("remote_good").manifest == CapabilityManifest.model_validate(documents[0].raw_document)
+        finally:
+            await registry.close()
+            await registry.close()
+    asyncio.run(run())
+
+
+class CapabilitySourceForBuiltin(CapabilitySource):
+    def load(self):
+        from agent_runtime.capabilities.source import LocalYamlCapabilitySource
+        return LocalYamlCapabilitySource(Path("src/agent_runtime/capabilities")).load()
+
+
+def test_remote_resources_closed_on_startup_failure_and_registry_shutdown():
+    import httpx
+    from tests.fake_a2a import FakeA2A, remote_transport
+    from agent_runtime.capabilities.remote_a2a.capability import RemoteA2ACapability
+    closed = []
+
+    class Transport(httpx.MockTransport):
+        async def aclose(self):
+            closed.append(self)
+
+    fake = FakeA2A()
+    healthy_transport = Transport(fake.handle)
+    bad_transport = Transport(lambda request: httpx.Response(503))
+    raw = _raw_manifest("remote_good", entrypoint="tests.fake:create_capability")
+    raw["transport"] = remote_transport()
+    bad_raw = {**raw, "capability_id": "remote_bad"}
+
+    def remote_factory(manifest):
+        return RemoteA2ACapability(manifest=manifest, development_mode=True,
+            http_transport=healthy_transport if manifest.capability_id == "remote_good" else bad_transport)
+
+    async def run():
+        def forbidden_local_allocation(manifest):
+            raise AssertionError("远程发现不得分配本地 Child 基础设施")
+        registry = await CapabilityRegistry.build(FakeSource([_document("good/manifest.yaml", raw), _document("bad/manifest.yaml", bad_raw)]),
+            child_checkpointer_factory=forbidden_local_allocation, model_factory=object(), remote_capability_factory=remote_factory)
+        assert closed == [bad_transport]
+        await registry.close()
+        await registry.close()
+        assert closed == [bad_transport, healthy_transport]
+    asyncio.run(run())
 
 
 def test_registry_builds_active_entry_and_minimal_router_projection(

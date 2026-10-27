@@ -3,7 +3,9 @@ capability_id: en_to_zh
 name: 英译汉
 description: 仅处理英文到中文的忠实完整翻译，不处理其他语言方向或非翻译任务。
 enabled: true
-entrypoint: agent_runtime.capabilities.en_to_zh.entrypoint:create_capability
+transport:
+  type: local
+  entrypoint: agent_runtime.capabilities.en_to_zh.entrypoint:create_capability
 version: 1.0.0
 state_scope: invocation
 state_schema_version: "1"

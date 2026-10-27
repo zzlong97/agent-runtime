@@ -25,7 +25,7 @@ def _manifest() -> CapabilityManifest:
             "name": "测试能力",
             "description": "用于验证 Capability 统一协议。",
             "enabled": True,
-            "entrypoint": "tests.fake_capability:create_capability",
+            "transport": {"type": "local", "entrypoint": "tests.fake_capability:create_capability"},
             "version": "1.0.0",
             "state_scope": "invocation",
             "state_schema_version": "1",

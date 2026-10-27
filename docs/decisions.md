@@ -1131,3 +1131,137 @@ regenerate 字段，不实现 run/session State Fork 或副作用重生成。
 重复执行；保守门禁可以保留现有产品能力而不扩大 S3。
 
 **Status**：Accepted
+
+---
+
+## D-064：Remote Agent 使用 A2A 1.0 与强制 Profile
+
+**Decision**
+
+Stage 3 之后的 Remote Agent 候选阶段采用 A2A 1.0，不把目标 Agent 当前私有
+`POST /api/agent/invoke` 固化为 AgentRuntime 远程协议。首期只实现 HTTP+JSON 绑定、
+静态 Agent Card、SendMessage、GetTask、CancelTask 和文本 Part/Artifact；不实现
+JSON-RPC、gRPC、Push Notification 或远程 token 流。
+
+标准 A2A 之外，AgentRuntime Profile 强制要求 `messageId + 请求指纹` 幂等、重复提交
+返回同一 Task、input-required 文本补参、非空文本 Artifact 和显式 OUT_OF_SCOPE
+控制码。不能满足 Profile 的 Agent 不进入正式 Runtime 链路。
+
+协议语义依据 [A2A 官方规范](https://github.com/a2aproject/A2A/blob/main/docs/specification.md)；
+实施时锁定 1.0 兼容 patch 与官方 SDK 版本，不在运行期自动降级。
+
+**Reason**
+
+A2A 已定义 Agent Card、Task、Artifact、查询、取消和多轮补参，复用标准能降低后续
+Agent 接入成本；强制 Profile 补齐 Runtime 崩溃恢复和外部副作用所需、但不能仅靠
+基础协议假定的幂等保证。
+
+**Status**：Accepted（仅候选阶段规划，不构成开发或优先级授权）
+
+---
+
+## D-065：Remote Agent 作为普通 Capability，不建立旁路产品入口
+
+**Decision**
+
+远程 Agent 通过 Registry Entry 和 Runtime 内建 A2A Adapter 作为普通 Capability
+进入现有 Router、Run、SSE、权限、健康、并发、超时、公共消息和 `/chat` 页面。
+Router 不感知 local/remote transport；远程 Agent 不访问 Parent、Redis、Session、
+顶层 Run 终态或本地 Checkpointer。
+
+严格 Manifest 升级为带判别字段的 `local | remote_a2a` transport。local 继续加载
+entrypoint；remote_a2a 只配置 Agent Card URL 和认证引用，由 Runtime 构造 Adapter。
+Registry 仍是启动期静态快照，不增加动态远程注册或管理 API。
+
+**Reason**
+
+旁路入口会绕过已经验收的运行治理和用户可见链路；transport 判别可以复用现有
+Capability 语义，同时避免把远程基础设施暴露成普通 Capability SDK 能力。
+
+**Status**：Accepted（仅候选阶段规划，不构成开发或优先级授权）
+
+---
+
+## D-066：首期远程状态限定为单 Invocation A2A Task
+
+**Decision**
+
+首期 Remote Capability 只允许 `state_scope=invocation`，并统一禁用 Regenerate。
+Runtime 初次只发送当前 HumanMessage 的文本，不发送完整 Parent 历史、System
+Message、Prompt、Checkpoint 或私有 State。补参在同一本地 Run、Invocation 和
+远程 Task/context 内完成；跨 Run 远程上下文另行设计。
+
+本地 PostgreSQL Run 和 Parent `messages` 继续分别是执行生命周期与公共历史权威源；
+远程 Agent 自治保存其业务 State、Checkpoint、结构化结果和业务数据。completed
+只有在远程终态已确认、非空文本 Artifact 已写回 Parent 后才能成立。
+
+**Reason**
+
+首个语义挖掘 Agent 是一次任务内多轮补参，不需要跨 Run 会话。限制状态范围既满足
+真实接入，也避免同时设计远程历史同步、State Schema 迁移和 Regenerate Fork。
+
+**Status**：Accepted（仅候选阶段规划，不构成开发或优先级授权）
+
+---
+
+## D-067：远程绑定复用 RuntimeEvent 与 Operation Ledger
+
+**Decision**
+
+首期不新增 Remote Task 表。Invocation 与远程 `taskId/contextId` 的绑定和已确认终态
+写入 durable internal RuntimeEvent；初次发送、补参发送和取消通过现有
+`ctx.operation()` 使用稳定 operation_key。GetTask 是只读查询，不进入 Ledger。
+
+远程受理与本地绑定提交之间不引入分布式事务，依靠稳定 messageId 幂等重送收敛。
+网络异常不能自动把 Operation 标为 failed；状态未知时保持 pending，并通过已绑定
+Task 查询恢复。此时 Run 保持 `recovering` 或 `cancel_requested` 并继续占用 Session，
+不得宣称 failed/cancelled/completed。Session 删除必须保留未知远程 Task 的绑定和
+恢复证据。
+
+S2.5 的 3 次恢复终止策略只保留给本地执行；有未确认远程 Task 的 Run 可以使
+`recovery_attempts` 超过 3，并按有界退避继续查询。公开计数字段移除最大值校验，
+否则一次以上的 Runtime 重启可能错误放开仍在远程执行的副作用。
+
+**Reason**
+
+当前实际查询路径可由既有 Invocation 事件链满足，专建表没有新增权威信息；稳定
+messageId 和 Operation Ledger 已能覆盖跨服务原子间隙，并保持“未知结果不判失败”。
+
+**Status**：Accepted（仅候选阶段规划，不构成开发或优先级授权）
+
+---
+
+## D-068：A2A input-required 复用 Run Interrupt 并增加文本类型
+
+**Decision**
+
+远程 `input-required` 由 Invocation Gateway 转换为现有 LangGraph Interrupt，不允许
+A2A Adapter 直接修改 Interrupt Repository。公开 Interrupt 使用关闭联合 Schema：
+保留 `confirmation`，新增 `text`；对应 Resume 分别只接受 `approved: bool` 和非空
+`answer: string`。
+
+页面必须支持文本输入，Resume 沿用同一 Run 且不新增 HumanMessage。实施前先以
+Fake A2A 验证 interrupt 穿过当前执行控制器、图重放和 open Invocation 恢复边界；
+该探针未通过前不得接入真实 Agent。
+
+**Reason**
+
+目标 Agent 缺失日期时需要自由文本补参，现有页面只有确认/拒绝，不能覆盖真实业务；
+复用持久 Interrupt 能保持既有断线恢复和幂等语义，避免创建第二套暂停机制。
+
+**Status**：Accepted（仅候选阶段规划，不构成开发或优先级授权）
+
+---
+
+## D-069：首个远程 Agent 由对方团队适配并单独统计成本
+
+**Decision**
+
+`D:\workspace\semantic-pattern-mining\semantic-pattern-mining` 的 A2A Server、持久
+Task、幂等、查询、取消、补参和 Artifact 改造由该项目团队实施；AgentRuntime 团队
+不得修改其代码，只交付通用 Client/Adapter、Profile 契约测试和真实集成验收。
+
+成本报告必须把 Runtime 一次性建设与单 Agent 适配分开，使用两仓库真实基线/最终
+差异、配置、依赖、测试、部署步骤及双方实际登记工时；不得用猜测工时替代证据。
+
+**Status**：Accepted（仅候选阶段规划，不构成开发或优先级授权）

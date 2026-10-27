@@ -24,9 +24,10 @@ def _valid_manifest() -> dict[str, Any]:
         "name": "通用对话",
         "description": "处理普通聊天和知识问答，不处理翻译任务。",
         "enabled": True,
-        "entrypoint": (
-            "agent_runtime.capabilities.general_chat.entrypoint:create_capability"
-        ),
+        "transport": {
+            "type": "local",
+            "entrypoint": "agent_runtime.capabilities.general_chat.entrypoint:create_capability",
+        },
         "version": "1.0.0",
         "state_scope": "invocation",
         "state_schema_version": "1",
@@ -56,6 +57,55 @@ def test_valid_manifest_is_closed_and_immutable() -> None:
         manifest.enabled = False  # type: ignore[misc]
 
 
+def test_transport_union_accepts_local_and_remote_without_legacy_entrypoint() -> None:
+    data = _valid_manifest()
+    assert CapabilityManifest.model_validate(data).transport.type == "local"
+    data["transport"] = {
+        "type": "remote_a2a",
+        "agent_card_url": "https://agent.example/.well-known/agent-card.json",
+        "auth": {"type": "bearer", "token_env": "TEST_AGENT_TOKEN"},
+    }
+    assert CapabilityManifest.model_validate(data).transport.type == "remote_a2a"
+
+
+def test_transport_rejects_legacy_top_level_entrypoint() -> None:
+    data = _valid_manifest()
+    data["entrypoint"] = data.pop("transport")["entrypoint"]
+    with pytest.raises(ValidationError):
+        CapabilityManifest.model_validate(data)
+
+
+@pytest.mark.parametrize("scope", ["run", "session"])
+def test_remote_transport_only_accepts_invocation_scope(scope):
+    from tests.fake_a2a import remote_transport
+    data = _valid_manifest()
+    data.update(transport=remote_transport(), state_scope=scope)
+    with pytest.raises(ValidationError, match="invocation"):
+        CapabilityManifest.model_validate(data)
+
+
+@pytest.mark.parametrize("transport", [
+    {"type": "local", "entrypoint": "tests.fake:create_capability", "auth": {"type": "none"}},
+    {"type": "remote_a2a", "agent_card_url": "https://agent.example/card", "auth": {"type": "bearer", "token": "secret"}},
+    {"type": "remote_a2a", "agent_card_url": "https://agent.example/card", "auth": {"type": "oauth2"}},
+    {"type": "unknown"},
+])
+def test_transport_and_auth_are_closed(transport):
+    data = _valid_manifest()
+    data["transport"] = transport
+    with pytest.raises(ValidationError):
+        CapabilityManifest.model_validate(data)
+
+
+@pytest.mark.parametrize("url", ["ftp://agent.example/card", "https://user:secret@agent.example/card", "https://agent.example/card#x", "https://agent.example:0/card", "https://agent.example:bad/card"])
+def test_card_url_cannot_carry_credentials_or_ambiguous_origin(url):
+    from tests.fake_a2a import remote_transport
+    data = _valid_manifest()
+    data["transport"] = remote_transport(url=url)
+    with pytest.raises(ValidationError):
+        CapabilityManifest.model_validate(data)
+
+
 @pytest.mark.parametrize(
     ("mutate", "expected_location"),
     [
@@ -68,8 +118,8 @@ def test_valid_manifest_is_closed_and_immutable() -> None:
         (lambda data: data.update({"manifest_schema_version": 2}), "manifest_schema_version"),
         (lambda data: data.update({"capability_id": "General-Chat"}), "capability_id"),
         (lambda data: data.update({"capability_id": "a" * 65}), "capability_id"),
-        (lambda data: data.update({"entrypoint": "../agent.py:create"}), "entrypoint"),
-        (lambda data: data.update({"entrypoint": "module:factory()"}), "entrypoint"),
+        (lambda data: data["transport"].update({"entrypoint": "../agent.py:create"}), "transport.local.entrypoint"),
+        (lambda data: data["transport"].update({"entrypoint": "module:factory()"}), "transport.local.entrypoint"),
         (lambda data: data.update({"version": "1.0"}), "version"),
         (lambda data: data.update({"version": "01.0.0"}), "version"),
         (lambda data: data.update({"state_schema_version": ""}), "state_schema_version"),
@@ -285,7 +335,8 @@ def test_compatible_versions_must_be_a_yaml_array() -> None:
 
 
 def test_every_schema_field_has_detailed_chinese_description() -> None:
-    for model_type in (CapabilityManifest, ConcurrencyPolicy, ExecutionPolicy):
+    from agent_runtime.capabilities.manifest import LocalTransport, RemoteA2ATransport, NoRemoteAuth, BearerRemoteAuth
+    for model_type in (CapabilityManifest, ConcurrencyPolicy, ExecutionPolicy, LocalTransport, RemoteA2ATransport, NoRemoteAuth, BearerRemoteAuth):
         for field_name, field in model_type.model_fields.items():
             description = field.description or ""
             assert len(description) >= 12, f"{model_type.__name__}.{field_name} 描述过短"

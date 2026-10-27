@@ -1761,3 +1761,312 @@ Parent Router
 
 这样 Parent Graph 长期保持轻量稳定。后续阶段的名称、顺序和验收范围必须在
 Stage 3 完成后重新裁决。
+
+Remote Agent 已形成候选架构，见第 17 节；它仍未获得相对于其他候选能力的实施优先级。
+
+---
+
+# 17. Remote Agent 候选架构（规划基线，不构成开发授权）
+
+本节对应 `requirements.md` 第 9 节。它只定义 Remote Agent 候选阶段的技术边界；
+在负责人完成其他候选能力规划并明确优先级之前，不进入实现。
+
+## 17.1 架构位置
+
+远程 Agent 仍以 Capability 身份参与现有产品链路，但远程传输由 Runtime 内建
+Adapter 负责，远程业务代码不加载到本进程：
+
+```text
+Parent Router
+  → Capability Registry Entry
+  → Capability Invocation Gateway
+      ├─ local transport      → 本地 Capability entrypoint
+      └─ remote_a2a transport → Runtime A2A Adapter
+                                  → 独立部署的 A2A Agent
+
+远程 A2A Task/Artifact
+  → Runtime A2A Adapter
+  → AgentResult / Runtime Interrupt
+  → Parent 最终 AIMessage / 现有公开 SSE
+```
+
+Parent Graph 不保存远程业务 State、A2A Task 历史或结构化业务数据。A2A Adapter 是
+Runtime 受信基础设施，不把 A2A Client、远程凭据、Run Repository、Sequencer 或
+Interrupt Repository 暴露给普通本地 Capability。
+
+## 17.2 Manifest 与 Registry
+
+候选阶段将严格 Manifest 升级为带判别字段的 transport 配置，现有两个本地 Manifest
+机械迁移到新 Schema；不同时保留多套含义重叠字段：
+
+```yaml
+transport:
+  type: local
+  entrypoint: package.module:create_capability
+```
+
+或：
+
+```yaml
+transport:
+  type: remote_a2a
+  agent_card_url: https://agent.example/.well-known/agent-card.json
+  auth:
+    type: bearer
+    token_env: SEMANTIC_AGENT_TOKEN
+```
+
+远程配置不得包含 Token 值。`remote_a2a` 必须配合 `state_scope=invocation`；首期所有
+Remote Capability 的 Regenerate 在 Run 创建前统一返回
+`CAPABILITY_REGENERATE_UNSUPPORTED`。
+
+Registry 保持启动期静态快照：
+
+1. `local` 按现有规则导入 entrypoint、构造 Capability 并健康检查。
+2. `remote_a2a` 不导入远程代码，由 Runtime 创建 A2A Adapter。
+3. Adapter 读取并严格校验 Agent Card，只接受 `protocolVersion=1.0`、
+   `protocolBinding=HTTP+JSON`、`text/plain` 输入输出及本阶段支持的认证方案。
+4. Agent Card 没有兼容接口、地址越界或强制扩展不受支持时，该 Entry 被隔离；其他
+   Capability 继续启动。
+5. Agent Card 刷新只更新 HealthSnapshot；Card 的身份、接口或必选能力发生不兼容
+   变化时标记 unavailable，必须重启才能形成新的 Registry Snapshot。
+
+Router 投影继续只含 `capability_id/name/description/enabled`，不知道传输类型。
+
+## 17.3 AgentRuntime A2A Profile
+
+首期采用 A2A 1.0 HTTP+JSON 绑定的最小子集：
+
+| 能力 | 要求 | 本地用途 |
+| --- | --- | --- |
+| Agent Card | 必须 | 启动发现、协议/模式/认证兼容性校验 |
+| SendMessage | 必须 | 初次调用及 input-required 后续文本 |
+| GetTask | 必须 | 有界轮询、重启恢复、取消结果确认 |
+| CancelTask | 必须 | 显式 Cancel、执行超时和 Session 删除屏障 |
+| SendStreamingMessage / SubscribeToTask | 首期不用 | 避免跨崩溃 delta 去重和游标语义扩张 |
+| Push Notification | 禁止 | 当前 Runtime 不开放回调入口 |
+| Text Part / 文本 Artifact | 必须 | 当前请求与最终公共回答 |
+| Data/File Part | 首期不消费 | 防止结构化私有数据或文件进入公共消息 |
+
+每个请求都显式发送 `A2A-Version: 1.0`。Card URL 由受信 Manifest 静态给出；Card
+声明的接口必须同源，除非配置显式列入允许来源。Client 拒绝 URL userinfo、非
+HTTP(S) scheme 和不受控跳转。
+
+Profile 在标准 A2A 之上增加以下接入保证：
+
+- 初次 `messageId = UUIDv5(namespace, invocation_id)`；同 ID、同指纹重送返回同一
+  `taskId/contextId`，同 ID、不同指纹返回冲突。
+- Runtime 使用 A2A 非阻塞 SendMessage 配置；除即时终态外，Server 必须先返回可查询
+  Task，再在后台推进业务，不能让 HTTP 请求覆盖整个语义挖掘执行周期。
+- 用户补参消息 ID 由 `invocation_id + 远程 input-required 消息 ID` 确定性生成；
+  重复 Resume 不重复推进远程任务。
+- 初次 Message 只有当前 HumanMessage 的非空 Text Part。Parent 历史、System
+  Message、Prompt、Checkpoint 和私有 State 不进入 A2A 请求。
+- `input-required` 必须携带唯一消息 ID 和非空文本提示；首期不接受文件或动态表单。
+- completed 必须包含至少一个非空文本 Artifact；按 Artifact/Part 原顺序拼接为
+  `AgentResult.content`，不把 Data/File Part 透传到 Parent。
+- 远程合法范围拒绝必须带 AgentRuntime Profile 定义的显式 `OUT_OF_SCOPE` 控制码且
+  不带用户可见 Artifact；缺少该码的 rejected 一律按远程失败处理。
+
+协议 1.0 的 patch 版本和官方 Python SDK 版本在实施任务创建时锁定并写入 `uv.lock`；
+不得在运行期自动降级到旧协议。
+
+## 17.4 初次调用与终态提交
+
+调用顺序固定：
+
+```text
+现有权限/Health/并发准入
+→ 创建或恢复本地 Invocation
+→ 解析 invocation-scope Capability Task
+→ 查询 internal.remote_agent.task_bound
+    ├─ 已绑定：GetTask
+    └─ 未绑定：使用稳定 messageId 执行幂等 SendMessage
+               → durable task_bound 事件
+→ GetTask 有界轮询
+    ├─ working/submitted：继续轮询并检查本地取消
+    ├─ input-required：进入 17.6
+    ├─ completed：校验文本 Artifact
+    │             → AgentResult(completed)
+    │             → Parent 最终 AIMessage
+    │             → 本地 Task/Invocation/Run 终态
+    └─ 其他终态：按 17.8 映射
+```
+
+首期没有远程 token 流。completed Artifact 通过 Adapter 形成规范全文，并在完成时映射
+为一个公开 `message.delta` 后再走现有最终消息提交，页面仍能从独立 SSE 观察结果。
+
+“远程受理成功”和“本地保存 task_bound”无法组成跨服务原子事务。该间隙只通过稳定
+`messageId` 与远程幂等重送收敛，不引入分布式事务或 Transactional Outbox。
+
+初次 SendMessage 和每次补参 SendMessage 都使用
+`ctx.operation(remote_send:<stable_message_id>)`；CancelTask 使用
+`ctx.operation(remote_cancel:<remote_task_id>)`。网络异常不自动标记 failed，结果
+未知时 Ledger 保持 pending。GetTask 是只读查询，不进入 Operation Ledger。
+
+## 17.5 远程绑定与持久事件
+
+首期不新增 Remote Task 业务表，复用现有 durable internal RuntimeEvent：
+
+```text
+internal.remote_agent.task_bound
+  invocation_id
+  capability_id
+  remote_task_id
+  remote_context_id
+  initial_message_id
+  remote_agent_identity_hash
+  protocol_version
+
+internal.remote_agent.task_terminal
+  invocation_id
+  capability_id
+  remote_task_id
+  remote_status
+```
+
+`remote_agent_identity_hash` 由规范化 Card 来源与稳定 Agent 身份字段生成，用于防止
+恢复时把旧 taskId 发给已替换的远程服务；身份不一致时保持 recovering 并拒绝重送。
+事件不保存 URL 中凭据、认证头、用户正文、远程消息正文、Artifact、Agent Card 全文
+或远程 Task 历史。`task_bound` 必须先于本地 Interrupt 或任何本地终态持久化；
+`task_terminal` 只在 GetTask/CancelTask 已确认远程终态后写入。
+
+恢复器继续先查唯一 open Invocation，再查绑定事件：
+
+- 没有绑定：以同一 `messageId` 重送，取回原 Task 后补写绑定。
+- 已绑定：直接 GetTask，不重新 SendMessage。
+- 远程 completed：重新校验 Artifact 并完成本地提交；Parent 最终消息的既有幂等规则
+  继续生效。
+- 远程仍在执行：继续轮询。
+- 远程长期不可达：Operation 保持 pending，Run 保持 `recovering`，绑定事件不得删除
+  或改写成终态；同 Session 新 Run 继续受单活动 Run 门禁阻塞。
+
+本地 Capability 继续使用 S2.5 的 3 次自动恢复上限。存在未终结
+`internal.remote_agent.task_bound` 的 Run 不受该终态上限约束：每次进程接管仍递增
+`recovery_attempts`，但可超过 3，并按有界退避继续安全查询/幂等重送。公开 Run Schema
+移除 `recovery_attempts <= 3` 校验，仅保留非负；这不是无限紧循环或多实例 Lease。
+
+## 17.6 input-required 与 Resume
+
+A2A Adapter 不能直接修改 `run_interrupts`。Invocation Gateway 识别受控的
+`RemoteInputRequired` 内部结果后，由 Parent 节点调用 LangGraph `interrupt()`；
+现有 Executor 再按 S2.5 顺序保存 Checkpoint、Interrupt 投影和公开事件。
+
+公开 payload 升级为关闭联合 Schema：
+
+```json
+{"kind":"confirmation","prompt":"是否继续？"}
+{"kind":"text","prompt":"请补充开始日期和结束日期。"}
+```
+
+对应 Resume 载荷：
+
+```json
+{"approved":true}
+{"answer":"2026-10-01 至 2026-10-20"}
+```
+
+恢复时图节点可能从头重放。Adapter 先凭绑定查询远程 Task；如果仍为
+input-required，则同一 `interrupt()` 返回已持久的 Resume 值，再以稳定补参
+messageId 向同一 `taskId/contextId` SendMessage。多个补参可以顺序发生，但任一时刻
+仍只有一个 pending Interrupt。
+
+实施前必须先用 Fake A2A + PostgreSQL 完成一个架构探针，验证 `interrupt()` 穿过
+现有 CapabilityExecutionController 和 Invocation Gateway 时不会被映射成普通失败，
+且 Resume 确实复用 open invocation_id。探针不通过时先调整 Gateway 控制边界，不在
+AgentResult 中增加任意业务状态字段。
+
+## 17.7 Cancel、超时与 Session 删除
+
+Runtime 取消顺序：
+
+```text
+检测本地 cancel_requested 或执行超时
+→ 若尚无 task_bound：以稳定 messageId 恢复/取得远程 Task
+→ CancelTask
+→ GetTask 确认远程 terminal
+→ 写 remote task_terminal
+→ 才允许本地 Run cancelled/failed
+```
+
+取消无法确认时不写 cancelled 或 failed，Run 保持 `cancel_requested`，执行器保留
+可恢复绑定并记录非终态诊断 `CAPABILITY_REMOTE_CANCEL_UNCONFIRMED`。Session 删除
+复用相同屏障，存在未确认远程 Task 时返回可重试冲突并保留 Session、Run、
+RuntimeEvent 和 Operation Ledger。
+远程 Agent 的历史或业务数据不随本地 Session 自动删除。
+
+## 17.8 Health、认证与错误映射
+
+Remote Entry 的健康检查读取 Agent Card 并验证兼容接口。运行期网络失败可使快照
+degraded/unhealthy，但不改变静态 Registry。Manifest 现有并发限制约束本进程同时
+占用的远程 Invocation；执行 timeout 是整个远程 Task 的本地等待上限，单次 HTTP
+请求和轮询间隔使用 Runtime 全局配置，避免为每个 Agent 增加无当前使用方的字段。
+
+首期认证：
+
+```text
+none   → 仅显式开发配置
+bearer → 从 token_env 解析；值不进入 Manifest 快照、日志、事件或错误详情
+```
+
+新增内部错误至少包括：
+
+```text
+CAPABILITY_REMOTE_UNAVAILABLE
+CAPABILITY_REMOTE_AUTH_FAILED
+CAPABILITY_REMOTE_PROTOCOL_ERROR
+CAPABILITY_REMOTE_TASK_FAILED
+```
+
+401/403、Schema/协议不兼容和确定远程失败不可重试；连接中断、超时和 5xx 只有在
+Profile 幂等条件已满足时才可重试。公开错误继续经过现有 Runtime 白名单，不透传
+远程堆栈、响应体或内部地址。
+
+状态未知和取消未确认使用内部非终态诊断码，不发送 `run.failed`；协调器按有界退避
+继续恢复。首期不增加重试按钮、强制终结或人工覆盖入口，以免把未知远程副作用错误
+标记为已终止。
+
+## 17.9 首个 Agent 的适配边界
+
+`semantic-pattern-mining` 当前同步私有接口、进程内 thread_id 和 `needs_input` 语义
+不满足本 Profile。对方团队需要在其服务边界增加 A2A 门面、持久任务投影、幂等提交、
+查询、取消、补参和文本 Artifact；可复用其现有 LangGraph 与业务数据库，不要求重写
+业务算法。
+
+AgentRuntime 团队只向对方提供：
+
+- Agent Card 与 Profile 契约测试样例。
+- Fake A2A Server/Client 互操作测试向量。
+- 稳定 messageId、冲突、状态映射和错误码清单。
+- 四条真实端到端验收脚本的输入与预期。
+
+不得由 AgentRuntime 团队进入远程仓库代写适配。真实联调开始前，双方分别记录基线
+提交和工作区状态；接入成本按 `requirements.md` 9.7 统计。
+
+## 17.10 交付拆分与依赖
+
+候选阶段正式启用后按以下顺序实施，每项独立审核：
+
+1. `RA-DEV-01`：Manifest transport、Agent Card 校验、A2A Client 接口和 Fake Server。
+2. `RA-DEV-02`：远程绑定事件、幂等 Send/Get/Cancel、恢复与错误映射。
+3. `RA-DEV-03`：文本 Interrupt/Resume 与 `/chat` 页面适配。
+4. `RA-EXT-01`：对方团队完成 `semantic-pattern-mining` A2A 适配；不属于当前团队代码。
+5. `RA-INT-01`：真实联调、取消/崩溃演练、回归与接入成本报告。
+
+`RA-DEV-01～03` 可先使用 Fake A2A 完成，但 `RA-INT-01` 依赖双方交付。任何开发任务
+创建前都必须先由负责人明确本候选阶段优先级和开始授权。
+
+## 17.11 风险门禁
+
+- A2A Server 若不能按 messageId 幂等返回同一 Task，不允许配置 automatic recovery。
+- Agent Card 若不提供 HTTP+JSON 1.0、文本输入输出或必需操作，不允许接入首期。
+- 远程 Agent 若只能同步长连接执行且不能持久查询/取消，不得用现有私有接口冒充
+  正式接入；只能作为独立 POC，不能通过阶段验收。
+- 文本 Interrupt 架构探针、远程受理后崩溃恢复探针未通过前，不开展真实 Agent 联调。
+- 未取得对方真实工时和基线差异时，成本报告必须标为缺项，不能编造估算值。
+
+## 17.12 非目标
+
+本候选架构不引入独立远程聊天 API、Remote Agent 管理平台、动态发现/热加载、跨 Run
+远程上下文、远程 token 流、Push、文件/二进制 Artifact、OAuth2/mTLS、远程数据删除、
+Workflow、多 Agent 编排、多实例 Worker 或分布式事务。

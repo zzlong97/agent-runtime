@@ -51,7 +51,7 @@ def _manifest():
             "name": "Operation 测试能力",
             "description": "仅验证 Operation Ledger，不执行真实外部副作用。",
             "enabled": True,
-            "entrypoint": "tests.fake_capability:create_capability",
+            "transport": {"type": "local", "entrypoint": "tests.fake_capability:create_capability"},
             "version": "1.0.0",
             "state_scope": "session",
             "state_schema_version": "v1",

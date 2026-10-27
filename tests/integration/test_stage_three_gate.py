@@ -45,9 +45,7 @@ def _protocol_manifest_document() -> CapabilityManifestDocument:
             "name": "第三方协议测试能力",
             "description": "验证任意合法 Capability ID 的正式产品执行链路。",
             "enabled": True,
-            "entrypoint": (
-                "tests.protocol_test_capability:create_capability"
-            ),
+            "transport": {"type": "local", "entrypoint": "tests.protocol_test_capability:create_capability"},
             "version": "1.0.0",
             "state_scope": "invocation",
             "state_schema_version": "v1",

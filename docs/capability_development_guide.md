@@ -4,9 +4,10 @@
 Parent Graph、Run Coordinator、SSE Gateway 等内部实现的前提下，能够完成一个本地
 Capability 的开发、注册、授权、测试和运行。
 
-本文适用于已经验收完成的 **Stage 3 静态 Capability Runtime**。文中的接口、路径和
-命令均以当前仓库实现为准。Stage 3 不提供热加载、远程 Capability、管理 API 或
-多实例协调；这些限制见“当前能力限制”。
+本文的本地能力流程基于 **Stage 3 静态 Capability Runtime**，Manifest 示例已迁移为
+显式 `transport` 关闭联合，不再接受顶层 `entrypoint`。RA-DEV-01 目前只提供远程
+发现和 Client 基础；远程 Run 执行尚未接通，不能将远程 Manifest 放入默认运行配置。
+远程协议契约见文末“远程 A2A 基础接入”。热加载、管理 API 和多实例协调仍未提供。
 
 ## 1. 开始前先理解五个概念
 
@@ -243,7 +244,9 @@ capability_id: text_statistics
 name: 文本统计
 description: 统计以 /stats 开头的文本字符数和按空白切分的词数，不处理其他请求。
 enabled: true
-entrypoint: agent_runtime.capabilities.text_statistics.entrypoint:create_capability
+transport:
+  type: local
+  entrypoint: agent_runtime.capabilities.text_statistics.entrypoint:create_capability
 version: 1.0.0
 state_scope: invocation
 state_schema_version: "1"
@@ -560,7 +563,7 @@ Stage 3 Manifest 的顶层字段全部必填，没有隐式默认值。字符串
 | `name` | 非空字符串，最长 80 | 人类可读名称，只用于候选描述和诊断 |
 | `description` | 非空字符串，最长 500 | Router 能力边界；应明确“处理什么、不处理什么” |
 | `enabled` | 严格布尔值 | `true` 才实例化；`false` 被发现但不进入 active Snapshot |
-| `entrypoint` | `package.module:create_capability` | 可导入的同步工厂；属性名必须精确为 `create_capability` |
+| `transport` | `local` / `remote_a2a` 判别关闭对象 | 本地填写 `type: local` 和 `entrypoint: package.module:create_capability`；远程契约见文末 |
 | `version` | 合法 SemVer | 当前实现版本，如 `1.0.0`、`1.1.0-beta.1` |
 | `state_scope` | `invocation`、`run`、`session` | Child 私有 State 的共享范围，必须显式选择 |
 | `state_schema_version` | 1～64 字符，字母数字开头，仅字母、数字、`.`、`_`、`-` | 新 Task 固化的 State Schema 版本，如 `1` 或 `v2` |
@@ -622,7 +625,7 @@ HTTP 409 `CAPABILITY_REGENERATE_UNSUPPORTED`。
 
 ### 4.1 `create_capability()`
 
-Registry 动态导入 `entrypoint` 后会检查工厂：
+Registry 动态导入 `transport.entrypoint` 后会检查本地工厂：
 
 ```python
 def create_capability(
@@ -1563,3 +1566,59 @@ Operation 和权限的事实权威源；Redis 只是短期公开实时事件旁�
 
 若实际代码与本手册不一致，应停止扩展并按项目文档优先级报告冲突，不要在 Capability
 内部绕过 Runtime 契约。
+
+## 13. 远程 A2A 基础接入（RA-DEV-01）
+
+本批只交付静态发现、健康检查及 HTTP Client/Fake，尚无远程 Run 的持久绑定、恢复、
+取消屏障或文本补参闭环。远程 `invoke()` 当前返回受控不可用错误；不得把下列配置
+加入默认运行目录或宣称远程聊天已经可用。后续 RA-DEV-02/03 审核交付后才能进入联调。
+
+远程 Manifest 使用下面的 `transport`，其余必填字段沿用第 3 节；`state_scope` 只能是
+`invocation`，即使 `side_effect_policy=none` 也不允许 Regenerate。旧顶层 `entrypoint`
+会被拒绝；本地能力必须使用 `transport: {type: local, entrypoint: ...}`，没有双轨兼容。
+
+```yaml
+transport:
+  type: remote_a2a
+  agent_card_url: https://agent.example/.well-known/agent-card.json
+  auth:
+    type: bearer
+    token_env: SEMANTIC_AGENT_TOKEN
+```
+
+Token 由 Runtime 从环境变量解析，Manifest、Card 快照、Bootstrap 和业务日志中均不能
+保存其值。默认只接受 HTTPS 和受控 Bearer；`REMOTE_A2A_DEVELOPMENT_MODE=true` 才
+允许 HTTP 或 `auth: {type: none}`，该安全开关与会绕过 Router 的 `RUNTIME_DEMO_MODE`
+独立。`REMOTE_A2A_HTTP_TIMEOUT_SECONDS` 为所有远程 HTTP 操作的全局有限正超时，默认
+10 秒。当前只支持 Card 与调用接口同源，按 scheme、规范化 host 和有效 port 比较；
+拒绝 URL 凭据、片段、越界接口和全部重定向，不提供额外来源白名单。
+
+协议锁定 [A2A v1.0.1](https://github.com/a2aproject/A2A/tree/v1.0.1)，官方 Python SDK
+锁定 `a2a-sdk==1.2.3`，仅使用 `RestTransport`，未启用可选 extra；SDK 基础依赖自身
+包含的 json-rpc 包不代表 Runtime 支持该传输。不会通过 SDK Factory 回退旧协议。
+Card 必须提供 `supportedInterfaces[]` 中 `protocolBinding=HTTP+JSON`、
+`protocolVersion=1.0` 的接口，默认输入输出包含 `text/plain`，且认证要求可满足，
+不能含未支持的 required extension。Card 不声明操作清单：三操作支持及幂等保证由
+互操作测试确认。刷新 Card 只影响健康，不替换启动身份、接口或认证约束。
+
+| 操作 | 官方 1.0 HTTP+JSON 约定 |
+| --- | --- |
+| Send | 接口 base URL 下 `POST /message:send`，`configuration.returnImmediately=true`，`acceptedOutputModes=["text/plain"]` |
+| 输入 | `messageId`、`role=ROLE_USER`、`parts=[{"text":"当前输入"}]`；续发保持同一 `taskId/contextId` |
+| Get | `GET /tasks/{id}`，返回具有稳定 `id/contextId` 的 Task |
+| Cancel | `POST /tasks/{id}:cancel`，返回实际 Task 状态；不能仅凭请求成功宣称本地取消完成 |
+
+所有请求带 `A2A-Version: 1.0`，Card 的 tenant 前缀按官方 SDK 规则进入操作路径。
+Send 必须返回 Task，裸 Message 不满足本 Profile。completed Task 必须有非空文本
+Artifact，input-required 必须有稳定消息 ID 及非空文本提示；原始状态使用官方
+`TASK_STATE_*` 枚举。Client 不重试、不轮询、不写 Ledger、不决定本地 Run 终态。
+
+离线协议和安全检查：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/capabilities/test_remote_a2a_client.py tests/capabilities/test_remote_agent_card.py tests/capabilities/test_registry.py tests/capabilities/test_regeneration_policy.py tests/capabilities/test_regeneration_submission.py tests/test_remote_service_bootstrap.py -q
+```
+
+共享替身位于 `tests/fake_a2a.py`，覆盖完成、working、input-required、Cancel、同
+messageId 重送、冲突和受理后断连；不启动服务、不连接模型或业务数据库。这些检查
+不能替代后续 PostgreSQL 恢复探针及真实远程 Agent 四条链路验收。

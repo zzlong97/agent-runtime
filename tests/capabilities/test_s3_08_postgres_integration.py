@@ -38,7 +38,7 @@ def _manifest():
             "name": "超时测试能力",
             "description": "用于验证超时后的 Invocation 与 Task 状态。",
             "enabled": True,
-            "entrypoint": "agent_runtime.capabilities.fake:factory",
+            "transport": {"type": "local", "entrypoint": "agent_runtime.capabilities.fake:factory"},
             "version": "1.0.0",
             "state_scope": "session",
             "state_schema_version": "v1",

@@ -41,7 +41,7 @@ def _manifest(*, state_scope: str = "invocation", side_effect_policy: str = "non
             "name": "通用对话",
             "description": "用于验证真实重新生成门禁。",
             "enabled": True,
-            "entrypoint": "tests.fake_capability:create_capability",
+            "transport": {"type": "local", "entrypoint": "tests.fake_capability:create_capability"},
             "version": "1.0.0",
             "state_scope": state_scope,
             "state_schema_version": "1",

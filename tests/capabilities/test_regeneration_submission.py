@@ -219,6 +219,27 @@ def test_unsupported_capability_is_rejected_before_parent_fork_and_run_creation(
     assert coordinator.wakes == []
 
 
+def test_remote_manifest_uses_real_policy_before_parent_fork_and_run_creation():
+    from agent_runtime.capabilities.manifest import CapabilityManifest
+    from agent_runtime.capabilities.regeneration import RegenerateSubmissionValidator
+    from tests.capabilities.test_manifest import _valid_manifest
+    from tests.fake_a2a import remote_transport
+    raw = _valid_manifest()
+    raw["transport"] = remote_transport()
+    manifest = CapabilityManifest.model_validate(raw)
+    registry = SimpleNamespace(get=lambda capability_id: SimpleNamespace(manifest=manifest))
+    validator = RegenerateSubmissionValidator(registry=registry, permission_service=object(), task_context_repository=object(), task_repository=object())
+    repository, coordinator, forker = _Repository(), _Coordinator(), _CheckpointForker()
+    service = _service(repository=repository, coordinator=coordinator, forker=forker, validator=validator)
+    with pytest.raises(CapabilityRegenerateUnsupportedError) as caught:
+        asyncio.run(service.submit_regeneration_run(request_id=REQUEST_ID, session_id=SESSION_ID, message_id=SOURCE_MESSAGE_ID))
+    assert caught.value.code == "CAPABILITY_REGENERATE_UNSUPPORTED"
+    assert caught.value.status_code == 409
+    assert forker.calls == 0
+    assert repository.submissions == []
+    assert coordinator.wakes == []
+
+
 def test_allowed_submission_persists_validated_capability_without_router() -> None:
     """合法提交保存原回答能力与 continue 动作，不调用 Router。"""
 

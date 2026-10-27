@@ -1354,7 +1354,7 @@ Stage 3 完成后，必须根据实际实现和验收结果重新设计后续阶
 - Capability Admin API 与后续 RBAC
 - Router confidence 与确认策略
 - 多 Agent / Complex Task 编排
-- Remote Capability / Remote Agent
+- Remote Capability / Remote Agent（规划见第 9 节，仍未排期）
 
 ## 8.2 Runtime 治理候选
 
@@ -1378,3 +1378,161 @@ Stage 3 完成后，必须根据实际实现和验收结果重新设计后续阶
 - Capability 配置数据库化
 - Deep Agents
 - Context Engineering
+
+---
+
+# 9. Remote Agent 候选阶段：已完成规划，未授权实施
+
+本节是 Stage 3 之后的候选阶段基线。负责人已同意完成规划，但尚未决定它与其他候选
+能力的实施优先级；因此本节不修改 Stage 3 禁止范围，也不授权编码、联调、远程 Agent
+改造、提交或推送。后续只有负责人明确选定本候选阶段并批准开始后才能实施。
+
+## 9.1 目标与产品形态
+
+远程 Agent 独立部署，通过标准远程协议接入 AgentRuntime，并作为普通 Capability
+进入现有 Router、Run、独立 SSE、公共消息和 `/chat` 页面，不增加旁路聊天入口。
+首个真实接入对象为：
+
+```text
+D:\workspace\semantic-pattern-mining\semantic-pattern-mining
+```
+
+接入完成后，用户必须能在现有聊天页面观察远程执行、补充文本参数、取消执行和查看
+最终非空回答；不能只完成不可见的后端调用。
+
+AgentRuntime 团队不得修改该远程 Agent 仓库。Agent 侧适配由对方开发团队完成，
+当前团队只负责 AgentRuntime 侧通用远程接入设施、Fake A2A 测试与集成验收。
+
+## 9.2 协议与接入规范
+
+远程接入采用 A2A 1.0 协议语义和 AgentRuntime 强制兼容 Profile，不把目标 Agent
+当前私有 `POST /api/agent/invoke` 当作正式 Runtime 契约，也不再自创一套同类协议。
+首期 Profile 固定：
+
+- 使用静态配置的 Agent Card URL 完成启动期发现；不做动态注册或热加载。
+- 只实现 HTTP+JSON/REST 绑定；不实现 JSON-RPC、gRPC 和 Push Notification。
+- `SendMessage`、`GetTask`、`CancelTask` 为必选；首期以 `GetTask` 有界轮询获取状态，
+  不承诺远程 token 流式输出。
+- Runtime 以非阻塞方式 SendMessage；长任务必须尽快返回可查询的 `taskId/contextId`，
+  不允许一直占用初次 HTTP 连接直到业务完成。
+- 初次发送的 A2A `messageId` 由本地 `invocation_id` 确定性生成；重复提交相同内容必须
+  返回同一远程 Task，不得重复执行业务；相同 ID 对应不同内容必须冲突拒绝。
+- Runtime 必须持久记录本地 Invocation 与远程 `taskId/contextId` 的绑定，恢复不得
+  创建新的本地 Run 或新的远程业务任务。
+- 远程 `input-required` 映射为现有 Run Interrupt；恢复沿用同一 Run、Invocation、
+  远程 Task 和 context，不新增 HumanMessage。
+- 远程终态必须返回至少一个非空文本 Artifact；结构化数据可由 Agent 自治保存，
+  首期不进入 Parent 公共消息或产品 API。
+- 只有显式、受控的 `OUT_OF_SCOPE` 控制元数据可映射为本地合法拒绝；普通远程拒绝、
+  协议错误或权限错误均不得伪装成 unsupported。
+
+首期远程 Capability 只允许 `state_scope=invocation`。Runtime 只发送当前
+HumanMessage 的文本，不发送 System Message、完整 Parent 历史、Checkpoint、私有
+State 或工具数据。远程 Agent 在同一 A2A Task 内维护补参上下文；跨 Run 的远程会话
+连续性留待后续单独设计。
+
+## 9.3 权威源与生命周期
+
+本地 PostgreSQL Run 继续是 AgentRuntime 执行生命周期权威源，Parent `messages`
+继续是完整公共消息唯一权威源；远程 A2A Task 只是对应 Invocation 的外部执行实体。
+远程 Agent 自治保存其业务 State、Checkpoint、任务内部消息、结构化结果和业务数据，
+不得写入本地 Parent、SSE、Redis、Session 或顶层 Run 终态。
+
+本地 Run 只有在远程终态已确认、最终文本已写回 Parent 后才能 completed。网络超时或
+进程崩溃导致结果未知时，不得猜测远程失败或重新创建任务；必须凭持久绑定执行
+`GetTask`，必要时使用同一 `messageId` 幂等重送。无法确认的外部操作保持 pending，
+本地 Run 保持 `recovering` 或 `cancel_requested` 并继续阻塞同 Session 新 Run，不得
+宣称 failed、cancelled 或 completed。只有确认远程 failed/cancelled/completed 后才
+进入对应本地终态。
+
+S2.5 的 3 次自动恢复上限继续适用于本地执行，但不得把仍有未确认远程 Task 的 Run
+强制置为 failed。该类 Run 允许 `recovery_attempts > 3`，按有界退避继续 GetTask 或
+幂等重送，直到远程终态可确认；公开字段仍表示实际接管次数，不再对远程 Run 限制为 3。
+
+显式 Cancel 和 Session 删除都必须先对已绑定的活动远程 Task 执行 `CancelTask` 并
+确认远程终态。远程状态仍未知时，Session 删除必须拒绝并保留本地绑定，不得先删除
+恢复证据。远程 Task 和业务数据的长期删除由远程 Agent 自身策略负责；首期不提供
+跨系统数据删除协议。
+
+## 9.4 健康、安全与错误
+
+- 启动健康检查以 Agent Card 可读取、Schema 合法且存在兼容接口为最低条件；运行期
+  继续使用现有 Health TTL、并发、获取超时和执行超时治理。
+- 远程 URL 只允许 HTTP/HTTPS，不允许 URL 中携带凭据；非开发环境应使用 HTTPS。
+- 首期认证只支持显式 `none` 和静态 Bearer Token。`none` 只允许显式开发配置；
+  Token 只能由环境配置引用，不得写入 Manifest、RuntimeEvent、日志或公开响应。
+- Agent Card 返回的调用地址必须与已配置来源同源，或由配置显式允许；不得无条件
+  跟随 Agent Card 指向任意地址。
+- 远程不可用、认证失败、协议不兼容和任务失败必须使用不同稳定错误码；状态未知与
+  取消未确认只能作为非终态诊断，不能触发 `run.failed`。只有可安全重试的网络/服务
+  暂态错误可标记 retryable。
+
+## 9.5 文本补参与页面要求
+
+现有 Resume API 的对象载荷保持兼容，但公开 Interrupt 需要增加关闭的展示类型：
+
+```text
+confirmation → prompt + approved(bool)
+text         → prompt + answer(non-empty string)
+```
+
+`/chat` 页面必须使用现有第三方组件支持两种类型。远程 Agent 缺少日期等参数时使用
+`text`，用户提交后沿用同一 Run 恢复；每个 Run 同时仍最多一个 pending Interrupt。
+首期不实现动态表单、多字段 Schema、文件补充或并行审批。
+
+## 9.6 首个远程 Agent 的外部适配要求
+
+`semantic-pattern-mining` 对方团队至少交付：
+
+- A2A 1.0 Agent Card 和 HTTP+JSON/REST 服务端接口；原私有接口可保留，但 Runtime
+  不依赖它。
+- 持久 A2A Task、`taskId/contextId` 查询、可靠 Cancel，以及进程重启后的任务查询。
+- 非阻塞接收长任务并尽快返回 Task；不得把当前同步长连接简单换路径后冒充 A2A。
+- 按 `messageId + 请求指纹` 实现幂等提交；相同 ID 不重复执行，不同内容返回冲突。
+- 把现有 `needs_input` 转换为非空文本 `input-required`，并在同一 Task/context 接收
+  用户补充内容。
+- completed 时生成非空用户可读文本 Artifact；当前结构化 `data` 留在 Agent 侧。
+- 最终文本必须明确本次实际采用的日期范围和结果摘要，使未写入 Parent 的 Resume 文本
+  不会造成后续公共对话缺失关键执行参数。
+- 明确任务失败、取消、拒绝和认证错误，不把未知结果报告成确定失败。
+
+## 9.7 接入成本统计
+
+验收报告必须区分“一次性 Runtime 通用建设成本”和“单个 Agent 适配成本”，至少记录：
+
+- 两个仓库各自的基线提交、最终提交、修改文件数和有效代码/测试行数。
+- 新增依赖、Manifest/环境配置、服务端口和部署步骤。
+- Runtime 通用协议、生命周期、页面和测试投入；Agent 侧协议门面、持久任务、幂等、
+  Cancel、补参与 Artifact 改造投入。
+- Fake A2A 测试、真实联调、故障演练所需用例数与人工步骤。
+- 双方团队实际记录的工时；未由团队记录的工时不得由 Runtime 团队猜测。
+- 后续第二个同类 Agent 仅需承担的增量配置、Agent 适配与契约测试项。
+
+## 9.8 验收标准
+
+候选阶段被正式启用后，至少满足：
+
+- RA-AC-01：合法远程 Manifest 启动加载并进入 Router；非法或不可达远程能力被隔离，
+  不影响本地 Capability。
+- RA-AC-02：Fake A2A 的 completed Task 在现有 `/chat` 页面形成唯一非空 AIMessage，
+  capability_id、Run 终态与 SSE 语义保持现有契约。
+- RA-AC-03：`input-required` 产生文本补参界面，Resume 不新增 Run/HumanMessage，且
+  同一远程 Task/context 完成。
+- RA-AC-04：显式 Cancel 能取消远程 Task；无法确认时保持 cancel_requested，不得错误
+  标记 cancelled 或 failed，也不得放开同 Session 新 Run。
+- RA-AC-05：在“远程已受理、本地绑定前”和“绑定后、终态前”分别模拟 Runtime
+  崩溃，并连续恢复超过 3 次；不得产生第二个远程业务任务或因次数上限误判 failed。
+- RA-AC-06：重复初次提交和重复 Resume 均幂等；同 ID 不同内容稳定冲突。
+- RA-AC-07：认证失败、协议错误、远程任务失败、暂时不可用和状态未知映射准确，
+  日志和事件不泄露正文、凭据、Checkpoint 或工具原始结果。
+- RA-AC-08：Session 删除会先确认远程终态；未知状态时保留 Session 和恢复证据。
+- RA-AC-09：真实 `semantic-pattern-mining` 完成“参数齐全直接执行”“缺少日期后补参”
+  “执行中取消”“Runtime 重启恢复”四条端到端场景。
+- RA-AC-10：交付接入成本报告，并通过 Stage 3 全量回归及远程阶段新增自动化测试。
+
+## 9.9 明确不实现
+
+首期不实现动态 Remote Registry、热加载、远程管理 API、A2A Push Notification、
+JSON-RPC/gRPC 绑定、远程 token 流式转发、跨 Run 远程上下文、远程文件/二进制
+Artifact、OAuth2/mTLS、跨系统数据删除、Workflow、多 Agent 编排、多实例 Worker、
+远程 Agent 管理页面或对目标 Agent 业务算法的修改。

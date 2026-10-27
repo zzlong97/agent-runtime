@@ -15,7 +15,7 @@ def _manifest(*, state_schema_version="v2", compatible=("v1",)):
             "name": "普通聊天",
             "description": "处理普通聊天，不执行翻译。",
             "enabled": True,
-            "entrypoint": "agent_runtime.capabilities.general_chat.adapter:factory",
+            "transport": {"type": "local", "entrypoint": "agent_runtime.capabilities.general_chat.adapter:factory"},
             "version": "1.0.0",
             "state_scope": "session",
             "state_schema_version": state_schema_version,

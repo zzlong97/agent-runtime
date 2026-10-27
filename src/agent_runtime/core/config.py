@@ -135,6 +135,22 @@ class Settings(BaseSettings):
             "Interrupt 与 Resume 链路。"
         ),
     )
+    remote_a2a_development_mode: bool = Field(
+        default=False,
+        description=(
+            "远程 A2A 专用开发安全开关；默认关闭，显式开启后才允许 HTTP 和 none "
+            "认证，与 runtime_demo_mode 独立。"
+        ),
+    )
+    remote_a2a_http_timeout_seconds: float = Field(
+        default=10.0,
+        gt=0,
+        allow_inf_nan=False,
+        description=(
+            "全部远程 A2A Card、Send、Get 和 Cancel 请求的全局 HTTP 超时秒数；"
+            "必须有限且大于零，不替代 Invocation 执行超时。"
+        ),
+    )
 
     @field_validator("database_url")
     @classmethod

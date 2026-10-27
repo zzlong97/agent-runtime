@@ -15,8 +15,19 @@ tasks:
     state_file: .dev-team/tasks/UI-001/state.yaml
     parent_task: null
     depends_on: []
+  RA-001:
+    title: 远程 Agent 接入与接入成本评估
+    state_file: .dev-team/tasks/RA-001/state.yaml
+    parent_task: null
+    depends_on:
+      - TEAM-001
   RT-001:
     title: 修复真实模型结构化路由不符合 Schema
     state_file: .dev-team/tasks/RT-001/state.yaml
     parent_task: null
+    depends_on: []
+  RA-DEV-01:
+    title: 远程传输、Agent Card 与 A2A Client 基础
+    state_file: .dev-team/tasks/RA-DEV-01/state.yaml
+    parent_task: RA-001
     depends_on: []

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlsplit
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
@@ -126,6 +127,79 @@ class ExecutionPolicy(_ClosedManifestModel):
     )
 
 
+class LocalTransport(_ClosedManifestModel):
+    """本地统一工厂传输，禁止与远程配置混用。"""
+
+    type: Literal["local"] = Field(
+        description="本地传输判别值；只允许显式 local，不自动推断实现类型。"
+    )
+    entrypoint: StrictStr = Field(
+        pattern=ENTRYPOINT_PATTERN,
+        description="本地统一同步工厂的 package.module:create_capability 导入位置；不接受路径或表达式。",
+    )
+
+
+class NoRemoteAuth(_ClosedManifestModel):
+    """仅在 Runtime 显式开发模式中使用的无认证方式。"""
+
+    type: Literal["none"] = Field(
+        description="无认证判别值；仅显式开发配置允许 none，生产默认拒绝。"
+    )
+
+
+class BearerRemoteAuth(_ClosedManifestModel):
+    """只保存环境变量名称，禁止 Manifest 保存凭据正文。"""
+
+    type: Literal["bearer"] = Field(
+        description="静态 Bearer 认证判别值；首期仅支持从环境变量解析 Token。"
+    )
+    token_env: StrictStr = Field(
+        pattern=r"^[A-Za-z_][A-Za-z0-9_]*$",
+        description="保存 Bearer Token 的环境变量名称；不得填写 Token 值，也不向普通 Capability 暴露解析结果。",
+    )
+
+
+class RemoteA2ATransport(_ClosedManifestModel):
+    """静态 Agent Card 发现配置，首期仅支持 A2A 1.0 HTTP+JSON。"""
+
+    type: Literal["remote_a2a"] = Field(
+        description="远程传输判别值；仅允许 remote_a2a，不回退旧协议或本地工厂。"
+    )
+    agent_card_url: StrictStr = Field(
+        description="可信配置给出的 Agent Card HTTP(S) URL；禁止凭据、片段和无效端口，生产要求 HTTPS。"
+    )
+    auth: Annotated[NoRemoteAuth | BearerRemoteAuth, Field(discriminator="type")] = (
+        Field(
+            description="远程认证关闭联合；仅接受 none 或 bearer，Token 只能通过环境变量引用。"
+        )
+    )
+
+    @field_validator("agent_card_url")
+    @classmethod
+    def validate_card_url(cls, value: str) -> str:
+        """在访问网络前拒绝无法确定安全来源的 URL。"""
+        try:
+            parsed = urlsplit(value)
+            port = parsed.port
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.fragment
+                or "#" in value
+                or "\\" in value
+                or any(char.isspace() or ord(char) < 32 for char in value)
+                or port == 0
+            ):
+                raise ValueError
+        except ValueError:
+            raise ValueError(
+                "Agent Card URL 必须是无凭据、无片段且端口有效的 HTTP(S) 地址"
+            ) from None
+        return value
+
+
 class CapabilityManifest(_ClosedManifestModel):
     """描述一个可由 Stage 3 Runtime 静态发现的 Capability。"""
 
@@ -163,12 +237,10 @@ class CapabilityManifest(_ClosedManifestModel):
             "Stage 3 不提供运行期热切换或动态 mount。"
         ),
     )
-    entrypoint: StrictStr = Field(
-        pattern=ENTRYPOINT_PATTERN,
-        description=(
-            "统一 Capability 同步工厂的 package.module:factory_name 导入位置；只"
-            "允许 Python 模块和属性标识符，不接受文件路径、调用表达式或参数。"
-        ),
+    transport: Annotated[
+        LocalTransport | RemoteA2ATransport, Field(discriminator="type")
+    ] = Field(
+        description="显式 local 或 remote_a2a 传输关闭联合；本地提供统一工厂，远程只提供静态 Card 与认证引用。",
     )
     version: StrictStr = Field(
         pattern=SEMVER_PATTERN,
@@ -268,9 +340,8 @@ class CapabilityManifest(_ClosedManifestModel):
     def validate_recovery_combination(self) -> Self:
         """禁止无法安全自动恢复的 automatic + unsafe 组合。"""
 
-        if (
-            self.recovery_policy == "automatic"
-            and self.side_effect_policy == "unsafe"
-        ):
+        if self.transport.type == "remote_a2a" and self.state_scope != "invocation":
+            raise ValueError("remote_a2a 只允许 invocation State 范围")
+        if self.recovery_policy == "automatic" and self.side_effect_policy == "unsafe":
             raise ValueError("automatic 恢复策略不能与 unsafe 副作用策略组合")
         return self

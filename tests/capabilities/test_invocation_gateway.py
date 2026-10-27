@@ -45,7 +45,7 @@ def _manifest(
             "name": "动态测试能力",
             "description": "验证通用 Invocation Gateway。",
             "enabled": True,
-            "entrypoint": "tests.fake_capability:create_capability",
+            "transport": {"type": "local", "entrypoint": "tests.fake_capability:create_capability"},
             "version": "1.0.0",
             "state_scope": state_scope,
             "state_schema_version": "1",

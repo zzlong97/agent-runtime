@@ -31,7 +31,7 @@ def _manifest(
             "name": f"测试能力 {capability_id}",
             "description": "用于验证恢复策略，不包含真实业务调用。",
             "enabled": True,
-            "entrypoint": "tests.fake_capability:create_capability",
+            "transport": {"type": "local", "entrypoint": "tests.fake_capability:create_capability"},
             "version": "1.0.0",
             "state_scope": "session",
             "state_schema_version": "1",

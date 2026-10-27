@@ -3,7 +3,9 @@ capability_id: general_chat
 name: 通用对话
 description: 处理普通聊天、知识问答和简单咨询，不处理任何翻译任务。
 enabled: true
-entrypoint: agent_runtime.capabilities.general_chat.entrypoint:create_capability
+transport:
+  type: local
+  entrypoint: agent_runtime.capabilities.general_chat.entrypoint:create_capability
 version: 1.0.0
 state_scope: invocation
 state_schema_version: "1"
