@@ -28,6 +28,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    remote_a2a_poll_interval_seconds: float = Field(default=0.25, gt=0, le=30,
+        description="远程 GetTask 有界轮询及恢复退避的基础间隔秒数；仅单 Runtime 使用。")
+
     database_url: PostgresDsn = Field(
         default=PostgresDsn(
             "postgresql://postgres:postgres@localhost:5432/agent_runtime"

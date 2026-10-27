@@ -1167,6 +1167,9 @@ cancelled
 必须在范围判断前保持零公开输出、零 Operation 和零业务 State 推进；违反该规则
 按执行失败处理，不执行拒绝回滚。
 
+该零 Operation 规则对本地 Capability 保持不变；Remote Agent 阶段仅适用第 9.2 节
+已确认远程范围拒绝的传输台账窄例外，不能用于清理业务操作或结果未知的操作。
+
 ## 7.6 State Scope 与版本兼容
 
 Manifest 必须显式声明且不得默认推断：
@@ -1425,6 +1428,12 @@ AgentRuntime 团队不得修改该远程 Agent 仓库。Agent 侧适配由对方
   首期不进入 Parent 公共消息或产品 API。
 - 只有显式、受控的 `OUT_OF_SCOPE` 控制元数据可映射为本地合法拒绝；普通远程拒绝、
   协议错误或权限错误均不得伪装成 unsupported。
+
+对于已确认同一远程 Task 的 rejected 终态、显式 `OUT_OF_SCOPE` 且零公开输出、
+零业务 State 推进和零 Child Checkpoint 的首次范围拒绝，Runtime 可仅原子清理本次
+`remote_send` 传输台账、恢复原 current 并回滚 provisional Task，同时保存可追溯的
+内部结果。其他业务/Cancel 操作及结果未知的 pending Operation 不在例外内；本地
+Capability 规则不变。精确归属、事务与恢复条件见架构 17.3～17.5 和决策 D-056/D-067。
 
 首期远程 Capability 只允许 `state_scope=invocation`。Runtime 只发送当前
 HumanMessage 的文本，不发送 System Message、完整 Parent 历史、Checkpoint、私有

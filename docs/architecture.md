@@ -1338,6 +1338,12 @@ current 指针或 Child State。Runtime 只检查 provisional thread 是否存�
 不得读取 Capability 私有 payload。若已产生 Operation、公开输出或 Child Checkpoint
 后拒绝，按 `CAPABILITY_EXECUTION_FAILED` 结束，不回滚可能关联外部事实的 Task。
 
+Remote Agent 阶段仅对第 17.3～17.5 节定义的已确认远程范围拒绝适用窄例外：在
+零公开输出、零业务 State 推进、零 Child Checkpoint 且只有本次受控 `remote_send`
+传输台账时，Runtime 可在同一事务内清理该台账、恢复原 current、删除 provisional
+Task，并写 Task 回滚与 Invocation rejected 的内部结果。本地 Capability 仍严格遵守
+上面的零 Operation 规则；该例外不是一般化的 Ledger 删除能力。
+
 ## 15.6 State Scope 与 thread_id
 
 Child thread ID 使用以下规范化格式：
@@ -1866,7 +1872,15 @@ Profile 在标准 A2A 之上增加以下接入保证：
 - completed 必须包含至少一个非空文本 Artifact；按 Artifact/Part 原顺序拼接为
   `AgentResult.content`，不把 Data/File Part 透传到 Parent。
 - 远程合法范围拒绝必须带 AgentRuntime Profile 定义的显式 `OUT_OF_SCOPE` 控制码且
-  不带用户可见 Artifact；缺少该码的 rejected 一律按远程失败处理。
+  不带用户可见 Artifact；还必须确认同一远程 Task 的 rejected 终态、零公开输出、
+  零业务 State 推进和零 Child Checkpoint。缺少该码的 rejected 一律按远程失败处理，
+  不适用范围拒绝回滚。
+
+显式 `OUT_OF_SCOPE` 是远程 Agent 在业务接受及业务 State 持久化前拒绝的受控承诺，
+不是任意错误文案。Runtime 校验协议控制码、终态、绑定归属和自身可见的输出、
+Checkpoint、Operation 事实，不读取远程私有 State；Fake 与服务端契约测试必须验证
+该拒绝路径确实没有业务 State 推进。符合条件的 provisional Task 仅按第 17.4 节的
+原子流程回滚；其他业务 Operation、Cancel 和结果未知的 pending Operation 均不在例外内。
 
 协议 1.0 的 patch 版本和官方 Python SDK 版本在实施任务创建时锁定并写入 `uv.lock`；
 不得在运行期自动降级到旧协议。
@@ -1904,6 +1918,28 @@ Profile 在标准 A2A 之上增加以下接入保证：
 `ctx.operation(remote_cancel:<remote_task_id>)`。网络异常不自动标记 failed，结果
 未知时 Ledger 保持 pending。GetTask 是只读查询，不进入 Operation Ledger。
 
+已确认范围拒绝的传输台账清理是上述持久化要求的唯一窄例外。Runtime 必须先凭
+绑定及身份校验，通过 GetTask 确认同一 Task/context 的 rejected 终态和显式
+`OUT_OF_SCOPE`，并满足第 17.3 节零输出、零业务 State、零 Child Checkpoint 条件。
+随后在同一 PostgreSQL 事务中：
+
+```text
+锁定并复核 Run、当前 Invocation、provisional Task、Context 和其 Operation 集合
+→ 仅接受本次稳定 messageId 对应的 remote_send:<messageId> 传输行
+→ 删除该受控传输行
+→ 恢复原 current（原本为空则移除 context）并删除本次 provisional Task
+→ 写 internal.capability.task.rejected_rolled_back 和 invocation completed(outcome=rejected)
+→ COMMIT
+```
+
+台账必须精确匹配本次 Run/Invocation/Capability/Task 及稳定消息 ID，不能只按
+`remote_send:` 前缀批量清理。目标行只能为 succeeded，或因本地崩溃仍为 pending、
+但请求结果已由该远程终态确认；结果未知的 pending 不得清理。存在其他业务操作、
+`remote_cancel`、其他消息的 Send、归属不符或证据不全时，整个回滚不得执行，不能先
+删除部分台账或改写其状态来满足检查。回滚事务失败必须整体保留原事实，允许按同一
+持久结果幂等对账；不得重建远程任务或改变 messageId。提交后才允许向 Parent 返回
+合法 rejected 并有限回流；不得先发送用户可见内容或关闭 Invocation。
+
 ## 17.5 远程绑定与持久事件
 
 首期不新增 Remote Task 业务表，复用现有 durable internal RuntimeEvent：
@@ -1931,9 +1967,37 @@ internal.remote_agent.task_terminal
 或远程 Task 历史。`task_bound` 必须先于本地 Interrupt 或任何本地终态持久化；
 `task_terminal` 只在 GetTask/CancelTask 已确认远程终态后写入。
 
+为覆盖“远程已受理、本地绑定前”崩溃，既有 `InvocationStartedPayload` 的关闭内部
+Schema 增加 `remote_agent_identity_hash: str | None = None`；非空值必须匹配
+`^[0-9a-f]{64}$`。该可选字段只用于远程 started，不加入所有 Invocation 事件的
+共享基类，不扩展普通 Capability SDK、公共事件或数据库表。本地与历史 started
+允许省略或为 null；这只提供读取兼容，不代表新远程调用可以缺少身份凭据。
+
+受信 Runtime 必须在新远程 Invocation 的 started 提交中保存当前已验证的身份 hash，
+提交成功后才允许首次 Send；提交失败不得发送。恢复 open Invocation 时使用原
+started 的持久 hash，不能用本次发现的新 Card 覆盖或回填旧事件。Send 或同 ID
+重送前必须比较原 hash 与当前身份；已有绑定时也必须核对绑定 hash，若两处都有
+hash 则必须一致。身份不符时拒绝向替换服务发起 Send/Get/Cancel，保持 recovering
+或 cancel_requested 并保留证据，不因缺失或不符自动终结 Run。
+
+started 与 task_bound 必须使用同一确定性身份 hash 定义，输入包括已验证并规范化的
+静态 Card 来源 URL、所选接口及 tenant 和稳定 Agent 身份字段；不得只散列 Card
+身份字段而漏掉来源，也不得混入 Token 等凭据。旧 started 缺少 hash 但存在可信
+task_bound 时，可按原绑定身份校验后查询；两者均无可信身份时必须安全不重送，即使
+当前 Card 可读取或 Operation 不存在也不能补证。旧绑定的 hash 含义无法确认时同样
+保留恢复态，不猜测兼容或改写历史。
+
+已确认远程范围拒绝时，绑定与远程终态事件仍保留；第 17.4 节的原子清理只删除其
+允许的传输 Operation 与 provisional Task，不删除、改写绑定或终态证据。事务内的
+Task 回滚与 Invocation rejected 事件经同一 Run Sequencer 分配持久 seq，并通过既有
+Run/Invocation/Task 标识与远程绑定串联，足以追溯清理原因；不保存用户正文、远程
+业务 State 或 Artifact，不新增表或公开事件。提交前崩溃按原绑定/终态继续对账，
+提交后恢复读取已关闭 Invocation 和已回滚 Task 的既有结果，不重复清理或重新 Send。
+
 恢复器继续先查唯一 open Invocation，再查绑定事件：
 
-- 没有绑定：以同一 `messageId` 重送，取回原 Task 后补写绑定。
+- 没有绑定：只有原 started 的持久身份 hash 与当前身份一致时才以同一 `messageId`
+  重送，取回原 Task 后补写绑定；缺少可信身份凭据时保持恢复态，不重送。
 - 已绑定：直接 GetTask，不重新 SendMessage。
 - 远程 completed：重新校验 Artifact 并完成本地提交；Parent 最终消息的既有幂等规则
   继续生效。
@@ -1994,6 +2058,29 @@ Runtime 取消顺序：
 复用相同屏障，存在未确认远程 Task 时返回可重试冲突并保留 Session、Run、
 RuntimeEvent 和 Operation Ledger。
 远程 Agent 的历史或业务数据不随本地 Session 自动删除。
+
+远程取消屏障必须持久保留已有的控制意图，不能把“执行超时后等待远程取消确认”
+在重启后误投影为用户主动取消。既有内部 `RunCancelRequestedPayload` 增加
+`reason: Literal["explicit", "timeout"] = "explicit"`，仅用于
+`internal.run.cancel_requested` 的关闭 Schema，不进入公开 SSE、Run 响应或普通
+Capability SDK，不增加表、配置或通用停止原因枚举。旧事件缺少该字段按 explicit
+读取；新的超时路径必须明确写 timeout，不能依赖内存异常、日志或恢复时重新计时推断。
+
+首次将 Run 转为 cancel_requested 的 PostgreSQL 行锁事务同时持久化 reason 和内部
+事件，其已提交意图获胜。重复取消、后续 timeout、显式 Cancel 或 Session 删除都
+不得覆盖该 reason 或追加相反意图；恢复读取原 durable 事实。已提交终态不得被后来
+到达的意图改写。本规则只保留远程持久等待中的既有结果，不改变第 15.9 节本地执行
+控制器在确定超时前检查显式取消的原有逻辑。
+
+远程终态仍未知时，无论 reason 为何都保持 cancel_requested，保留绑定、Operation
+和 Session 占用，不生成 stopped/incomplete 或终态事件。远程终态确认后，explicit
+沿原显式取消路径形成非空 stopped 公共消息、Invocation cancelled 和 Run cancelled；
+timeout 沿第 15.9 节原超时失败路径，以 CAPABILITY_TIMEOUT 关闭 Invocation 为 failed，
+形成非空 incomplete 公共消息并使 Run failed，不得变成 cancelled。该 timeout 意图
+允许在远程确认屏障后从 cancel_requested 进入原失败
+投影，不是把普通取消状态一般化为可任意失败。两条路径均遵守 Checkpoint-first，
+公共消息必须先于 Run 终态落盘；重建 Runtime 后仍保留原错误码和终态语义，不能
+重复公共消息或终态事件。
 
 ## 17.8 Health、认证与错误映射
 

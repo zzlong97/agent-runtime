@@ -66,7 +66,7 @@ def build_operation_idempotency_key(
 class CapabilityOperationHandle:
     """向 Capability 暴露是否执行、副作用幂等键和确定失败标记。"""
 
-    __slots__ = ("_context", "_operation", "_should_execute")
+    __slots__ = ("_context", "_operation", "_should_execute", "_created")
 
     def __init__(
         self,
@@ -74,10 +74,17 @@ class CapabilityOperationHandle:
         context: CapabilityOperationContext,
         operation: CapabilityOperation,
         should_execute: bool,
+        created: bool = False,
     ) -> None:
         self._context = context
         self._operation = operation
         self._should_execute = should_execute
+        self._created = created
+
+    @property
+    def created(self) -> bool:
+        """表示账本是否本次首次创建；重放时不能用新的拒绝否认旧的未知结果。"""
+        return self._created
 
     @property
     def operation_id(self) -> UUID:
@@ -180,6 +187,7 @@ class CapabilityOperationContext:
             context=self,
             operation=operation,
             should_execute=operation.status == "pending",
+            created=result.created,
         )
         self._handle = handle
         log_business_event(

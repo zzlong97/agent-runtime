@@ -1,0 +1,102 @@
+{
+  "task_id": "RA-DEV-02",
+  "operation": "负责人终验候选提交及双远程同步",
+  "inputs": {
+    "base_commit": "4f6791369ee562c52539a260ee7320f38e7f34c8",
+    "branch": "master",
+    "products": {
+      "src/agent_runtime/api/schemas/runs.py": "c5daee9a0d100406c4110000a022275afdc7c3d8f2c57df592a390a2f2af350a",
+      "src/agent_runtime/capabilities/contracts.py": "b71624a9cc7b8ae63d084da0bc210e9b4cb4636ec986593cad93d85ed000489f",
+      "src/agent_runtime/capabilities/execution.py": "03a4d55bca79e02709468fa59982c72e18bcca40c8cdb06ee8fea171bf101e54",
+      "src/agent_runtime/capabilities/invocation_gateway.py": "bb4cc0d43cc6f293651af70ac5addf92bc8fbf2def504a21872324badc9fcdd3",
+      "src/agent_runtime/capabilities/invocation_service.py": "a06c645be8cb94d9f55f3f4bbe4d7a552b473cc688aa655a65d8d4577c4f9ef8",
+      "src/agent_runtime/capabilities/operation_ledger.py": "954255fb895362d09bfe40f62e1f3c241c0ef1ed25e29dcf62501d5cadb97874",
+      "src/agent_runtime/capabilities/persistence.py": "ffdcf2452210b5033292b31f36918d3214f7ca81ba94d002b7c028aeb7f6dbbf",
+      "src/agent_runtime/capabilities/remote_a2a/capability.py": "d6bfc71a38d1408f628d7aedfbc1355861a70bd6a4a7937a423d06937dd10b02",
+      "src/agent_runtime/capabilities/remote_a2a/card.py": "b0816a5ecc662b3abff05bee66ff7cbb9e9ec78f901fc607465c174ef5ed37a5",
+      "src/agent_runtime/capabilities/task_service.py": "7abb4996e100c045ec3aa64e861d890e02c83ead425315bb52ae67aa6145118a",
+      "src/agent_runtime/chat.py": "80cc38fedbeb4621bede925c20e56b73e85ff7d396b9dd6aad37bf7a89c29fed",
+      "src/agent_runtime/core/config.py": "602e24a5b09a15385073a9dc2efd3fc1a78e6bb7fec950f783d79a079bc89d31",
+      "src/agent_runtime/runtime/event_repository.py": "b150d349f038806772f78af4daecc11c170bba30106ff3de86c391165c64549d",
+      "src/agent_runtime/runtime/event_schemas.py": "fb506bfeb76e49927e7ce1e3ca1f79a96f981eaa47c757a040d8c9aacbcbb66e",
+      "src/agent_runtime/runtime/sequencer.py": "5b91e92679b8c3ee10777cf9626003b389e46ec685d6764a02680263aad7be84",
+      "tests/fake_a2a.py": "75f39845cb6147ff1ad6121e6c3b36f56e281514f297e40bc99d8148a24a3ef4",
+      "tests/capabilities/test_invocation_gateway.py": "a8a754d38529aa3526ff0e770a1d9d3b67d5a73741bbdd0c00e02ab967c130d8",
+      "tests/capabilities/test_remote_invocation.py": "da399ccc10230db709d95661e28b917055facbe40bb2028336a2c00a0fc31ddc",
+      "tests/runtime/test_capability_event_schemas.py": "7d3e826208e0c98a2acc2e9337886b2583d45353916cde9addf0d4bde4ced413",
+      "tests/integration/test_remote_runtime_postgres.py": "2a386d446481b6020d83692a7fe050e2d0fa6e20391ad10c7b455310111a84f6",
+      "docs/capability_development_guide.md": "bb8596bc9cca8010becd0ea73c4f66bc3b36449dafa9c40a2882707604387a9d",
+      "src/agent_runtime/capabilities/remote_a2a/client.py": "189d979bd0ab7f75af4b224b9cd7da5385c1faf1fcb1486fad5e9f7f641fb56d",
+      "tests/capabilities/test_remote_a2a_client.py": "e27feba92aa36e3fd972baf1c79f54c1b9d5c3d3794ce8be5b462eb11dbe2b77"
+    },
+    "doc_prefixes": {
+      "docs/requirements.md": "0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad",
+      "docs/architecture.md": "435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652",
+      "docs/decisions.md": "9ad27638f40772c824669cd478d69ee4c20b364898216e791df48a7177f96058"
+    },
+    "index_filtered_sha256": "35f5bd9d83be2c85df858950ec78e6297ec8bb60dfbbdbc671526a8b82715df4",
+    "approval": {
+      "path": ".dev-team/tasks/RA-DEV-02/handoffs/0005-负责人终验与提交授权.md",
+      "version": "sha256:941e9fe48fee835320987a6b831df171f4610b6b645719c4d7d547fcf7340316"
+    },
+    "targets": {
+      "github": "refs/heads/master",
+      "origin": "refs/heads/master"
+    }
+  },
+  "source_proofs": [
+    {
+      "path": "docs/requirements.md",
+      "marker": "# 10. 多实例部署",
+      "worktree_sha256": "8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a",
+      "staged_prefix_sha256": "0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad",
+      "staged_git_blob": "644a75422f5d5e58a2bf407f1f6fc5f0361ce979",
+      "excluded_suffix_sha256": "0c1e461f7c8d50881d0918e7efa9cf26578b74d108e12d6022c389cd9bc25098"
+    },
+    {
+      "path": "docs/architecture.md",
+      "marker": "# 18. 多实例部署",
+      "worktree_sha256": "92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b",
+      "staged_prefix_sha256": "435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652",
+      "staged_git_blob": "e243435066973acd5c26bd5e50e813e80cba1fab",
+      "excluded_suffix_sha256": "141ee11378b5bfb9dcda8f19eda1e19162c2e418d54cbd9c12c2a5786f8c3e7c"
+    },
+    {
+      "path": "docs/decisions.md",
+      "marker": "## D-070：",
+      "worktree_sha256": "78ac1122defa9df497fd154d13bacd8dc04a15ef1b4c53024d448cbf3ee681af",
+      "staged_prefix_sha256": "9ad27638f40772c824669cd478d69ee4c20b364898216e791df48a7177f96058",
+      "staged_git_blob": "11bcb3f43e91d4c05adba7d8e8939b559a72b793",
+      "excluded_suffix_sha256": "e8169cd37e13d6f2ca8fa49e8efb4bf2bf34bc63d5e75365652b9a3506900384"
+    }
+  ],
+  "preservation_checks": {
+    ".dev-team/tasks/DB-001/state.yaml": "67d215d66446be3c08ff82fa35aa309b637a269d70421ca3051338d932247413",
+    ".dev-team/tasks/UI-001/state.yaml": "4872c3cba972fe86edc394bfd62bd0fbf12124972cd3201adfad09c0699af45c",
+    ".dev-team/tasks/RT-001/state.yaml": "8713b953cf8ab377fdfe0c390e3fe162a975e3e7082b8b9d7a8339f39b6f872c",
+    ".dev-team/tasks/TEAM-001/state.yaml": "d4d43cb989b8ba6057234c96e936fcce7bb072562ea915bfb4b26d083be824d2",
+    ".dev-team/tasks/TEAM-001/evidence/remote-sync-inputs.json": "2678f9c48d4b1f11c961e6b61c259b62b120e731687d4f78b27acb93ab612e24",
+    ".dev-team/tasks/TEAM-001/handoffs/0004-remote-sync.md": "1ec6653ec6444378d456640f2493235802804c0428d6416d62c4259fc16db47d",
+    ".dev-team/tasks/MI-001/handoffs/0001-planning.md": "7a5e89710c1dbad53ae03cb30bccc0a9335d91758f5a7f27bed0e87d9a3e2430",
+    ".dev-team/tasks/MI-001/state.yaml": "4b73fe6b2c6993373f2c2e7407781dac3481d34684c7ca72608003cfe089c1e1",
+    ".dev-team/tasks/MI-001/task.md": "3febabd400ec26f8085b5ed9fb0d75e28b1db4d95ab8dcde86f7ed3363baa315",
+    ".dev-team/index.yaml": "0c4b6c5c650d1e89fe94e40950707385a73dea9578e3da2c3be9fe68bd7f1be3"
+  },
+  "record_paths": [
+    ".dev-team/tasks/RA-DEV-02/evidence/R01独立复核探针.py",
+    ".dev-team/tasks/RA-DEV-02/evidence/R01返工范围指纹.json",
+    ".dev-team/tasks/RA-DEV-02/evidence/R01返工验证回执.json",
+    ".dev-team/tasks/RA-DEV-02/evidence/交付范围指纹.json",
+    ".dev-team/tasks/RA-DEV-02/evidence/审核探针.py",
+    ".dev-team/tasks/RA-DEV-02/evidence/最终验证回执.json",
+    ".dev-team/tasks/RA-DEV-02/evidence/验证记录.md",
+    ".dev-team/tasks/RA-DEV-02/handoffs/0001-开发交付.md",
+    ".dev-team/tasks/RA-DEV-02/handoffs/0002-独立审核.md",
+    ".dev-team/tasks/RA-DEV-02/handoffs/0003-R01返工交付.md",
+    ".dev-team/tasks/RA-DEV-02/handoffs/0004-R01独立复核.md",
+    ".dev-team/tasks/RA-DEV-02/handoffs/0005-负责人终验与提交授权.md",
+    ".dev-team/tasks/RA-DEV-02/state.yaml",
+    ".dev-team/tasks/RA-DEV-02/task.md"
+  ],
+  "note": "操作状态为本次输出，不纳入operation_key。完整文档含未批准MI，仅索引提交已批准RA前缀；原字节保留。"
+}

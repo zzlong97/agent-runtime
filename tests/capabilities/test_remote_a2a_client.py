@@ -266,3 +266,61 @@ def test_business_logs_include_available_message_id_without_text(caplog):
     asyncio.run(run())
     assert '"message_id": "correlation-id"' in caplog.text
     assert "私密请求文本" not in caplog.text
+
+
+@pytest.mark.parametrize("changed", ["version", "name", "interface"])
+def test_discovered_identity_mismatch_blocks_all_task_io_until_original_is_verified(changed):
+    """已证实身份改变后，旧快照不能授权任何业务请求；恢复须重新验证原身份。"""
+    from agent_runtime.capabilities.remote_a2a.client import RemoteA2AError
+
+    fake = FakeA2A(state="TASK_STATE_WORKING")
+
+    async def exercise():
+        client = make_client(fake)
+        try:
+            original = await client.discover()
+            task = await client.send_message(message_id="seed", text="初始请求")
+            if changed == "interface":
+                fake.card["supportedInterfaces"][0]["url"] = "https://agent.example/replacement"
+            else:
+                fake.card[changed] = "replacement"
+            with pytest.raises(RemoteA2AError):
+                await client.discover()
+            start = len(fake.requests)
+            operations = (
+                lambda: client.send_message(message_id="later", text="后续请求"),
+                lambda: client.get_task(task.id),
+                lambda: client.cancel_task(task.id),
+            )
+            for operation in operations:
+                with pytest.raises(RemoteA2AError) as caught:
+                    await operation()
+                assert caught.value.code == "CAPABILITY_REMOTE_PROTOCOL_ERROR"
+            assert fake.requests[start:] == []
+            assert client.snapshot == original
+
+            # 仅恢复远程 Card 不等于 Runtime 已重新建立信任。
+            fake.card["version"] = "1.0.0"
+            fake.card["name"] = "离线测试 Agent"
+            fake.card["supportedInterfaces"][0]["url"] = "https://agent.example/api"
+            for operation in operations:
+                with pytest.raises(RemoteA2AError):
+                    await operation()
+            assert fake.requests[start:] == []
+            fake.status_code = 503
+            with pytest.raises(RemoteA2AError):
+                await client.discover()
+            start = len(fake.requests)
+            with pytest.raises(RemoteA2AError):
+                await client.get_task(task.id)
+            assert fake.requests[start:] == []
+
+            fake.status_code = None
+            assert await client.discover() == original
+            assert (await client.get_task(task.id)).id == task.id
+            assert (await client.cancel_task(task.id)).status.state == wire.TASK_STATE_CANCELED
+            assert len(fake.tasks) == 1
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())

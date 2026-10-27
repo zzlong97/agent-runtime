@@ -104,10 +104,9 @@ class RunSummaryResponse(BaseModel):
     )
     recovery_attempts: int = Field(
         ge=0,
-        le=3,
         description=(
-            "PostgreSQL 已记录的崩溃恢复接管次数；初次执行为 0，Stage 2.5 "
-            "最多允许 3 次，用于页面展示公开恢复进度。"
+            "PostgreSQL 已记录的实际恢复接管次数；初次为 0，本地最多三次，"
+            "未确认远程调用可超过三次。"
         ),
     )
 

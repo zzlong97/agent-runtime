@@ -28,6 +28,10 @@ type CapabilityOperation[_ResultT] = Callable[
 ]
 
 _PUBLIC_ERRORS: dict[str, tuple[str, bool]] = {
+    "CAPABILITY_REMOTE_UNAVAILABLE": ("远程能力暂时不可用，请稍后重试", True),
+    "CAPABILITY_REMOTE_AUTH_FAILED": ("远程能力认证失败", False),
+    "CAPABILITY_REMOTE_PROTOCOL_ERROR": ("远程能力协议不兼容", False),
+    "CAPABILITY_REMOTE_TASK_FAILED": ("远程任务执行失败", False),
     "CAPABILITY_PERMISSION_DENIED": ("当前用户未获授权使用该能力", False),
     "CAPABILITY_BUSY": ("该能力当前繁忙，请稍后重试", True),
     "CAPABILITY_TIMEOUT": ("该能力执行超时，请稍后重试", True),

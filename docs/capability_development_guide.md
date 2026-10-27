@@ -1567,11 +1567,11 @@ Operation 和权限的事实权威源；Redis 只是短期公开实时事件旁�
 若实际代码与本手册不一致，应停止扩展并按项目文档优先级报告冲突，不要在 Capability
 内部绕过 Runtime 契约。
 
-## 13. 远程 A2A 基础接入（RA-DEV-01）
+## 13. 远程 A2A 接入（RA-DEV-01/02）
 
-本批只交付静态发现、健康检查及 HTTP Client/Fake，尚无远程 Run 的持久绑定、恢复、
-取消屏障或文本补参闭环。远程 `invoke()` 当前返回受控不可用错误；不得把下列配置
-加入默认运行目录或宣称远程聊天已经可用。后续 RA-DEV-02/03 审核交付后才能进入联调。
+当前实现静态发现、受信 Runtime Adapter、持久绑定、恢复和远程取消确认屏障。
+远程配置不加入默认运行目录；真实联调仍需 RA-DEV-03 文本补参及后续审核门禁。
+普通 SDK 的 `invoke()` 不提供远程绑定权限，正式调用由 Invocation Gateway 注入受控出口。
 
 远程 Manifest 使用下面的 `transport`，其余必填字段沿用第 3 节；`state_scope` 只能是
 `invocation`，即使 `side_effect_policy=none` 也不允许 Regenerate。旧顶层 `entrypoint`
@@ -1592,6 +1592,9 @@ Token 由 Runtime 从环境变量解析，Manifest、Card 快照、Bootstrap 和
 独立。`REMOTE_A2A_HTTP_TIMEOUT_SECONDS` 为所有远程 HTTP 操作的全局有限正超时，默认
 10 秒。当前只支持 Card 与调用接口同源，按 scheme、规范化 host 和有效 port 比较；
 拒绝 URL 凭据、片段、越界接口和全部重定向，不提供额外来源白名单。
+`REMOTE_A2A_POLL_INTERVAL_SECONDS` 默认为 0.25 秒，用于 GetTask 轮询与最高 5 秒的
+恢复退避。自动恢复的远程 Manifest 使用 `automatic + idempotent`；不把传输账本作为
+`automatic + none` 恢复策略的隐式例外。
 
 协议锁定 [A2A v1.0.1](https://github.com/a2aproject/A2A/tree/v1.0.1)，官方 Python SDK
 锁定 `a2a-sdk==1.2.3`，仅使用 `RestTransport`，未启用可选 extra；SDK 基础依赖自身
@@ -1620,5 +1623,26 @@ Artifact，input-required 必须有稳定消息 ID 及非空文本提示；原�
 ```
 
 共享替身位于 `tests/fake_a2a.py`，覆盖完成、working、input-required、Cancel、同
-messageId 重送、冲突和受理后断连；不启动服务、不连接模型或业务数据库。这些检查
-不能替代后续 PostgreSQL 恢复探针及真实远程 Agent 四条链路验收。
+messageId 重送、冲突和受理后断连；不连接真实 Agent 或模型。
+
+Runtime 在首次 Send 前把来源及身份 hash 写入 Invocation started；恢复不得覆盖该值。
+初次消息 ID 为 Invocation 确定性 UUIDv5，绑定前未知用同 ID 重送，绑定后只 Get。
+Send/Cancel 使用 `remote_send:<messageId>` / `remote_cancel:<taskId>` 账本，Get 不登记
+Operation。绑定必须在 Send 正常退出标记 succeeded 前落盘。身份变化、旧事件缺少可信
+身份、结果未知均保留活动 Run 与恢复证据；远程恢复次数可以超过 3，本地仍限制三次。
+
+取消、执行超时和 Session 删除先确认远程终态。未知时 Run 保持 cancel_requested，
+删除返回可重试 409。内部首次取消意图区分 explicit/timeout，重建后分别维持
+stopped/cancelled 与 CAPABILITY_TIMEOUT/incomplete/failed；不向产品协议暴露 reason。
+远程 input-required 当前仅保留内部未决边界，文本 Interrupt/Resume API 与页面归 RA-DEV-03。
+
+显式范围拒绝使用 Task metadata 的 `control_signal="OUT_OF_SCOPE"`；还必须由 Get
+确认同 Task/context 的 rejected 终态，且无 Artifact、公开输出、业务 State 或 Child
+Checkpoint。只有满足正式架构 17.3～17.5 的 provisional Task 才能原子清理本次精确
+Send 行并恢复原 current。普通 rejected、其他 Operation 与未知结果不能使用该例外；
+本地 Capability 继续遵守零 Operation 拒绝规则。
+
+隔离 PostgreSQL 与保留独立 Fake 的真实 Runtime 探针位于
+`tests/integration/test_remote_runtime_postgres.py`；显式设置 `RUN_POSTGRES_TESTS=1`，
+仅使用项目 Compose 中已建立的 `agent_runtime_ra02_probe` 测试库。它验证服务重建、
+绑定前后崩溃、取消删除屏障和原子拒绝，不替代真实远程 Agent 四条链路验收。

@@ -64,6 +64,7 @@ STATEFUL_INTERNAL_EVENT_TYPES = frozenset(
         "internal.run.cancel_requested",
         "internal.run.recovery_claimed",
         "internal.run.recovery_activated",
+        "internal.run.remote_pending",
     }
 )
 
@@ -93,6 +94,9 @@ class RunStartedPayload(_ClosedPayload):
 class RunCancelRequestedPayload(_ClosedPayload):
     """Run 已持久化显式取消意图的内部数据。"""
 
+    reason: Literal["explicit", "timeout"] = Field(default="explicit",
+        description="首次已提交的内部取消意图；explicit为显式取消或旧事件缺省，timeout仅保留既有远程执行超时失败语义，不公开。")
+
     status: Literal["cancel_requested"] = Field(
         description=(
             "Run 已进入等待执行器完成取消投影的活动状态；该内部字段在 Stage 2.5 "
@@ -112,8 +116,7 @@ class RunRecoveryClaimedPayload(_ClosedPayload):
     )
     recovery_attempt: int = Field(
         ge=1,
-        le=3,
-        description="本次重启接管的恢复次数，只允许 1 到 3，并与 Run 计数原子递增。",
+        description="本次实际接管次数；本地最多三次，存在未确认远程调用时允许继续递增。",
     )
 
 
@@ -128,7 +131,6 @@ class RunRecoveryActivatedPayload(_ClosedPayload):
     )
     recovery_attempt: int = Field(
         ge=1,
-        le=3,
         description="当前 Run 已持久化的恢复次数，用于关联本次重新执行尝试。",
     )
 
@@ -179,6 +181,9 @@ class _InvocationPayloadBase(_ClosedPayload):
 
 class InvocationStartedPayload(_InvocationPayloadBase):
     """Capability Invocation 已进入唯一 open 生命周期的内部数据。"""
+
+    remote_agent_identity_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$",
+        description="仅受信远程调用在首次发送前保存的来源及身份SHA256；本地或历史事件可缺省，恢复不得用当前身份回填。")
 
     @model_validator(mode="after")
     def validate_before_task_resolution(self) -> InvocationStartedPayload:
@@ -396,9 +401,42 @@ INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_TYPES = tuple(
     dict.fromkeys(INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_BY_TYPE.values())
 )
 
+class RemoteTaskBoundPayload(_ClosedPayload):
+    """远程恢复必需的身份；禁止正文、认证和远程私有数据。"""
+
+    invocation_id: UUID = Field(description="既有本地 Invocation 的稳定 UUID。")
+    capability_id: ManifestCapabilityId = Field(description="静态 Manifest 的能力标识。")
+    remote_task_id: str = Field(min_length=1, max_length=512, description="已受理的远程 Task 标识，不允许跨调用替换。")
+    remote_context_id: str = Field(min_length=1, max_length=512, description="与远程 Task 绑定的上下文标识。")
+    initial_message_id: UUID = Field(description="由 Invocation 确定性生成的首次 A2A 消息 UUIDv5。")
+    remote_agent_identity_hash: str = Field(pattern=r"^[0-9a-f]{64}$", description="规范化 Card 来源及静态身份的 SHA256，不保存地址或凭据。")
+    protocol_version: Literal["1.0"] = Field(description="本阶段固定的 A2A 协议版本 1.0。")
+
+
+class RemoteTaskTerminalPayload(_ClosedPayload):
+    """只记录已查询确认的远程终态，不复制 Artifact。"""
+
+    invocation_id: UUID = Field(description="既有本地 Invocation 的稳定 UUID。")
+    capability_id: ManifestCapabilityId = Field(description="静态 Manifest 的能力标识。")
+    remote_task_id: str = Field(min_length=1, max_length=512, description="必须匹配本次 durable 绑定的远程 Task 标识。")
+    remote_status: Literal["completed", "failed", "canceled", "rejected"] = Field(description="GetTask 确认的远程终态；不允许用未知或进行中状态代替。")
+
+
+REMOTE_AGENT_EVENT_TYPES = frozenset({"internal.remote_agent.task_bound", "internal.remote_agent.task_terminal"})
+
+
+class RemotePendingPayload(_ClosedPayload):
+    """仅有受控诊断码的非终态投影。"""
+
+    status: Literal["recovering"] = Field(description="远程结果未知时固定保持 recovering 活动态。")
+    code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{0,127}$", description="受控内部诊断码，不包含远程异常、正文或地址。")
+
 INTERNAL_PAYLOAD_SCHEMA_BY_TYPE = {
     **INTERNAL_STATE_PAYLOAD_SCHEMA_BY_TYPE,
     **INTERNAL_CAPABILITY_PAYLOAD_SCHEMA_BY_TYPE,
+    "internal.remote_agent.task_bound": RemoteTaskBoundPayload,
+    "internal.remote_agent.task_terminal": RemoteTaskTerminalPayload,
+    "internal.run.remote_pending": RemotePendingPayload,
 }
 
 INTERNAL_STATE_PAYLOAD_SCHEMA_TYPES = tuple(

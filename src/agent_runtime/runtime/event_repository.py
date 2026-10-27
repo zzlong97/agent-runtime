@@ -25,6 +25,7 @@ from agent_runtime.runtime.event_models import (
 from agent_runtime.runtime.event_schemas import (
     CAPABILITY_INVOCATION_EVENT_TYPES,
     CAPABILITY_TASK_EVENT_TYPES,
+    REMOTE_AGENT_EVENT_TYPES,
     STATEFUL_INTERNAL_EVENT_TYPES,
     STATEFUL_PUBLIC_EVENT_TYPES,
     project_public_event,
@@ -63,6 +64,7 @@ _ALLOWED_STATE_EVENT_TRANSITIONS = frozenset(
         ),
         ("running", "run.completed", "completed"),
         ("running", "run.failed", "failed"),
+        ("running", "internal.run.remote_pending", "recovering"),
         ("running", "interrupt.required", "interrupted"),
         (
             "running",
@@ -90,6 +92,7 @@ _ALLOWED_STATE_EVENT_TRANSITIONS = frozenset(
         ("interrupted", "run.cancelled", "cancelled"),
         ("interrupted", "interrupt.resumed", "running"),
         ("cancel_requested", "run.cancelled", "cancelled"),
+        ("cancel_requested", "run.failed", "failed"),
     }
 )
 
@@ -628,6 +631,73 @@ class PostgresRuntimeEventRepository:
                 retryable=True,
             ) from error
 
+    async def get_remote_agent_event(self, *, run_id: UUID, invocation_id: UUID, event_type: str) -> RuntimeEvent | None:
+        """按调用读取受控远程事实，不提供任意内部事件查询接口。"""
+        from agent_runtime.runtime.event_schemas import REMOTE_AGENT_EVENT_TYPES
+        if event_type not in REMOTE_AGENT_EVENT_TYPES:
+            raise ValueError("只能读取固定远程绑定或终态事件")
+        async with open_database_connection(self._settings) as connection:
+            cursor = await connection.execute(
+                "SELECT * FROM runtime_events WHERE run_id=%s AND event_type=%s "
+                "AND payload->>'invocation_id'=%s ORDER BY seq",
+                (run_id, event_type, str(invocation_id)),
+            )
+            rows = await cursor.fetchall()
+            if len(rows) > 1:
+                raise ValueError("远程事实存在重复记录")
+            return None if not rows else _event_from_row(rows[0])
+
+    async def get_remote_rejected_result(self, *, run_id: UUID, capability_id: str) -> RuntimeEvent | None:
+        """读取同一 Run 已提交的范围拒绝结果，防止 Parent 重放新建远程任务。"""
+        async with open_database_connection(self._settings) as connection:
+            cursor = await connection.execute(
+                "SELECT e.* FROM runtime_events e WHERE e.run_id=%s AND e.event_type='internal.capability.invocation.completed' "
+                "AND e.payload->>'capability_id'=%s AND e.payload->>'outcome'='rejected' "
+                "AND EXISTS(SELECT 1 FROM runtime_events b WHERE b.run_id=e.run_id AND b.event_type='internal.remote_agent.task_terminal' "
+                "AND b.payload->>'invocation_id'=e.payload->>'invocation_id' AND b.payload->>'remote_status'='rejected') "
+                "AND EXISTS(SELECT 1 FROM runtime_events r WHERE r.run_id=e.run_id AND r.event_type='internal.capability.task.rejected_rolled_back' "
+                "AND r.payload->>'task_id'=e.payload->>'task_id') ORDER BY e.seq DESC LIMIT 1",
+                (run_id, capability_id),
+            )
+            row = await cursor.fetchone()
+            return None if row is None else _event_from_row(row)
+
+    async def get_cancel_reason(self, *, run_id: UUID) -> str:
+        """兼容旧内部事件；只有首次已提交的意图有权决定取消收尾语义。"""
+        async with open_database_connection(self._settings) as connection:
+            return await _cancel_reason_in_transaction(connection, run_id)
+
+    async def record_remote_agent_event(self, event: RuntimeEvent) -> RuntimeEvent:
+        """锁定 Run，校验 open Invocation 和绑定归属后幂等保存远程事实。"""
+        from agent_runtime.runtime.event_schemas import REMOTE_AGENT_EVENT_TYPES
+        self._validate_durable_event(event, allow_stateful=False, allow_remote_controlled=True)
+        if event.event_type not in REMOTE_AGENT_EVENT_TYPES:
+            raise ValueError("只能保存固定远程事实")
+        async with open_database_connection(self._settings) as connection:
+            async with connection.transaction():
+                await _lock_run_for_capability_event(connection=connection, run_id=event.run_id)
+                cursor = await connection.execute(
+                    "SELECT * FROM runtime_events WHERE run_id=%s AND event_type=ANY(%s) "
+                    "AND payload->>'invocation_id'=%s ORDER BY seq",
+                    (event.run_id, list(REMOTE_AGENT_EVENT_TYPES), str(event.payload["invocation_id"])),
+                )
+                existing = [_event_from_row(row) for row in await cursor.fetchall()]
+                for stored in existing:
+                    if stored.event_type == event.event_type:
+                        if stored.payload != event.payload:
+                            raise ValueError("远程绑定或终态不可改变")
+                        return stored
+                opened = await select_open_capability_invocation_in_transaction(connection=connection, run_id=event.run_id)
+                if opened is None or any(opened.payload[key] != event.payload[key] for key in ("invocation_id", "capability_id")):
+                    raise ValueError("远程事实与 open Invocation 不匹配")
+                if event.event_type.endswith("task_bound") and opened.payload.get("remote_agent_identity_hash") != event.payload["remote_agent_identity_hash"]:
+                    raise ValueError("发送前身份与远程绑定身份不一致")
+                if event.event_type.endswith("task_terminal"):
+                    bound = next((e for e in existing if e.event_type.endswith("task_bound")), None)
+                    if bound is None or any(bound.payload[key] != event.payload[key] for key in ("capability_id", "remote_task_id")):
+                        raise ValueError("远程终态缺少匹配绑定")
+                return await self._insert_event(connection, event)
+
     async def transition_run(
         self,
         *,
@@ -685,7 +755,16 @@ class PostgresRuntimeEventRepository:
                         message="Run 恢复激活次数与权威计数不一致",
                         status_code=409,
                     )
-                if not can_transition_run(current.status, target_status):
+                remote_timeout_failure = False
+                if current.status == "cancel_requested" and target_status == "failed":
+                    reason = await _cancel_reason_in_transaction(connection, run_id)
+                    cursor = await connection.execute(
+                        "SELECT 1 FROM runtime_events t WHERE t.run_id=%s AND t.event_type='internal.remote_agent.task_terminal' "
+                        "AND t.payload->>'invocation_id'=(SELECT s.payload->>'invocation_id' FROM runtime_events s "
+                        "WHERE s.run_id=t.run_id AND s.event_type='internal.capability.invocation.started' ORDER BY s.seq DESC LIMIT 1) LIMIT 1", (run_id,))
+                    confirmed = await cursor.fetchone() is not None
+                    remote_timeout_failure = reason == "timeout" and confirmed and event.payload.get("code") == "CAPABILITY_TIMEOUT"
+                if not can_transition_run(current.status, target_status) and not remote_timeout_failure:
                     raise RunStateConflictError(
                         code="RUN_STATE_CONFLICT",
                         message="Run 状态不允许执行该转换",
@@ -771,6 +850,7 @@ class PostgresRuntimeEventRepository:
         run_id: UUID,
         event: RuntimeEvent,
         updated_at: datetime,
+        allow_remote_pending: bool = False,
     ) -> RunEventCommit:
         """原子递增恢复次数、接管 Run 并写入内部 durable 事件。"""
 
@@ -803,7 +883,7 @@ class PostgresRuntimeEventRepository:
                     event_type=event.event_type,
                     target_status="recovering",
                 )
-                if current.recovery_attempts >= 3:
+                if current.recovery_attempts >= 3 and not allow_remote_pending:
                     raise RunStateConflictError(
                         code="RUN_RECOVERY_EXHAUSTED",
                         message="Run 已达到三次恢复上限",
@@ -1423,6 +1503,7 @@ class PostgresRuntimeEventRepository:
         *,
         allow_stateful: bool,
         allow_capability_controlled: bool = False,
+        allow_remote_controlled: bool = False,
     ) -> None:
         if event.durability != "durable":
             raise RuntimeEventPersistenceError(
@@ -1448,6 +1529,8 @@ class PostgresRuntimeEventRepository:
                 status_code=409,
             )
         else:
+            if event.event_type in REMOTE_AGENT_EVENT_TYPES and not allow_remote_controlled:
+                raise RuntimeEventPersistenceError(code="REMOTE_EVENT_REQUIRES_CONTROLLED_TRANSACTION", message="远程事实必须通过受控归属校验入口保存", status_code=409)
             if (
                 event.event_type
                 in CAPABILITY_INVOCATION_EVENT_TYPES | CAPABILITY_TASK_EVENT_TYPES
@@ -1544,6 +1627,14 @@ class PostgresRuntimeEventRepository:
             duration_ms=_elapsed_ms(started_at),
             **fields,
         )
+
+
+async def _cancel_reason_in_transaction(connection, run_id):
+    """首个持久意图不能被重试、删除或后来的相反原因覆盖。"""
+    from agent_runtime.runtime.event_schemas import RunCancelRequestedPayload
+    cursor = await connection.execute("SELECT payload FROM runtime_events WHERE run_id=%s AND event_type='internal.run.cancel_requested' ORDER BY seq LIMIT 1", (run_id,))
+    row = await cursor.fetchone()
+    return "explicit" if row is None else RunCancelRequestedPayload.model_validate(row["payload"]).reason
 
 
 async def _lock_run_for_capability_event(*, connection, run_id: UUID) -> None:

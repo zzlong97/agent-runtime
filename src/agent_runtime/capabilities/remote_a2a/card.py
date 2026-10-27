@@ -114,7 +114,7 @@ def validate_card(
         )
     }
     fingerprint = hashlib.sha256(
-        json.dumps(signature, ensure_ascii=False, sort_keys=True).encode()
+        json.dumps({"source": str(source), "interface": selected[0], "tenant": selected[1], "identity": signature}, ensure_ascii=False, sort_keys=True).encode()
     ).hexdigest()
     return card, AgentCardSnapshot(
         interface_url=selected[0], tenant=selected[1], fingerprint=fingerprint

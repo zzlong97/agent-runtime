@@ -45,6 +45,7 @@ from agent_runtime.capabilities.recovery import (
 from agent_runtime.capabilities.regeneration import RegenerateSubmissionValidator
 from agent_runtime.capabilities.registry import CapabilityRegistry
 from agent_runtime.capabilities.remote_a2a.capability import RemoteA2ACapability
+from agent_runtime.capabilities.remote_a2a.capability import RemoteExecutionPending
 from agent_runtime.capabilities.routing import (
     CapabilityPermissionService,
     RouterCandidateProvider,
@@ -101,6 +102,7 @@ from agent_runtime.runtime.event_schemas import (
     RunRecoveryActivatedPayload,
     RunRecoveryClaimedPayload,
     RunStartedPayload,
+    RemotePendingPayload,
 )
 from agent_runtime.runtime.checkpoint_recovery import (
     RecoveredFinalMessage,
@@ -110,6 +112,7 @@ from agent_runtime.runtime.checkpoint_recovery import (
 )
 from agent_runtime.runtime.fingerprints import build_request_fingerprint
 from agent_runtime.runtime.models import JsonValue, Run, RunSubmission
+from agent_runtime.runtime.agent_contract import TaskInput
 from agent_runtime.runtime.interrupts import (
     InterruptStateConflictError,
     PostgresRunInterruptRepository,
@@ -208,6 +211,7 @@ class ChatService:
             CapabilityRecoveryPolicyEvaluator | None
         ) = None,
         open_invocation_resolver: OpenInvocationResolver | None = None,
+        remote_gateway: CapabilityInvocationGateway | None = None,
         regenerate_submission_validator: (
             RegenerateSubmissionValidator | None
         ) = None,
@@ -243,6 +247,7 @@ class ChatService:
             capability_recovery_policy_evaluator
         )
         self._open_invocation_resolver = open_invocation_resolver
+        self._remote_gateway = remote_gateway
         self._regenerate_submission_validator = regenerate_submission_validator
         self._session_id_factory = session_id_factory
         self._human_message_id_factory = human_message_id_factory
@@ -983,6 +988,14 @@ class ChatService:
                         turn=turn,
                     )
             return
+        except RemoteExecutionPending as error:
+            await self._defer_remote_run(run, error.code)
+            if error.code == "CAPABILITY_REMOTE_TIMEOUT_UNCONFIRMED":
+                async with coordinator.claim_guard(run.run_id):
+                    current = await repository.get(run.run_id)
+                    if current.status == "cancel_requested":
+                        await self._finalize_persistent_cancellation_locked(current)
+            return
         except Exception as error:
             if parent_final_checkpoint_persisted:
                 log_business_event(
@@ -1002,6 +1015,13 @@ class ChatService:
                     error_type=type(error).__name__,
                 )
                 raise
+            if await self._is_remote_open(run):
+                opened = await sequencer.get_open_capability_invocation()
+                terminal = None if opened is None else await sequencer.get_remote_agent_event(
+                    invocation_id=UUID(opened.payload["invocation_id"]), event_type="internal.remote_agent.task_terminal")
+                if terminal is None:
+                    await self._defer_remote_run(run, "CAPABILITY_REMOTE_STATE_UNKNOWN")
+                    return
             public_error = (
                 error
                 if isinstance(error, ApplicationError)
@@ -1098,6 +1118,40 @@ class ChatService:
             duration_ms=round((perf_counter() - started_at) * 1000, 2),
         )
 
+    async def _is_remote_open(self, run: Run) -> bool:
+        """恢复上限判断覆盖尚未写入绑定的远程 open Invocation。"""
+        return self._remote_gateway is not None and await self._remote_gateway.is_remote_open(run_id=run.run_id, response_message_id=run.response_message_id)
+
+    async def _remote_cancellation_confirmed(self, run: Run) -> bool:
+        """只在确认远程终态后允许取消投影或 Session 清理。"""
+        if self._remote_gateway is None:
+            return True
+        content = (run.input_payload or {}).get("message", {}).get("content", "")
+        try:
+            await self._remote_gateway.confirm_remote_cancellation_for_run(run_id=run.run_id, response_message_id=run.response_message_id,
+                task_input=TaskInput(messages=(HumanMessage(content=content),)))
+            return True
+        except RemoteExecutionPending as error:
+            await self._defer_remote_run(run, error.code)
+            return False
+
+    async def _defer_remote_run(self, run: Run, code: str) -> None:
+        """结果未知只投影非终态，不生成公共失败消息或关闭 Invocation。"""
+        repository, _ = self._persistent_runtime_dependencies()
+        current = await repository.get(run.run_id)
+        if code in {"CAPABILITY_REMOTE_CANCEL_UNCONFIRMED", "CAPABILITY_REMOTE_TIMEOUT_UNCONFIRMED"} and current.status in {"running", "recovering"}:
+            sequencer = RunSequencer.for_run(run_id=run.run_id, response_message_id=run.response_message_id,
+                repository=self._runtime_event_repository, publisher=self._runtime_event_publisher)
+            await sequencer.transition_run(target_status="cancel_requested", event=self._internal_runtime_event_draft(
+                "internal.run.cancel_requested", RunCancelRequestedPayload(status="cancel_requested", reason="timeout" if code == "CAPABILITY_REMOTE_TIMEOUT_UNCONFIRMED" else "explicit")), updated_at=datetime.now(UTC))
+        elif current.status == "running":
+            sequencer = RunSequencer.for_run(run_id=run.run_id, response_message_id=run.response_message_id,
+                repository=self._runtime_event_repository, publisher=self._runtime_event_publisher)
+            await sequencer.transition_run(target_status="recovering", event=self._internal_runtime_event_draft(
+                "internal.run.remote_pending", RemotePendingPayload(status="recovering", code=code)), updated_at=datetime.now(UTC))
+        log_business_event(logger, "远程执行等待确认", run_id=run.run_id, session_id=run.session_id,
+            message_id=run.response_message_id, status=current.status, error_code=code)
+
     async def _reconcile_stopped_checkpoint(self, run: Run) -> bool:
         """识别已落盘 stopped 消息，并在执行 Graph 前只补取消投影。"""
 
@@ -1151,6 +1205,8 @@ class ChatService:
         assert event_repository is not None
         current = run
         if current.status in {"completed", "failed", "cancelled"}:
+            return current
+        if not await self._remote_cancellation_confirmed(current):
             return current
         if current.status in {"running", "recovering"}:
             requested = await sequencer.transition_run(
@@ -1265,6 +1321,9 @@ class ChatService:
                 or final_message.runtime_status == "incomplete"
             )
         )
+        remote_open = await self._is_remote_open(run)
+        if remote_open and run.recovery_attempts:
+            await asyncio.sleep(min(5.0, self._settings.remote_a2a_poll_interval_seconds * 2 ** min(run.recovery_attempts, 5)))
         recovery_decision: CapabilityRecoveryDecision | None = None
         claimed_run = run
         recovery_limit_reached = False
@@ -1276,7 +1335,7 @@ class ChatService:
                 return
             if current.status not in {"running", "recovering"}:
                 return
-            if current.recovery_attempts >= 3:
+            if current.recovery_attempts >= 3 and not remote_open:
                 claimed_run = current
                 recovery_limit_reached = True
             else:
@@ -1290,6 +1349,7 @@ class ChatService:
                         ),
                     ),
                     updated_at=datetime.now(UTC),
+                    allow_remote_pending=remote_open,
                 )
                 claimed_run = claim.run
 
@@ -1309,6 +1369,9 @@ class ChatService:
                     checkpoint_capability_id=checkpoint_capability_id,
                 )
             except CapabilityRecoveryError as error:
+                if remote_open:
+                    await self._defer_remote_run(run, error.code)
+                    return
                 async with coordinator.claim_guard(run.run_id):
                     current = await repository.get(run.run_id)
                     if current.status == "cancel_requested":
@@ -1327,6 +1390,9 @@ class ChatService:
                         )
                 return
             except Exception:
+                if remote_open:
+                    await self._defer_remote_run(run, "CAPABILITY_REMOTE_STATE_UNKNOWN")
+                    return
                 if claimed_run.recovery_attempts < 3:
                     raise
                 async with coordinator.claim_guard(run.run_id):
@@ -1350,6 +1416,10 @@ class ChatService:
             and recovery_decision.action == "manual_fail"
             and final_message is None
         ):
+            if remote_open:
+                # 拒绝自动重放不能证明外部任务已停止；显式 Cancel 仍可确认并收尾。
+                await self._defer_remote_run(run, "CAPABILITY_MANUAL_RECOVERY_REQUIRED")
+                return
             async with coordinator.claim_guard(run.run_id):
                 current = await repository.get(run.run_id)
                 if current.status == "cancel_requested":
@@ -1994,6 +2064,27 @@ class ChatService:
             error_code="RUN_RECOVERY_EXHAUSTED",
         )
 
+    async def _finalize_remote_timeout_locked(self, run: Run, *, turn=None, partial_content="", capability_id=None) -> Run:
+        """远程终态确认后恢复原超时失败语义，公共消息必须先于 Run 终态。"""
+        repository = self._runtime_event_repository
+        sequencer = RunSequencer.for_run(run_id=run.run_id, response_message_id=run.response_message_id,
+            repository=repository, publisher=self._runtime_event_publisher)
+        if turn is None:
+            turn = await self._turn_from_run(run)
+        await self.persist_runtime_message(turn, partial_content if partial_content.strip() else _FAILED_MESSAGE_FALLBACK,
+            runtime_status="incomplete", capability_id=capability_id,
+            include_human=not turn.is_regeneration and not turn.is_resume)
+        await self._fail_open_invocation(run=run, sequencer=sequencer, error_code="CAPABILITY_TIMEOUT")
+        if not await repository.has_event_type(run_id=run.run_id, event_type="message.finalized"):
+            await sequencer.emit(self._runtime_event_draft("message.finalized", MessageFinalizedPayload(
+                response_message_id=run.response_message_id, runtime_status="incomplete", capability_id=capability_id)))
+        message = "该能力执行超时，请稍后重试"
+        commit = await sequencer.transition_run(target_status="failed", event=self._runtime_event_draft("run.failed", RunFailedPayload(
+            status="failed", code="CAPABILITY_TIMEOUT", message=message, retryable=True)), updated_at=datetime.now(UTC),
+            error_code="CAPABILITY_TIMEOUT", error_message=message)
+        await self._session_service.touch_session(session_id=run.session_id)
+        return commit.run
+
     async def _finalize_persistent_cancellation_locked(
         self,
         run: Run,
@@ -2013,6 +2104,10 @@ class ChatService:
             )
         if run.status == "cancelled":
             return run
+        if not await self._remote_cancellation_confirmed(run):
+            return run
+        if self._remote_gateway is not None and await event_repository.get_cancel_reason(run_id=run.run_id) == "timeout":
+            return await self._finalize_remote_timeout_locked(run, turn=turn, partial_content=partial_content, capability_id=capability_id)
         inspector = RunCheckpointInspector(parent_graph=self._parent_graph)
         snapshot = await inspector.latest_for_run(run)
         existing_final_message = (
@@ -2738,9 +2833,10 @@ class ChatService:
                     await self.cancel_persistent_run(
                         run_id=active_persistent_run.run_id
                     )
-                    await run_coordinator.wait_for_run(
-                        active_persistent_run.run_id
-                    )
+                    try:
+                        await asyncio.wait_for(run_coordinator.wait_for_run(active_persistent_run.run_id), timeout=self._settings.run_cancel_grace_seconds + self._settings.remote_a2a_http_timeout_seconds * 3 + 1)
+                    except TimeoutError:
+                        raise SessionDeletionError(code="CAPABILITY_REMOTE_CANCEL_UNCONFIRMED", message="远程取消尚未确认，请稍后重试删除", status_code=409, retryable=True) from None
                     persisted_terminal = await persistent_run_repository.get(
                         active_persistent_run.run_id
                     )
@@ -2750,9 +2846,9 @@ class ChatService:
                         "cancelled",
                     }:
                         raise SessionDeletionError(
-                            code="SESSION_DELETE_FAILED",
+                            code="CAPABILITY_REMOTE_CANCEL_UNCONFIRMED",
                             message="Session 活动 Run 尚未完成取消，请重试",
-                            status_code=500,
+                            status_code=409,
                             retryable=True,
                         )
 
@@ -3454,6 +3550,7 @@ async def open_chat_service(
         registry: CapabilityRegistry | None = None
         capability_recovery_policy_evaluator = None
         open_invocation_resolver = None
+        capability_gateway = None
         regenerate_submission_validator = None
         if settings.runtime_demo_mode:
             parent_graph = build_runtime_demo_graph(
@@ -3488,6 +3585,7 @@ async def open_chat_service(
                     manifest=manifest,
                     development_mode=settings.remote_a2a_development_mode,
                     http_timeout_seconds=settings.remote_a2a_http_timeout_seconds,
+                    poll_interval_seconds=settings.remote_a2a_poll_interval_seconds,
                 ),
             )
             # Registry 构造后即登记清理，覆盖后续组装失败及正常关闭两个出口。
@@ -3509,7 +3607,7 @@ async def open_chat_service(
                 task_repository=capability_task_repository,
                 operation_repository=capability_operation_repository,
                 child_checkpointer_provider=(
-                    child_checkpointer_by_capability.__getitem__
+                    lambda capability_id: child_checkpointer_by_capability.get(capability_id, checkpointers.cleanup)
                 ),
                 sequencer_factory=lambda run_id, response_message_id: (
                     RunSequencer.for_run(
@@ -3616,6 +3714,7 @@ async def open_chat_service(
                 capability_recovery_policy_evaluator
             ),
             open_invocation_resolver=open_invocation_resolver,
+            remote_gateway=capability_gateway,
             regenerate_submission_validator=regenerate_submission_validator,
         )
         try:

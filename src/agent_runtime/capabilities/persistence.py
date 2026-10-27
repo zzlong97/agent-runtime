@@ -1087,8 +1087,10 @@ class CapabilityTaskRepository:
         task_event: RuntimeEvent,
         invocation_event: RuntimeEvent,
         updated_at: datetime,
+        remote_binding: dict | None = None,
+        remote_thread_id: str | None = None,
     ) -> tuple[RuntimeEvent, RuntimeEvent]:
-        """无 Operation 时删除 provisional Task、恢复 current 并关闭 Invocation。"""
+        """原子回滚零副作用 Task；远程仅可清理已确认拒绝的精确传输行。"""
 
         if not resolution.provisional:
             raise CapabilityPersistenceConflictError(
@@ -1139,7 +1141,10 @@ class CapabilityTaskRepository:
                     (run_id, invocation_id),
                 )
                 operation_row = await operation_cursor.fetchone()
-                if operation_row and bool(operation_row["operation_exists"]):
+                if remote_binding is not None:
+                    await _clear_confirmed_remote_rejection_transport(connection=connection, run_id=run_id,
+                        invocation_id=invocation_id, task=task, binding=remote_binding, thread_id=remote_thread_id)
+                elif operation_row and bool(operation_row["operation_exists"]):
                     raise CapabilityTaskContractViolationError(
                         code="CAPABILITY_EXECUTION_FAILED",
                         message="Capability 拒绝前已经登记 Operation，禁止回滚 Task",
@@ -1962,6 +1967,45 @@ async def _validate_run_session_and_open_invocation(
             message="Task 操作与当前 open Capability Invocation 不匹配",
             status_code=409,
         )
+
+
+async def _clear_confirmed_remote_rejection_transport(*, connection, run_id, invocation_id, task, binding, thread_id):
+    """仅在受信 Gateway 已确认范围拒绝后，原子校验并精确删除一次传输行。"""
+    from agent_runtime.capabilities.remote_a2a.capability import initial_message_id
+    from agent_runtime.capabilities.operation_ledger import build_operation_idempotency_key
+    from agent_runtime.runtime.event_schemas import RemoteTaskBoundPayload, RemoteTaskTerminalPayload
+    expected = RemoteTaskBoundPayload.model_validate(binding)
+    if (expected.invocation_id != invocation_id or expected.capability_id != task.capability_id
+            or expected.initial_message_id != initial_message_id(invocation_id) or not thread_id):
+        raise ValueError("远程拒绝绑定归属不匹配")
+    cursor = await connection.execute(
+        "SELECT event_type,payload FROM runtime_events WHERE run_id=%s AND "
+        "payload->>'invocation_id'=%s AND event_type=ANY(%s) ORDER BY seq FOR UPDATE",
+        (run_id, str(invocation_id), ["internal.remote_agent.task_bound", "internal.remote_agent.task_terminal"]),
+    )
+    rows = await cursor.fetchall()
+    facts = {row["event_type"]: row["payload"] for row in rows}
+    if len(rows) != 2 or facts.get("internal.remote_agent.task_bound") != expected.model_dump(mode="json"):
+        raise ValueError("远程拒绝缺少唯一持久绑定")
+    terminal = RemoteTaskTerminalPayload.model_validate(facts["internal.remote_agent.task_terminal"])
+    if (terminal.invocation_id != invocation_id or terminal.capability_id != task.capability_id
+            or terminal.remote_task_id != expected.remote_task_id or terminal.remote_status != "rejected"):
+        raise ValueError("远程拒绝终态未确认")
+    cursor = await connection.execute("SELECT 1 FROM checkpoints WHERE thread_id=%s LIMIT 1", (thread_id,))
+    if await cursor.fetchone() is not None:
+        raise ValueError("远程拒绝已推进 Child Checkpoint")
+    cursor = await connection.execute("SELECT * FROM capability_operations WHERE run_id=%s AND invocation_id=%s FOR UPDATE", (run_id, invocation_id))
+    operations = [_operation_from_row(row) for row in await cursor.fetchall()]
+    key = f"remote_send:{expected.initial_message_id}"
+    if len(operations) != 1:
+        raise ValueError("远程拒绝存在其他或缺失的 Operation")
+    operation = operations[0]
+    if (operation.run_id != run_id or operation.invocation_id != invocation_id or operation.task_id != task.task_id
+            or operation.capability_id != task.capability_id or operation.operation_key != key
+            or operation.status not in {"pending", "succeeded"}
+            or operation.idempotency_key != build_operation_idempotency_key(run_id=run_id, invocation_id=invocation_id, operation_key=key)):
+        raise ValueError("远程拒绝传输账本不符合精确归属")
+    await connection.execute("DELETE FROM capability_operations WHERE operation_id=%s", (operation.operation_id,))
 
 
 async def _recover_task_resolution(

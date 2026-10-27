@@ -208,8 +208,9 @@ class CapabilityTaskService:
         public_output_emitted: bool,
         checkpoint_store: ChildCheckpointStore,
         updated_at: datetime,
+        remote_binding: dict | None = None,
     ) -> tuple[RuntimeEvent, RuntimeEvent]:
-        """仅在零输出、零 Operation、零 Checkpoint 时回滚 provisional Task。"""
+        """本地保持零 Operation；远程只接受受信 Gateway 注入的精确拒绝证据。"""
 
         if not resolution.provisional:
             raise ValueError("只有 provisional Task 可以执行 OUT_OF_SCOPE 回滚")
@@ -265,6 +266,7 @@ class CapabilityTaskService:
                 task_event=events[0],
                 invocation_event=events[1],
                 updated_at=updated_at,
+                **({"remote_binding": remote_binding, "remote_thread_id": thread_id} if remote_binding is not None else {}),
             )
 
         try:

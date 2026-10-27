@@ -169,6 +169,19 @@ class RunSequencer:
                 events.append(await self._build_event(draft))
             return await commit(tuple(events))
 
+    async def get_remote_agent_event(self, *, invocation_id: UUID, event_type: str) -> RuntimeEvent | None:
+        """读取本 Run 的受控远程事实，不向普通 Capability SDK 暴露。"""
+        return await self._repository.get_remote_agent_event(run_id=self._run_id, invocation_id=invocation_id, event_type=event_type)
+
+    async def get_remote_rejected_result(self, *, capability_id: str) -> RuntimeEvent | None:
+        """读取已原子提交的远程拒绝，避免事务提交后 Graph 重放重复 Send。"""
+        return await self._repository.get_remote_rejected_result(run_id=self._run_id, capability_id=capability_id)
+
+    async def record_remote_agent_event(self, draft: RuntimeEventDraft) -> RuntimeEvent:
+        """串行分配持久序号；重复事实由数据库归属校验后复用。"""
+        async with self._lock:
+            return await self._repository.record_remote_agent_event(await self._build_event(draft))
+
     async def transition_run(
         self,
         *,
@@ -199,6 +212,7 @@ class RunSequencer:
         *,
         event: RuntimeEventDraft,
         updated_at: datetime,
+        allow_remote_pending: bool = False,
     ) -> RunEventCommit:
         """分配序号并原子递增恢复次数、接管 Run 与写入内部事件。"""
 
@@ -208,6 +222,7 @@ class RunSequencer:
                 run_id=self._run_id,
                 event=runtime_event,
                 updated_at=updated_at,
+                **({"allow_remote_pending": True} if allow_remote_pending else {}),
             )
             return commit
 

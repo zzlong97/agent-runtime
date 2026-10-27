@@ -1000,6 +1000,14 @@ continue，不迁移、不失败 Task。
 current Task 并清理临时 Child thread。Capability 若已产生公开输出、Operation 或
 业务 State 后再拒绝，按契约违规失败。
 
+2026-10-27 负责人补充批准 Remote Agent 窄例外：只有已确认的远程 rejected 终态、
+显式 `OUT_OF_SCOPE`、零公开输出、零业务 State 推进和零 Child Checkpoint，才允许
+原子清理本次受控 `remote_send` 传输台账并回滚 provisional Task、恢复原 current。
+本地 Capability 的零 Operation 规则不变；其他业务/Cancel 操作和结果未知的 pending
+均不得借此清理。精确条件与事务语义见架构 17.3～17.5 和 D-067；实际裁决来源见
+`.dev-team/tasks/RA-001/handoffs/0008-远程范围拒绝窄例外裁决.md`。原决策及批准保留，
+本补充不授权一般化删除 Ledger、修改恢复幂等或增加远程私有 State 访问。
+
 **Status**：Accepted
 
 ---
@@ -1221,6 +1229,17 @@ Task 查询恢复。此时 Run 保持 `recovering` 或 `cancel_requested` 并继
 S2.5 的 3 次恢复终止策略只保留给本地执行；有未确认远程 Task 的 Run 可以使
 `recovery_attempts` 超过 3，并按有界退避继续查询。公开计数字段移除最大值校验，
 否则一次以上的 Runtime 重启可能错误放开仍在远程执行的副作用。
+
+2026-10-27 负责人补充批准已确认远程范围拒绝的窄例外：在显式 `OUT_OF_SCOPE`、
+已确认同一 Task/context 的 rejected 终态、零公开输出/业务 State/Child Checkpoint
+且本地 Task 仍为本次 provisional Task 时，允许同一事务精确清理该次稳定消息 ID
+对应的 `remote_send` 传输行、恢复原 current、删除 provisional Task，并写可追溯的
+内部 Task 回滚和 Invocation rejected 结果。只允许 succeeded，或请求结果已由远程
+终态确认但因本地崩溃仍 pending 的该传输行；其他业务操作、Cancel、其他消息的 Send
+及未知 pending 不得清理。绑定与已确认远程终态事件仍保留，事务失败整体回滚，
+恢复不改变 messageId 或新建远程任务。该批准不改变本地拒绝规则、不新增表，也不
+把普通远程 rejected 当 OUT_OF_SCOPE。实际问题和负责人原话见上述 0008 交接；
+其余原批准与未知结果 pending 原则继续有效。
 
 **Reason**
 

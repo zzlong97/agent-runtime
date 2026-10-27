@@ -38,7 +38,7 @@ def test_capability_invocation_payloads_reject_extra_or_invalid_combinations() -
         "state_scope",
         "state_schema_version",
     }
-    assert set(InvocationStartedPayload.model_fields) == common_fields
+    assert set(InvocationStartedPayload.model_fields) == common_fields | {"remote_agent_identity_hash"}
     assert set(InvocationCompletedPayload.model_fields) == common_fields | {
         "outcome"
     }

@@ -1,0 +1,33 @@
+{
+  "task_id": "RA-DEV-02",
+  "date": "2026-10-27",
+  "cwd": "D:/workspace/agent_runtime",
+  "python": "3.12.7",
+  "base_commit": "4f6791369ee562c52539a260ee7320f38e7f34c8",
+  "scope_sha256": "626b1e0e8bd52d899063b32bd1bfe1747f6ee2ff2cbc73653414836360105c03",
+  "default_full": {
+    "command": ".venv/Scripts/python.exe -X utf8 -m pytest -q -m 'not postgres and not redis and not bailian' -o addopts='' --tb=short",
+    "exit_code": 0,
+    "raw_terminal_output": "782 passed, 108 deselected in 12.29s",
+    "executions": 1
+  },
+  "postgres_complete": {
+    "command": "$env:RUN_POSTGRES_TESTS='1'; $env:RUN_REDIS_TESTS='1'; .venv/Scripts/python.exe -X utf8 -c \"import os; from agent_runtime.core.config import Settings; os.environ['DATABASE_URL']=str(Settings().database_url).rsplit('/',1)[0]+'/agent_runtime_ra02_probe'; import pytest; raise SystemExit(pytest.main(['tests/capabilities/test_contracts.py','tests/capabilities/test_s3_05_postgres_integration.py','tests/capabilities/test_s3_08_postgres_integration.py','tests/capabilities/test_s3_09_postgres_integration.py','tests/capabilities/test_s3_10_postgres_integration.py','tests/capabilities/test_session_deletion_postgres_integration.py','tests/integration/test_checkpoint_recovery_runtime.py','tests/api/test_session_delete_runtime_integration.py','tests/runtime/test_cancel_postgres_integration.py','tests/integration/test_remote_runtime_postgres.py','-q','-o','addopts=','--tb=short']))\"",
+    "database": "agent_runtime_ra02_probe",
+    "compose_services": [
+      "postgres",
+      "redis"
+    ],
+    "exit_code": 0,
+    "raw_terminal_output": ".                                                                   [100%]\r\n78 passed in 167.20s (0:02:47)\r\n",
+    "passed": 78,
+    "skipped": 0,
+    "new_remote_cases": 34,
+    "old_cases": 44
+  },
+  "limitations": [
+    "HEAD can reproduce an existing circular import when event_repository is the first Capability entry point; see verification record.",
+    "Remote text Interrupt/Resume API/UI belong to RA-DEV-03.",
+    "No real model or remote Agent, no commit or push."
+  ]
+}

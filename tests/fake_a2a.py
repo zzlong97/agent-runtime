@@ -37,6 +37,11 @@ class FakeA2A:
         self.tasks = {}
         self.messages = {}
         self.disconnect_after_accept = False
+        self.disconnect_get = False
+        self.disconnect_cancel = False
+        self.cancel_state = "TASK_STATE_CANCELED"
+        self.out_of_scope = False
+        self.business_creations = 0
         self.status_code = None
         self.raw_response = None
         self.redirect = None
@@ -74,6 +79,10 @@ class FakeA2A:
                     "contextId": context_id,
                     "status": {"state": self.state},
                 }
+                if self.state == "TASK_STATE_REJECTED" and self.out_of_scope:
+                    task["metadata"] = {"control_signal": "OUT_OF_SCOPE"}
+                else:
+                    self.business_creations += 1
                 if self.state == "TASK_STATE_COMPLETED":
                     task["artifacts"] = [
                         {
@@ -98,7 +107,11 @@ class FakeA2A:
             if task_id not in self.tasks:
                 return httpx.Response(404, json={"error": {"message": "未知任务"}})
             if request.url.path.endswith(":cancel"):
-                self.tasks[task_id]["status"] = {"state": "TASK_STATE_CANCELED"}
+                self.tasks[task_id]["status"] = {"state": self.cancel_state}
+                if self.disconnect_cancel:
+                    raise httpx.ReadError("模拟取消响应未知", request=request)
+            elif self.disconnect_get:
+                raise httpx.ReadError("模拟查询不可达", request=request)
             return httpx.Response(200, json=deepcopy(self.tasks[task_id]))
         return httpx.Response(404)
 

@@ -102,6 +102,7 @@ class RemoteA2AClient:
         )
         self._snapshot: AgentCardSnapshot | None = None
         self._rest: RestTransport | None = None
+        self._identity_mismatch_detected = False
 
     @property
     def snapshot(self) -> AgentCardSnapshot | None:
@@ -213,10 +214,14 @@ class RemoteA2AClient:
                 development_mode=self._development_mode,
             )
             if self._snapshot is not None and self._snapshot != snapshot:
+                # 旧快照仅保留静态归属，不能让取消路径继续使用已经失效的信任。
+                self._identity_mismatch_detected = True
                 raise protocol_error()
             if self._snapshot is None:
                 self._snapshot = snapshot
                 self._rest = RestTransport(self._http, card, snapshot.interface_url)
+            # 只有重新成功验证原身份才解除门禁；暂时不可达或仅恢复远程 Card 均不解除。
+            self._identity_mismatch_detected = False
             return self._snapshot
 
         return await self._call("discover", request)
@@ -297,7 +302,7 @@ class RemoteA2AClient:
 
     def _require_discovered(self):
         """发现失败时不能直接使用远程 Client。"""
-        if self._rest is None or self._snapshot is None:
+        if self._rest is None or self._snapshot is None or self._identity_mismatch_detected:
             raise protocol_error()
         return self._rest, self._snapshot
 

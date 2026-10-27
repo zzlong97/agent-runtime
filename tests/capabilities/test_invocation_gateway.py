@@ -401,3 +401,16 @@ def test_gateway_rejects_regenerate_capability_metadata_mismatch() -> None:
         )
 
     assert invocation_service.started == []
+
+
+def test_local_scope_rejection_with_operation_still_fails():
+    """远程传输窄例外不能放宽本地 Capability 的零 Operation 门禁。"""
+    fixture = _gateway_fixture(AgentResult(status="rejected", content="", metadata={"control_signal": "OUT_OF_SCOPE"}))
+    gateway, _, _, _, invocation, tasks, task, _ = fixture
+    async def operations(**kwargs):
+        return (SimpleNamespace(operation_key="remote_send:forged", status="succeeded"),)
+    gateway._operation_repository.list_for_invocation = operations
+    with pytest.raises(Exception) as caught:
+        _invoke_gateway(gateway, task)
+    assert caught.value.code == "CAPABILITY_EXECUTION_FAILED"
+    assert tasks.rollbacks == [] and len(invocation.failed) == 1

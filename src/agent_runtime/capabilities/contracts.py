@@ -184,7 +184,10 @@ class CapabilityError(Exception):
 
     def __setattr__(self, name: str, value: object) -> None:
         """拒绝修改既有字段或添加任意私有状态。"""
-
+        # contextlib 重新抛出同一异常时必须恢复 traceback；这不改变业务契约字段。
+        if name == "__traceback__":
+            BaseException.__setattr__(self, name, value)
+            return
         raise AttributeError("CapabilityError 是关闭且不可变的错误契约")
 
     def __delattr__(self, name: str) -> None:

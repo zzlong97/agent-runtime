@@ -31,3 +31,9 @@ tasks:
     state_file: .dev-team/tasks/RA-DEV-01/state.yaml
     parent_task: RA-001
     depends_on: []
+  RA-DEV-02:
+    title: 远程执行绑定、恢复与取消闭环
+    state_file: .dev-team/tasks/RA-DEV-02/state.yaml
+    parent_task: RA-001
+    depends_on:
+      - RA-DEV-01

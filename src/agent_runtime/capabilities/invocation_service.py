@@ -55,6 +55,7 @@ class CapabilityInvocationService:
         task_action: Literal["continue", "new"],
         state_scope: StateScope,
         created_at: datetime,
+        remote_agent_identity_hash: str | None = None,
     ) -> CapabilityInvocation:
         """创建新 Invocation；已有 open started 时复用其稳定身份。"""
 
@@ -73,6 +74,7 @@ class CapabilityInvocationService:
                     effective_task_action=None,
                     state_scope=state_scope,
                     state_schema_version=None,
+                    remote_agent_identity_hash=remote_agent_identity_hash,
                 ),
                 schema_version=1,
                 durability="durable",

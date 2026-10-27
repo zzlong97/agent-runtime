@@ -1,40 +1,40 @@
 schema_version: 1
 task_id: "RA-001"
-state_version: 10
-status: "开发中"
+state_version: 16
+status: 开发中
 current_role: "dev-team-controller"
-next_action: "按负责人继续执行授权完成 RA-DEV-01 提交/双远程同步，再推进已批准 RA-DEV-02；整个 RA 尚未终验"
+next_action: RA-DEV-02负责人终验通过，提交及双同步核实后再推进RA-DEV-03；父阶段未整体验收
 baselines:
   requirements:
     path: "docs/requirements.md"
-    version: "sha256:4c4737947a6b2dcafc04a94b62301f7b47e3614b42dea103ed3a85f965d8ff9b"
+    version: "sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a"
     section: "第9节RA-001，不包含MI追加段"
     approval:
       status: "已批准（仅RA引用范围）"
       approved_by: "项目负责人"
-      source_ref: ".dev-team/tasks/RA-001/handoffs/0007-续行授权与基线等价核对.md"
+      source_ref: ".dev-team/tasks/RA-001/handoffs/0008-远程范围拒绝窄例外裁决.md"
       source_text: "同意当前任务规划，规划完成后先不要开展工作，我需要另外规划一个能力，再看优先实现哪一个。"
       approved_at: "2026-10-26T17:30:20+08:00"
   architecture:
     path: "docs/architecture.md"
-    version: "sha256:3f4d0231880ec42975248165ad2cd0fde4380ffea17d3e80939b83f6800d60da"
-    section: "第17节RA-001，不包含MI追加段"
+    version: "sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b"
+    section: "第17节及15.5引用：0008窄例外、0010/0011既有安全与超时语义实施细化；MI不在范围"
     approval:
       status: "已批准（仅RA引用范围）"
       approved_by: "项目负责人"
-      source_ref: ".dev-team/tasks/RA-001/handoffs/0007-续行授权与基线等价核对.md"
+      source_ref: ".dev-team/tasks/RA-001/handoffs/0011-远程超时取消意图持久化细化.md"
       source_text: "同意当前任务规划，规划完成后先不要开展工作，我需要另外规划一个能力，再看优先实现哪一个。"
       approved_at: "2026-10-26T17:30:20+08:00"
 artifacts:
   -
     path: "docs/requirements.md"
-    version: "sha256:4c4737947a6b2dcafc04a94b62301f7b47e3614b42dea103ed3a85f965d8ff9b"
+    version: "sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a"
   -
     path: "docs/architecture.md"
-    version: "sha256:3f4d0231880ec42975248165ad2cd0fde4380ffea17d3e80939b83f6800d60da"
+    version: "sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b"
   -
     path: "docs/decisions.md"
-    version: "sha256:2157ebb51b5a309886e96759bf35b41f39d686b684acd1d47db51b78df6ef8e2"
+    version: "sha256:78ac1122defa9df497fd154d13bacd8dc04a15ef1b4c53024d448cbf3ee681af"
   -
     path: ".dev-team/tasks/RA-001/task.md"
     version: "sha256:02d24d018a0c46bec3777d27bffe7aa4931734f8382a72e8cabf0f81887694e2"
@@ -50,18 +50,63 @@ artifacts:
   -
     path: ".dev-team/tasks/RA-001/handoffs/0007-续行授权与基线等价核对.md"
     version: "sha256:7c37d118138bc94fe721bb5926e718781aab0ca5fda8576930439cb3c7a837db"
+  -
+    path: ".dev-team/tasks/RA-DEV-01/handoffs/0005-提交与同步回执.md"
+    version: "sha256:8bdd8822c74aa9003713ea05be0d74654947cf76f7b6b0d53dd434949820b96b"
+  -
+    path: ".dev-team/tasks/RA-001/handoffs/0008-远程范围拒绝窄例外裁决.md"
+    version: "sha256:bd19dba783de882cfcde119a42a14d07d4c73be4cebeb76f04b6d61c226403c8"
+  -
+    path: ".dev-team/tasks/RA-001/handoffs/0006-RA02实施落点核对.md"
+    version: "sha256:519f08e4e61039d6a1e9deae3c38c43c32e09ff806636ab8c20d0f98ec068d5e"
+  -
+    path: ".dev-team/tasks/RA-001/handoffs/0009-发送前远程身份缺口核对.md"
+    version: "sha256:b2d1326a8523686a396ee5b8ffe6abc42965c73256d9cdab8e00890e82c34408"
+  -
+    path: ".dev-team/tasks/RA-001/handoffs/0010-发送前身份持久化实施细化.md"
+    version: "sha256:42632c5525868f3837d07dfd5b7d3e8dd1a1c2c72f4ad532470ac0e61f4622f5"
+  -
+    path: ".dev-team/tasks/RA-001/handoffs/0011-远程超时取消意图持久化细化.md"
+    version: "sha256:3cfdd9b2f58653c212b80959cd24d1ee6de3cf6d305cf5b8fb633f76cf6757b8"
+  -
+    path: ".dev-team/tasks/RA-DEV-02/handoffs/0001-开发交付.md"
+    version: "sha256:3aff42cfeaa6247e304b2963f00466440a57dae05d2b1c777dda65ec3d72e3b8"
+  -
+    path: ".dev-team/tasks/RA-DEV-02/handoffs/0002-独立审核.md"
+    version: "sha256:77cb087238d956a12ac465dfc101804584d6fc646236efc1d5acbf64dee88ba8"
+  -
+    path: ".dev-team/tasks/RA-DEV-02/handoffs/0003-R01返工交付.md"
+    version: "sha256:c40b8d50148bed9f236d20986a3ec5c04396af46d77f7f0f887d5c71186ba2ec"
+  -
+    path: ".dev-team/tasks/RA-DEV-02/handoffs/0004-R01独立复核.md"
+    version: "sha256:6d3cd65f95aa1d2d133b72a66ee56fb5b7923b17425fd17c10ef100723bac3b4"
+  -
+    path: ".dev-team/tasks/RA-DEV-02/evidence/R01返工范围指纹.json"
+    version: "sha256:e5a93508a245cce224d6379a89dd5e503194c5334955ac3c85a8a1ff1d54bc23"
+  -
+    path: ".dev-team/tasks/RA-DEV-02/evidence/R01返工验证回执.json"
+    version: "sha256:b9acdeb53ef5f136f4ff2b93f6b0573f2042fd77b9485acc3a1b48c229bf05cb"
+  -
+    path: ".dev-team/tasks/RA-001/handoffs/0012-RA02技术交付与终验边界.md"
+    version: "sha256:eda58bb2e02af37fd493e8f07261ec730824b28639b5695a9b642ac617566cfe"
+  -
+    path: .dev-team/tasks/RA-DEV-02/handoffs/0005-负责人终验与提交授权.md
+    version: sha256:941e9fe48fee835320987a6b831df171f4610b6b645719c4d7d547fcf7340316
+  -
+    path: .dev-team/tasks/RA-DEV-02/evidence/提交输入.json
+    version: sha256:7d8279f6abf0f47f717eed8d0ceba3f3eb05eb8a4e44f301ceceeacd866c3e27
 checkpoints:
   -
     boundary: "候选阶段规划交付"
     handoff: ".dev-team/tasks/RA-001/handoffs/0001-planning.md"
     operation_key: "sha256:0ebd7900c8185332a5cd94a719ff5f8c3c496339f8ca8ebd4c48700be64fbe5c"
     baseline_versions:
-      requirements: "sha256:4c4737947a6b2dcafc04a94b62301f7b47e3614b42dea103ed3a85f965d8ff9b"
-      architecture: "sha256:3f4d0231880ec42975248165ad2cd0fde4380ffea17d3e80939b83f6800d60da"
+      requirements: "sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a"
+      architecture: "sha256:951693e0b3e159d3569618fed4b0d1593161b46b8efeb59c6f2f7e8804a769cc"
     artifact_versions:
       -
         path: "docs/decisions.md"
-        version: "sha256:2157ebb51b5a309886e96759bf35b41f39d686b684acd1d47db51b78df6ef8e2"
+        version: "sha256:78ac1122defa9df497fd154d13bacd8dc04a15ef1b4c53024d448cbf3ee681af"
       -
         path: ".dev-team/tasks/RA-001/task.md"
         version: "sha256:02d24d018a0c46bec3777d27bffe7aa4931734f8382a72e8cabf0f81887694e2"
@@ -69,30 +114,36 @@ checkpoints:
       -
         path: ".dev-team/tasks/RA-001/evidence/0001-planning-validation.md"
         version: "sha256:e5d33493d8c4634b7a91456d200e1c0ee60f44475aa691ab20ecb107134de573"
-    validation_status: "已确认有效"
+    validation_status: "需要重新验证"
   -
     boundary: "架构交付"
-    handoff: ".dev-team/tasks/RA-001/handoffs/0004-实施前技术核对.md"
-    operation_key: "RA-001/approved-plan-preflight/a2a-1.0.1-sdk-1.2.3"
+    handoff: ".dev-team/tasks/RA-001/handoffs/0011-远程超时取消意图持久化细化.md"
+    operation_key: "RA-001/remote-pre-send-identity-and-timeout-intent"
     baseline_versions:
-      requirements: "sha256:4c4737947a6b2dcafc04a94b62301f7b47e3614b42dea103ed3a85f965d8ff9b"
-      architecture: "sha256:3f4d0231880ec42975248165ad2cd0fde4380ffea17d3e80939b83f6800d60da"
+      requirements: "sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a"
+      architecture: "sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b"
     artifact_versions:
       -
-        path: ".dev-team/tasks/RA-001/handoffs/0004-实施前技术核对.md"
-        version: "sha256:daf7afed746b06d8f35c688eef70c1466c7569c9e42c413432a9859b5768f2fa"
+        path: ".dev-team/tasks/RA-001/handoffs/0009-发送前远程身份缺口核对.md"
+        version: "sha256:b2d1326a8523686a396ee5b8ffe6abc42965c73256d9cdab8e00890e82c34408"
+      -
+        path: ".dev-team/tasks/RA-001/handoffs/0010-发送前身份持久化实施细化.md"
+        version: "sha256:42632c5525868f3837d07dfd5b7d3e8dd1a1c2c72f4ad532470ac0e61f4622f5"
+      -
+        path: ".dev-team/tasks/RA-001/handoffs/0011-远程超时取消意图持久化细化.md"
+        version: "sha256:3cfdd9b2f58653c212b80959cd24d1ee6de3cf6d305cf5b8fb633f76cf6757b8"
     evidence_refs:
       -
-        path: ".dev-team/tasks/RA-001/handoffs/0004-实施前技术核对.md"
-        version: "sha256:daf7afed746b06d8f35c688eef70c1466c7569c9e42c413432a9859b5768f2fa"
+        path: ".dev-team/tasks/RA-001/handoffs/0011-远程超时取消意图持久化细化.md"
+        version: "sha256:3cfdd9b2f58653c212b80959cd24d1ee6de3cf6d305cf5b8fb633f76cf6757b8"
     validation_status: "已确认有效"
   -
     boundary: "RA-DEV-01技术交付"
     handoff: ".dev-team/tasks/RA-001/handoffs/0005-首批实施与复核.md"
     operation_key: "RA-001/RA-DEV-01/reviewed-foundation/sdk-1.2.3/R01"
     baseline_versions:
-      requirements: "sha256:4c4737947a6b2dcafc04a94b62301f7b47e3614b42dea103ed3a85f965d8ff9b"
-      architecture: "sha256:3f4d0231880ec42975248165ad2cd0fde4380ffea17d3e80939b83f6800d60da"
+      requirements: "sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a"
+      architecture: "sha256:951693e0b3e159d3569618fed4b0d1593161b46b8efeb59c6f2f7e8804a769cc"
     artifact_versions:
       -
         path: ".dev-team/tasks/RA-DEV-01/handoffs/0004-R01独立复核.md"
@@ -104,6 +155,37 @@ checkpoints:
       -
         path: ".dev-team/tasks/RA-001/handoffs/0005-首批实施与复核.md"
         version: "sha256:78e50aafd1c01013b1dadd89b73b174115a10dce9f66fc3a6945dcac1b69ad3c"
+    validation_status: "需要重新验证"
+  -
+    boundary: "RA-DEV-02技术交付"
+    handoff: ".dev-team/tasks/RA-001/handoffs/0012-RA02技术交付与终验边界.md"
+    operation_key: "RA-001/RA-DEV-02/sha256:efb6cc01401ea70ed2cba908b4bb70577a4c4554947e03dcffa7de88f1dee894"
+    baseline_versions:
+      requirements: "sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a"
+      architecture: "sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b"
+    artifact_versions:
+      -
+        path: ".dev-team/tasks/RA-DEV-02/handoffs/0003-R01返工交付.md"
+        version: "sha256:c40b8d50148bed9f236d20986a3ec5c04396af46d77f7f0f887d5c71186ba2ec"
+      -
+        path: ".dev-team/tasks/RA-DEV-02/handoffs/0004-R01独立复核.md"
+        version: "sha256:6d3cd65f95aa1d2d133b72a66ee56fb5b7923b17425fd17c10ef100723bac3b4"
+      -
+        path: ".dev-team/tasks/RA-DEV-02/evidence/R01返工范围指纹.json"
+        version: "sha256:e5a93508a245cce224d6379a89dd5e503194c5334955ac3c85a8a1ff1d54bc23"
+      -
+        path: ".dev-team/tasks/RA-DEV-02/evidence/R01返工验证回执.json"
+        version: "sha256:b9acdeb53ef5f136f4ff2b93f6b0573f2042fd77b9485acc3a1b48c229bf05cb"
+      -
+        path: ".dev-team/tasks/RA-001/handoffs/0012-RA02技术交付与终验边界.md"
+        version: "sha256:eda58bb2e02af37fd493e8f07261ec730824b28639b5695a9b642ac617566cfe"
+    evidence_refs:
+      -
+        path: ".dev-team/tasks/RA-DEV-02/handoffs/0004-R01独立复核.md"
+        version: "sha256:6d3cd65f95aa1d2d133b72a66ee56fb5b7923b17425fd17c10ef100723bac3b4"
+      -
+        path: ".dev-team/tasks/RA-DEV-02/evidence/R01返工验证回执.json"
+        version: "sha256:b9acdeb53ef5f136f4ff2b93f6b0573f2042fd77b9485acc3a1b48c229bf05cb"
     validation_status: "已确认有效"
 current_operation:
   name: "同步前序已验收基线到双远程"
@@ -112,7 +194,7 @@ current_operation:
   status: "已完成"
   inputs_ref: ".dev-team/tasks/RA-001/evidence/0002-前序双远程同步输入.json"
   result_ref: ".dev-team/tasks/RA-001/handoffs/0003-前序双远程同步回执.md"
-latest_handoff: ".dev-team/tasks/RA-001/handoffs/0007-续行授权与基线等价核对.md"
+latest_handoff: .dev-team/tasks/RA-DEV-02/handoffs/0005-负责人终验与提交授权.md
 resume_from: null
 blocked_reason: null
 project_gates:
@@ -136,5 +218,5 @@ project_gates:
     name: "双远程同步"
     status: "待满足"
     evidence_ref: null
-updated_by: "dev-team-controller"
-updated_at: "2026-10-27T14:28:29.0884635+08:00"
+updated_by: dev-team-controller
+updated_at: '2026-10-27T13:30:18Z'

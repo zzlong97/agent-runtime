@@ -1,0 +1,56 @@
+{
+  "task_id": "RA-DEV-02",
+  "issue_id": "RA-DEV-02-R01",
+  "date": "2026-10-27",
+  "cwd": "D:/workspace/agent_runtime",
+  "base_commit": "4f6791369ee562c52539a260ee7320f38e7f34c8",
+  "scope_sha256": "efb6cc01401ea70ed2cba908b4bb70577a4c4554947e03dcffa7de88f1dee894",
+  "production_changes": [
+    "src/agent_runtime/capabilities/remote_a2a/client.py"
+  ],
+  "original_probe": {
+    "path": ".dev-team/tasks/RA-DEV-02/evidence/审核探针.py",
+    "sha256": "27612e7d32f3e377b9c63ebfe18f27eb2cd3482d778fc628a36db917a609e883",
+    "unchanged": true,
+    "command": "$env:RUN_POSTGRES_TESTS='1'; .venv/Scripts/python.exe -X utf8 -c \"import os; from agent_runtime.core.config import Settings; os.environ['DATABASE_URL']=str(Settings().database_url).rsplit('/',1)[0]+'/agent_runtime_ra02_probe'; import pytest; raise SystemExit(pytest.main(['.dev-team/tasks/RA-DEV-02/evidence/审核探针.py','-q','-o','addopts=','--tb=short']))\"",
+    "exit_code": 1,
+    "raw_terminal_output": "AssertionError: {'actual_status': 'cancelled', 'task_request_methods': ['GET', 'POST', 'GET', 'GET', 'GET']}\n1 failed in 6.04s"
+  },
+  "red_formal": {
+    "command": "$env:RUN_POSTGRES_TESTS='1'; .venv/Scripts/python.exe -X utf8 -m pytest tests/capabilities/test_remote_a2a_client.py tests/integration/test_remote_runtime_postgres.py -k 'discovered_identity_mismatch or health_detected_identity_change' -q -o addopts='' --tb=short",
+    "exit_code": 1,
+    "raw_terminal_output": "Client version/name/interface: DID NOT RAISE RemoteA2AError\nBefore binding: actual_status=cancelled; methods=['POST', 'GET', 'GET', 'GET']\nAfter binding: actual_status=cancelled; methods=['GET', 'POST', 'GET', 'GET', 'GET']\n5 failed, 55 deselected in 9.54s"
+  },
+  "green_formal": {
+    "command": "$env:RUN_POSTGRES_TESTS='1'; .venv/Scripts/python.exe -X utf8 -m pytest tests/capabilities/test_remote_a2a_client.py tests/integration/test_remote_runtime_postgres.py -k 'discovered_identity_mismatch or health_detected_identity_change' -q -o addopts='' --tb=short",
+    "exit_code": 0,
+    "raw_terminal_output": ".                                                                    [100%]\r\n5 passed, 55 deselected in 11.18s\r\n"
+  },
+  "sdk_privacy": {
+    "command": ".venv/Scripts/python.exe -X utf8 -m pytest tests/capabilities/test_remote_a2a_client.py tests/capabilities/test_remote_agent_card.py tests/capabilities/test_remote_a2a_transport_errors.py tests/capabilities/test_remote_invocation.py -q -o addopts='' --tb=short",
+    "exit_code": 0,
+    "raw_terminal_output": "85 passed in 1.84s"
+  },
+  "affected_pg": {
+    "command": "$env:RUN_POSTGRES_TESTS='1'; .venv/Scripts/python.exe -X utf8 -c \"import os; from agent_runtime.core.config import Settings; os.environ['DATABASE_URL']=str(Settings().database_url).rsplit('/',1)[0]+'/agent_runtime_ra02_probe'; import pytest; raise SystemExit(pytest.main(['tests/integration/test_remote_runtime_postgres.py','-q','-o','addopts=','--tb=short','-k','health_detected_identity_change or replacement_identity or cancel_unknown or timeout_unconfirmed or accept_before_binding']))\"",
+    "exit_code": 0,
+    "raw_terminal_output": "........                                                                [100%]\r\n9 passed, 27 deselected in 51.10s\r\n",
+    "database": "agent_runtime_ra02_probe",
+    "fake_kept_across_local_rebuilds": true
+  },
+  "default_full": {
+    "command": ".venv/Scripts/python.exe -X utf8 -m pytest -q -m 'not postgres and not redis and not bailian' -o addopts='' --tb=short",
+    "exit_code": 0,
+    "raw_terminal_output": "..................................... [ 64%]\r\n........................................................................ [ 73%]\r\n........................................................................ [ 82%]\r\n........................................................................ [ 91%]\r\n.................................................................        [100%]\r\n785 passed, 110 deselected in 11.35s\r\n",
+    "executions_on_r01_candidate": 1
+  },
+  "diff_check": {
+    "command": "git -c core.autocrlf=false diff --check -- src/agent_runtime/capabilities/remote_a2a/client.py tests/capabilities/test_remote_a2a_client.py tests/integration/test_remote_runtime_postgres.py",
+    "exit_code": 0
+  },
+  "validation_limits": [
+    "Original audit probe was preserved and used for RED only; its cleanup restores Fake Card without trusted rediscovery. Formal tests assert zero I/O, unresolved Run and retained records before explicitly rediscovering the original identity for cleanup.",
+    "Previous 782/full-78 receipts remain historical evidence for their scope; they are not reported as covering the changed client.",
+    "No real Agent/model call, no current Runtime restart, commit or push. R01 awaits independent re-review."
+  ]
+}

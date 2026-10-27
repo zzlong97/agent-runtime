@@ -31,6 +31,7 @@ from agent_runtime.capabilities.persistence import (
     CapabilityTaskRepository,
 )
 from agent_runtime.capabilities.registry import CapabilityRegistry
+from agent_runtime.capabilities.remote_a2a.capability import RemoteA2ACapability, RemoteExecutionPending
 from agent_runtime.capabilities.routing import (
     CapabilityPermissionService,
     CapabilityUnavailableError,
@@ -202,13 +203,23 @@ class CapabilityInvocationGateway:
             sequencer,
             invocation_service,
         )
+        if isinstance(entry.capability, RemoteA2ACapability) and await sequencer.get_remote_rejected_result(capability_id=capability_id):
+            return ParentCapabilityInvocation(result=ChildResult(status="rejected", control_signal="OUT_OF_SCOPE"))
         invocation = await invocation_service.start(
             capability_id=capability_id,
             task_action=task_action,
             state_scope=entry.manifest.state_scope,
             created_at=self._now_factory(),
+            **({"remote_agent_identity_hash": entry.capability.client.snapshot.fingerprint} if isinstance(entry.capability, RemoteA2ACapability) and entry.capability.client.snapshot is not None else {}),
         )
+        persisted_started = getattr(invocation, "started_event", None)
+        if persisted_started is not None and not isinstance(entry.capability, RemoteA2ACapability):
+            remote_origin = persisted_started.payload.get("remote_agent_identity_hash") or await sequencer.get_remote_agent_event(
+                invocation_id=invocation.invocation_id, event_type="internal.remote_agent.task_bound")
+            if remote_origin:
+                raise RemoteExecutionPending("CAPABILITY_REMOTE_IDENTITY_CHANGED")
         resolution = None
+        remote = isinstance(entry.capability, RemoteA2ACapability)
         invocation_closed = False
         try:
             async with entry.concurrency_controller.acquire():
@@ -257,7 +268,9 @@ class CapabilityInvocationGateway:
                 async def execute_capability(
                     cancellation: AgentCancellation,
                 ) -> AgentResult:
-                    result = await entry.capability.invoke(
+                    invoke_options = {"sequencer": sequencer} if remote else {}
+                    invoke = entry.capability.invoke_bound if remote else entry.capability.invoke
+                    result = await invoke(
                         RunContext(
                             run_id=run_id,
                             request_id=request_id,
@@ -289,6 +302,7 @@ class CapabilityInvocationGateway:
                                 build_refreshed_child_input(state["messages"])
                             )
                         ),
+                        **invoke_options,
                     )
                     return AgentResult.model_validate(result)
 
@@ -311,8 +325,9 @@ class CapabilityInvocationGateway:
                     )
                     if (
                         streamed_text
-                        or operations
+                        or (operations and not (remote and resolution.provisional))
                         or checkpoint_after != checkpoint_before
+                        or (remote and checkpoint_after is not None)
                     ):
                         raise RuntimeError(
                             "Capability 在 OUT_OF_SCOPE 前产生了公开输出或业务状态"
@@ -328,6 +343,7 @@ class CapabilityInvocationGateway:
                                 child_checkpointer
                             ),
                             updated_at=self._now_factory(),
+                            **({"remote_binding": (await sequencer.get_remote_agent_event(invocation_id=invocation.invocation_id, event_type="internal.remote_agent.task_bound")).payload} if remote else {}),
                         )
                     else:
                         await invocation_service.complete(
@@ -386,7 +402,12 @@ class CapabilityInvocationGateway:
                     ),
                     message=message,
                 )
+        except RemoteExecutionPending:
+            # open Invocation 和 pending Ledger 是后续恢复的唯一身份，不能关闭。
+            raise
         except asyncio.CancelledError:
+            if remote:
+                raise
             if not invocation_closed:
                 await invocation_service.cancel(
                     invocation_id=invocation.invocation_id,
@@ -408,6 +429,17 @@ class CapabilityInvocationGateway:
                 )
             raise
         except Exception as error:
+            if remote:
+                log_business_event(logger, "远程调用收尾检查", run_id=run_id, invocation_id=invocation.invocation_id,
+                    capability_id=capability_id, error_code=getattr(error, "code", None), error_type=type(error).__name__)
+                if getattr(error, "code", None) == "CAPABILITY_TIMEOUT":
+                    # 先由 Chat 在状态事务中保存 timeout 意图，再发 Cancel；崩溃不得丢失原因。
+                    raise RemoteExecutionPending("CAPABILITY_REMOTE_TIMEOUT_UNCONFIRMED") from None
+                terminal = await sequencer.get_remote_agent_event(invocation_id=invocation.invocation_id, event_type="internal.remote_agent.task_terminal")
+                if terminal is None:
+                    operations = await self._operation_repository.list_for_invocation(run_id=run_id, invocation_id=invocation.invocation_id)
+                    if operations and not all(operation.status == "failed" for operation in operations):
+                        raise RemoteExecutionPending() from None
             public_error = self._error_mapper.map(error)
             if not invocation_closed:
                 await invocation_service.fail(
@@ -445,6 +477,45 @@ class CapabilityInvocationGateway:
                 duration_ms=round((perf_counter() - started_at) * 1000, 2),
             )
             raise public_error from error
+
+    async def is_remote_open(self, *, run_id, response_message_id):
+        """识别已受理但尚未绑定的调用；恢复次数上限不能先于该判断。"""
+        sequencer = self._sequencer_factory(run_id, response_message_id)
+        opened = await sequencer.get_open_capability_invocation()
+        if opened is None:
+            return False
+        if opened.payload.get("remote_agent_identity_hash"):
+            return True
+        if await sequencer.get_remote_agent_event(invocation_id=UUID(opened.payload["invocation_id"]), event_type="internal.remote_agent.task_bound"):
+            return True
+        entry = self._registry.get(opened.payload["capability_id"])
+        return bool(entry and entry.manifest and entry.manifest.transport.type == "remote_a2a")
+
+    async def confirm_remote_cancellation_for_run(self, *, run_id, response_message_id, task_input):
+        """超时、显式取消和删除共用一次有界的远程终态屏障。"""
+        sequencer = self._sequencer_factory(run_id, response_message_id)
+        opened = await sequencer.get_open_capability_invocation()
+        if opened is None:
+            return
+        capability_id = opened.payload["capability_id"]
+        entry = self._registry.get(capability_id)
+        remote_evidence = opened.payload.get("remote_agent_identity_hash") or await sequencer.get_remote_agent_event(
+            invocation_id=UUID(opened.payload["invocation_id"]), event_type="internal.remote_agent.task_bound")
+        if not remote_evidence and (not entry or not entry.manifest or entry.manifest.transport.type != "remote_a2a"):
+            return
+        if entry is None or not isinstance(entry.capability, RemoteA2ACapability):
+            raise RemoteExecutionPending("CAPABILITY_REMOTE_CANCEL_UNCONFIRMED")
+        invocation_id = UUID(opened.payload["invocation_id"])
+        task = await self._task_repository.get_by_invocation(run_id=run_id, invocation_id=invocation_id)
+        if task is None:
+            # 尚未创建本地 Task 就不可能发出受信远程请求。
+            return
+        context = RunContext(run_id=run_id, request_id=None, input_message_id=None,
+            response_message_id=response_message_id, invocation_id=invocation_id,
+            cancellation=AgentCancellation(_never_cancel), events=AgentEventOutlet(lambda event: None),
+            operation_gateway=CapabilityOperationGateway(run_id=run_id, invocation_id=invocation_id,
+                task_id=task.task_id, capability_id=capability_id, repository=self._operation_repository))
+        await entry.capability.cancel_remote(context, task_input, sequencer=sequencer)
 
     @staticmethod
     async def _checkpoint_marker(
@@ -527,3 +598,8 @@ class CapabilityInvocationGateway:
             status_code=503,
             retryable=True,
         )
+
+
+async def _never_cancel():
+    """远程确认不继承已经触发的本地取消标记。"""
+    return False
