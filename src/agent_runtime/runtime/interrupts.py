@@ -25,6 +25,19 @@ _COMMENT_RUN_INTERRUPTS_TABLE = """
 COMMENT ON TABLE run_interrupts IS '保存 Run 的中断及恢复幂等投影，包括中断状态、恢复输入和恢复请求标识；每个 Run 同时最多一个待处理中断。'
 """
 
+_COMMENT_RUN_INTERRUPTS_COLUMNS = """
+COMMENT ON COLUMN run_interrupts.run_id IS '中断归属的持久 Run 标识；恢复沿用同一 Run，不新增会话消息。';
+COMMENT ON COLUMN run_interrupts.interrupt_id IS 'Run 内稳定中断标识；顺序文本问题分别拥有独立标识。';
+COMMENT ON COLUMN run_interrupts.status IS '中断投影状态：pending 待输入、resumed 已消费、cancelled 已取消；同一 Run 最多一个 pending。';
+COMMENT ON COLUMN run_interrupts.interrupt_payload IS '持久中断提示：确认或文本类型、公开提示及受控内部问题身份；公开接口只投影 kind 和 prompt。';
+COMMENT ON COLUMN run_interrupts.resume_payload IS '已消费的确认值或文本答案，供同一 Run 的原检查点恢复；不进入公开事件或业务日志。';
+COMMENT ON COLUMN run_interrupts.resume_request_id IS '恢复请求的全局唯一幂等标识；相同请求重试必须复用。';
+COMMENT ON COLUMN run_interrupts.resume_request_fingerprint IS 'Run、中断目标与恢复输入的 SHA256 指纹；同请求标识内容冲突时拒绝消费。';
+COMMENT ON COLUMN run_interrupts.created_at IS '中断首次持久投影时间；用于同一 Run 顺序补参恢复。';
+COMMENT ON COLUMN run_interrupts.resumed_at IS '恢复输入与运行状态事务提交时间；未消费时为空。';
+COMMENT ON COLUMN run_interrupts.cancelled_at IS '待处理中断随 Run 取消的事务提交时间；未取消时为空。';
+"""
+
 _CREATE_RUN_INTERRUPTS_TABLE = """
 CREATE TABLE IF NOT EXISTS run_interrupts (
     run_id UUID NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
@@ -160,6 +173,7 @@ class PostgresRunInterruptRepository:
                 await connection.execute(_CREATE_PENDING_INTERRUPT_INDEX)
                 await connection.execute(_CREATE_RESUME_REQUEST_INDEX)
                 await connection.execute(_COMMENT_RUN_INTERRUPTS_TABLE)
+                await connection.execute(_COMMENT_RUN_INTERRUPTS_COLUMNS)
                 await connection.commit()
         except Exception as error:
             log_business_event(
@@ -189,6 +203,15 @@ class PostgresRunInterruptRepository:
             run_id=run_id,
             event_name="Interrupt待处理查询",
         )
+
+    async def get(self, *, run_id: UUID, interrupt_id: UUID) -> RunInterrupt | None:
+        """按精确快照身份查询，恢复已消费中断时不能误取另一个问题。"""
+        async with open_database_connection(self._settings) as connection:
+            cursor = await connection.execute(
+                f"SELECT {_INTERRUPT_COLUMNS} FROM run_interrupts WHERE run_id=%s AND interrupt_id=%s",
+                (run_id, interrupt_id))
+            row = await cursor.fetchone()
+        return None if row is None else _interrupt_from_row(row)
 
     async def get_latest_resumed(
         self,

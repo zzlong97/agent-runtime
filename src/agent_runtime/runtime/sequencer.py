@@ -139,6 +139,10 @@ class RunSequencer:
             event = await self._build_event(draft)
             return await self._repository.finish_capability_invocation(event)
 
+    async def get_remote_input_interrupts(self, *, invocation_id: UUID):
+        """只读已持久的补参轮次，恢复节点不得依赖进程内答案缓存。"""
+        return await self._repository.get_remote_input_interrupts(run_id=self._run_id, invocation_id=invocation_id)
+
     async def get_open_capability_invocation(self) -> RuntimeEvent | None:
         """读取数据库中的唯一 open Invocation，供恢复诊断使用。"""
 

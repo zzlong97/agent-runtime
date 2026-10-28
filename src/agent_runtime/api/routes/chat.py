@@ -264,11 +264,13 @@ async def get_active_run(
         return None
     pending_interrupt = None
     if run.status == "interrupted":
-        pending = await chat_service.get_pending_interrupt(run_id=run.run_id)
-        pending_interrupt = PendingInterruptResponse.model_validate(
-            pending,
-            from_attributes=True,
-        )
+        from agent_runtime.runtime.interrupt_payloads import project_interrupt_payload
+        try:
+            pending = await chat_service.get_pending_interrupt(run_id=run.run_id)
+            pending_interrupt = PendingInterruptResponse(interrupt_id=pending.interrupt_id,
+                interrupt_payload=project_interrupt_payload(pending.interrupt_payload), created_at=pending.created_at)
+        except ApplicationError as error:
+            raise HTTPException(status_code=error.status_code, detail=_application_error_detail(error)) from error
     summary = RunSummaryResponse.model_validate(run, from_attributes=True)
     return ActiveRunResponse(
         **summary.model_dump(),
@@ -406,7 +408,7 @@ async def resume_run(
             run_id=run_id,
             interrupt_id=payload.interrupt_id,
             request_id=payload.request_id,
-            resume_payload=payload.resume_payload,
+            resume_payload=payload.resume_payload.model_dump(mode="json"),
         )
     except ApplicationError as error:
         raise HTTPException(

@@ -37,3 +37,9 @@ tasks:
     parent_task: RA-001
     depends_on:
       - RA-DEV-01
+  RA-DEV-03:
+    title: 文本 Interrupt/Resume 与页面闭环
+    state_file: .dev-team/tasks/RA-DEV-03/state.yaml
+    parent_task: RA-001
+    depends_on:
+      - RA-DEV-02

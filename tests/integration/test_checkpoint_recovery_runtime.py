@@ -363,6 +363,7 @@ def test_interrupt_checkpoint_is_projected_without_reexecuting_graph() -> None:
             assert recovered.recovery_attempts == 1
             assert pending is not None
             assert pending.interrupt_payload == {
+                "kind": "confirmation",
                 "prompt": "是否继续恢复？"
             }
             assert node_calls == 1

@@ -1,0 +1,353 @@
+schema_version: 1
+task_id: RA-DEV-03
+state_version: 6
+status: 已验收
+current_role: dev-team-controller
+next_action: 负责人已终验并授权提交，同一提交同步GitHub/Gitee后保存实际回执闭环
+baselines:
+  requirements:
+    path: docs/requirements.md
+    version: sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a
+    section: 第9.2/9.3/9.5及相关既有安全要求，MI不在范围
+    approval:
+      status: 已批准（仅RA引用范围）
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/RA-001/handoffs/0008-远程范围拒绝窄例外裁决.md
+      source_text: 同意当前任务规划，规划完成后先不要开展工作，我需要另外规划一个能力，再看优先实现哪一个。
+      approved_at: '2026-10-26T17:30:20+08:00'
+  architecture:
+    path: docs/architecture.md
+    version: sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b
+    section: 第17.6/17.10/17.11及相关既有Interrupt/Parent/取消约束，MI不在范围
+    approval:
+      status: 已批准（仅RA引用范围）
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/RA-001/handoffs/0011-远程超时取消意图持久化细化.md
+      source_text: 同意当前任务规划，规划完成后先不要开展工作，我需要另外规划一个能力，再看优先实现哪一个。
+      approved_at: '2026-10-26T17:30:20+08:00'
+artifacts:
+- path: .dev-team/tasks/RA-DEV-03/task.md
+  version: sha256:6ad1c94852dc1691650470407695cbcee97dff52638c530dec44ba7836a42721
+- path: .dev-team/tasks/RA-001/handoffs/0013-RA03实施落点核对.md
+  version: sha256:315c839d090cc236452fb92c6e7b64cbf2dd3b8fdc9fb41304ccb1ed30eceba7
+- path: .dev-team/tasks/RA-DEV-02/handoffs/0006-提交与同步回执.md
+  version: sha256:701600430c3375aa61c09c4a58c268b839cb74c9dd7406908f9a80fc41ccbc6d
+- &id001
+  path: AGENTS.md
+  version: sha256:42b07029752d3ae8350754ed9278d3e13e4bbcebcd712b653fbf6dcc893ba7c6
+- &id002
+  path: docs/capability_development_guide.md
+  version: sha256:9bf68630215eae2cbcf4586037a66f85017907a1c48cd3ac12b66837cdb96f0f
+- &id003
+  path: frontend/e2e-remote/chat.spec.js
+  version: sha256:a556658ecbf784f33b580bb24a05545fb4766dcc341e6c77b323dcf2c179b2f9
+- &id004
+  path: frontend/e2e/chat.spec.js
+  version: sha256:0375bcd0b5498890b19d8d2573f475f1a08214a17843e4903594fefd3faa7f6c
+- &id005
+  path: frontend/package-lock.json
+  version: sha256:fd5b2e50db00d851accd57c63e0c41614a64033bc9e8dd7734855f4f709c7819
+- &id006
+  path: frontend/package.json
+  version: sha256:53ef9239ed517795d54523287ddced72878ebf8fc2ce95140deeed04d26c81d5
+- &id007
+  path: frontend/playwright.config.js
+  version: sha256:4e59d18676ef803549b6d2ba01c403be8a518cb3c0ee6dc30b316bb2333eb0dd
+- &id008
+  path: frontend/playwright.remote.config.js
+  version: sha256:b46c44928aabf98ac77f7e192c1bed7ebc10760ff8c4025f425edb333882946a
+- &id009
+  path: frontend/src/App.jsx
+  version: sha256:03d3ddbeae3e08e079e6060ba46da94b9806bf857997f42f3a7365b4b37f578c
+- &id010
+  path: frontend/src/App.test.jsx
+  version: sha256:1f8aef861b3d417352836676acf04e54a9c089e1468618857942a5178e0bc50b
+- &id011
+  path: frontend/src/components/ChatWorkspace.jsx
+  version: sha256:0b67d1835265ea17e6307741d93b005d5044483e0f667462a6ec63f165955b80
+- &id012
+  path: frontend/src/components/RunStatusPanel.jsx
+  version: sha256:5190a14e72167e6f47723f0a742373cf22d45bee6a0e6615ce3740cb37e82e19
+- &id013
+  path: frontend/src/styles/app.css
+  version: sha256:9fbb3f5853a7311e5f0567abb5d498b429ecb940c3e3fe1ce63dce5ca293e8a8
+- &id014
+  path: frontend/vite.config.js
+  version: sha256:d458553cf997e50a1d3defca2bce28eaa18728d289beb41c09f0410e2a497645
+- &id015
+  path: pyproject.toml
+  version: sha256:77dd36edda7f897552a2f30e6894d77688585ecf10654866da628f2c3badad8b
+- &id016
+  path: src/agent_runtime/api/routes/chat.py
+  version: sha256:fe478dc27f263380ab9dc4c2614a8127c1d5256c5d462b841ea601442944be6d
+- &id017
+  path: src/agent_runtime/api/schemas/runs.py
+  version: sha256:32f913ec27eedc3fb2fa8c869086bf8314807df628b237e874daacc8831c7418
+- &id018
+  path: src/agent_runtime/capabilities/execution.py
+  version: sha256:5a53f649865a5d6b467a1b3e12a493b858fbeaad75ff979b43f192d6a35080d0
+- &id019
+  path: src/agent_runtime/capabilities/invocation_gateway.py
+  version: sha256:9ba549243e2f4067e4d61cfdb84a69bb687ce7decfedb8ab72f81d2ecdf6dd04
+- &id020
+  path: src/agent_runtime/capabilities/remote_a2a/capability.py
+  version: sha256:1e48bb2c7b051db24ddcd4f162e3a66a868cc3443388895314afa7def8dfbb3d
+- &id021
+  path: src/agent_runtime/capabilities/remote_a2a/errors.py
+  version: sha256:a2fc314064f6a26dee1e53f70320a5375354f5a73623bf03966947f2da09a549
+- &id022
+  path: src/agent_runtime/chat.py
+  version: sha256:2dd63ea47cb643c3bb60cf27afb61804d526b198994c38ec1b8516a9d00171c9
+- &id023
+  path: src/agent_runtime/graph/parent.py
+  version: sha256:14b4df750c332d68d23fa7d357537afa0228311995892e27c0e5742c74a22693
+- &id024
+  path: src/agent_runtime/runtime/event_repository.py
+  version: sha256:6771a999c02a95b0cfee0fec7cd6093ca5b30d7da67c3b92189c6427f12f13c1
+- &id025
+  path: src/agent_runtime/runtime/event_schemas.py
+  version: sha256:e7f80d19c4818bc9bd3e22ae35ffb3dabd76676943f41cb4d655b2ab0c1de571
+- &id026
+  path: src/agent_runtime/runtime/interrupt_payloads.py
+  version: sha256:2bd9f01335269298a13ca3922a53706b4774265f6abd009f19a58829af286f49
+- &id027
+  path: src/agent_runtime/runtime/interrupts.py
+  version: sha256:2e2ae2a51c18f405f0d2b0caee672755d7008827e18c29465433adf6e9627b46
+- &id028
+  path: src/agent_runtime/runtime/models.py
+  version: sha256:e720102221790356cfac3931b1f41f319d75923b932fadab989391fb808ffaf7
+- &id029
+  path: src/agent_runtime/runtime/sequencer.py
+  version: sha256:016d418f66c63f93e47f6f71c2172c396879cd277f48243667bef106d0c2f128
+- &id030
+  path: src/agent_runtime/static/assets/index-B_5ARtbB.js
+  version: sha256:873c4fce88dea742cac578464e887ba9f953342d8bfcf47eda707a734baf9025
+- &id031
+  path: src/agent_runtime/static/assets/index-xY-hKUao.css
+  version: sha256:7ed8c1ebb9794aeb9aab4474210d19f39c98b22567e694f0ea50c103857c51a7
+- &id032
+  path: src/agent_runtime/static/index.html
+  version: sha256:edbf5388f87add4d30af11b65065fcf055e56c3d29f95d08397bab12c6203b59
+- &id033
+  path: tests/api/schemas/test_interrupt_payloads.py
+  version: sha256:92b2c0ce43d81ce99461a9afbd1a61aaa42224456fca25adb1d01a1996b35a11
+- &id034
+  path: tests/api/test_async_run_api.py
+  version: sha256:7db896d23b8f9c277a0f6c8cc5e6d1e6c8d1bc66cc8bb3b0e73cee84bb13056f
+- &id035
+  path: tests/capabilities/test_remote_invocation.py
+  version: sha256:1336c681a7d5b6dbb0f0ae1c9c5cef52e9c0036d6e96f77b20cbff0d070320ba
+- &id036
+  path: tests/e2e/remote_server.py
+  version: sha256:e68051d86f9e7e754ed1eb3448da42cc3a01f42f1d909ec9ddad2b0f6d54ab5b
+- &id037
+  path: tests/e2e/server.py
+  version: sha256:be5f768335db7a96a10d061bac1efb29f4b58bbbcc7da4d52f79c0cca34af290
+- &id038
+  path: tests/fake_a2a.py
+  version: sha256:1db2af9820b53bad13c116896b27d2875df172579cf15f154b1ac7c70fa6fbe9
+- &id039
+  path: tests/integration/test_checkpoint_recovery_runtime.py
+  version: sha256:a3e7bcd2912b48fef2a82fb82d03a96991b94e89f378926b19045d26a8b2b362
+- &id040
+  path: tests/integration/test_interrupt_resume_runtime.py
+  version: sha256:19ca2935eb9d897f26dc11e713127aa9ba5ee1e1b24df47fe1b66628176cd18a
+- &id041
+  path: tests/integration/test_remote_interrupt_resume_postgres.py
+  version: sha256:cfc45d5ff5fff7f9f4f6bbcce4f6c7064233dcfc641d8c789d8170bff719e4c2
+- &id042
+  path: tests/integration/test_remote_runtime_postgres.py
+  version: sha256:afd65654856cf2a2c03ef7c8d356524a94d95bf8da47a88f0eb513f84d3c3c73
+- &id043
+  path: tests/runtime/test_interrupt_comments_postgres.py
+  version: sha256:190d8c928a2a7640c500ff7c4d8dc1780b19e92b0a414529506bfc10fd2b9501
+- &id044
+  path: uv.lock
+  version: sha256:1d879693c8d6b4b277d980598cd3d9f881bd2a835b3dccb5f7866c08126d4fa2
+- &id045
+  path: docs/decisions.md
+  version: sha256:78ac1122defa9df497fd154d13bacd8dc04a15ef1b4c53024d448cbf3ee681af
+- &id046
+  path: .dev-team/tasks/RA-DEV-03/evidence/browser/.last-run.json
+  version: sha256:91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903
+- &id047
+  path: .dev-team/tasks/RA-DEV-03/evidence/browser/chat-刷新恢复两轮文本补参、空白阻止、双击单提交和同请求失败重试-browser/second-text-interrupt.png
+  version: sha256:d643942d83630a8446942cdba2d5bf8795b7f16ba34e8f0e78fcb1b1a4b669c0
+- &id048
+  path: .dev-team/tasks/RA-DEV-03/evidence/候选文件指纹.json
+  version: sha256:bdcf146c0690847add0071f60f67c8b49eb3914788cd221591d903a7a92d6a31
+- &id049
+  path: .dev-team/tasks/RA-DEV-03/evidence/接线阶段验证回执.md
+  version: sha256:ff14800fe83988244585fa7582133fb4bc9239dac3bc7f90d05ec5445560b0c9
+- &id050
+  path: .dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md
+  version: sha256:b56b9eefbf84ee1e38ad66712a0fb76a739e4601e90499c320d7e79feadae7aa
+- &id051
+  path: .dev-team/tasks/RA-DEV-03/evidence/首组真实PG探针.md
+  version: sha256:7419a50dd654409025da09e07aaa58c11dcf03370fcc7db95799b7892fc884bd
+- path: .dev-team/tasks/RA-DEV-03/handoffs/0001-开发交付.md
+  version: sha256:0c6ed3fc530b7c301533212a28c60f7ac76f0ac968b4688776a00263164dc842
+- &id052
+  path: .dev-team/tasks/RA-DEV-03/handoffs/0002-独立审核.md
+  version: sha256:6f5efc8a4464b59cab3cad2e69154aa299511c5239efcc91938205da4c8f79cb
+- &id053
+  path: .dev-team/tasks/RA-DEV-03/evidence/审核补充探针.py
+  version: sha256:8da80e7c3ec2350362ce5b715b60c1333e184c7d942311d2b12170a699c1818b
+- &id054
+  path: .dev-team/tasks/RA-DEV-03/evidence/审核浏览器/.last-run.json
+  version: sha256:91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903
+- &id055
+  path: .dev-team/tasks/RA-DEV-03/evidence/审核浏览器/chat-刷新恢复两轮文本补参、空白阻止、双击单提交和同请求失败重试-browser/second-text-interrupt.png
+  version: sha256:ba1f906dfdfb00de4eb2ab3086c5f807ed8b668795c1c0fa4e3f83bd58796148
+- path: .dev-team/tasks/RA-DEV-03/handoffs/0003-负责人终验与提交授权.md
+  version: sha256:f2ad85d8fb7467db703161772b31e7138e77a2e26b4c4a95e513d2f9e0d8881e
+- path: .dev-team/tasks/RA-DEV-03/evidence/提交输入.json
+  version: sha256:bc04d604b4679180cd96b70f368436dd5836ad576ff62c78b117d08070a9bc03
+checkpoints:
+- boundary: 开发交付
+  handoff: .dev-team/tasks/RA-DEV-03/handoffs/0001-开发交付.md
+  operation_key: RA-DEV-03/delivery/sha256:eae9a86390468af6ded6d58cb7709532f58b6ec2a1cc00a846d82558891ca95e
+  baseline_versions:
+    requirements: sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a
+    architecture: sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b
+  artifact_versions:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - *id009
+  - *id010
+  - *id011
+  - *id012
+  - *id013
+  - *id014
+  - *id015
+  - *id016
+  - *id017
+  - *id018
+  - *id019
+  - *id020
+  - *id021
+  - *id022
+  - *id023
+  - *id024
+  - *id025
+  - *id026
+  - *id027
+  - *id028
+  - *id029
+  - *id030
+  - *id031
+  - *id032
+  - *id033
+  - *id034
+  - *id035
+  - *id036
+  - *id037
+  - *id038
+  - *id039
+  - *id040
+  - *id041
+  - *id042
+  - *id043
+  - *id044
+  - *id045
+  - path: .dev-team/tasks/RA-DEV-03/evidence/候选文件指纹.json
+    version: sha256:bdcf146c0690847add0071f60f67c8b49eb3914788cd221591d903a7a92d6a31
+  evidence_refs:
+  - *id046
+  - *id047
+  - *id048
+  - *id049
+  - *id050
+  - *id051
+  validation_status: 已确认有效
+- boundary: 开发验收
+  handoff: .dev-team/tasks/RA-DEV-03/handoffs/0002-独立审核.md
+  operation_key: RA-DEV-03/review/sha256:eae9a86390468af6ded6d58cb7709532f58b6ec2a1cc00a846d82558891ca95e
+  baseline_versions:
+    requirements: sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a
+    architecture: sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b
+  artifact_versions:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - *id009
+  - *id010
+  - *id011
+  - *id012
+  - *id013
+  - *id014
+  - *id015
+  - *id016
+  - *id017
+  - *id018
+  - *id019
+  - *id020
+  - *id021
+  - *id022
+  - *id023
+  - *id024
+  - *id025
+  - *id026
+  - *id027
+  - *id028
+  - *id029
+  - *id030
+  - *id031
+  - *id032
+  - *id033
+  - *id034
+  - *id035
+  - *id036
+  - *id037
+  - *id038
+  - *id039
+  - *id040
+  - *id041
+  - *id042
+  - *id043
+  - *id044
+  - *id045
+  - *id048
+  evidence_refs:
+  - *id050
+  - *id052
+  - *id053
+  - *id054
+  - *id055
+  validation_status: 已确认有效
+current_operation:
+  name: RA-DEV-03提交及双远程同步
+  kind: 外部操作
+  operation_key: sha256:0a03bac43133e0e545cbf630b819a55c98c3101da94d7bcc0a94d745d4ced852
+  status: 执行中
+  inputs_ref: .dev-team/tasks/RA-DEV-03/evidence/提交输入.json
+  result_ref: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
+latest_handoff: .dev-team/tasks/RA-DEV-03/handoffs/0003-负责人终验与提交授权.md
+resume_from: null
+blocked_reason: null
+project_gates:
+- name: 前置RA-DEV-02完整交付
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-DEV-02/handoffs/0006-提交与同步回执.md
+- name: 负责人终验
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-DEV-03/handoffs/0003-负责人终验与提交授权.md
+- name: 任务提交
+  status: 待满足
+  evidence_ref: null
+- name: 双远程同步
+  status: 待满足
+  evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-28T02:51:14Z'

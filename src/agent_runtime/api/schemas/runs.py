@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field
+from agent_runtime.runtime.interrupt_payloads import PublicInterruptPayload, ResumePayload
 
 
 class RegenerateRunRequest(BaseModel):
@@ -37,10 +38,10 @@ class ResumeRunRequest(BaseModel):
             "该值，不同内容复用时返回 409。"
         )
     )
-    resume_payload: dict[str, JsonValue] = Field(
+    resume_payload: ResumePayload = Field(
         description=(
-            "提交给当前 Interrupt 的恢复输入对象；Stage 2.5 仅传给同一 Run 的 "
-            "Command(resume=...)，不会创建 HumanMessage 或新 Run。"
+            "当前持久 Interrupt 的关闭输入对象：confirmation只接受approved严格布尔，"
+            "text只接受answer非空字符串；仅恢复同一Run，不新增HumanMessage或Run。"
         )
     )
 
@@ -53,10 +54,10 @@ class PendingInterruptResponse(BaseModel):
     interrupt_id: UUID = Field(
         description="当前 Run 唯一待处理 Interrupt 的服务端 UUID。"
     )
-    interrupt_payload: dict[str, JsonValue] = Field(
+    interrupt_payload: PublicInterruptPayload = Field(
         description=(
-            "需要页面展示的固定公开中断提示对象；不得包含 Prompt、Checkpoint、"
-            "私有 State 或工具原始参数。"
+            "关闭公开对象，只允许kind为confirmation/text及1到4000字符非空prompt；"
+            "不包含远程身份、Task、Checkpoint、答案或私有State。"
         )
     )
     created_at: datetime = Field(

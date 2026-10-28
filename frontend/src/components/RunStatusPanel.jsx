@@ -1,4 +1,5 @@
-import { Button, Collapse, Descriptions, Space, Tag, Typography } from 'antd';
+import { useState } from 'react';
+import { Button, Collapse, Descriptions, Input, Space, Tag, Typography } from 'antd';
 
 const STATUS_COLORS = {
   queued: 'default',
@@ -12,8 +13,10 @@ const STATUS_COLORS = {
   idle: 'default',
 };
 
-export function RunStatusPanel({ run, onResume }) {
+export function RunStatusPanel({ run, onResume, resuming = false }) {
+  const [answer, setAnswer] = useState('');
   const prompt = run.pendingInterrupt?.interrupt_payload?.prompt;
+  const textRequired = run.pendingInterrupt?.interrupt_payload?.kind === 'text';
   const items = [
     {
       key: 'runtime-status',
@@ -40,11 +43,20 @@ export function RunStatusPanel({ run, onResume }) {
           />
           {run.status === 'interrupted' && run.pendingInterrupt ? (
             <div className="interrupt-action" aria-label="中断操作">
-              <Typography.Text>{typeof prompt === 'string' ? prompt : '运行等待人工确认。'}</Typography.Text>
-              <Space>
-                <Button type="primary" onClick={() => onResume(true)}>确认并继续</Button>
-                <Button onClick={() => onResume(false)}>拒绝并继续</Button>
-              </Space>
+              <Typography.Text>{typeof prompt === 'string' ? prompt : '运行等待人工输入。'}</Typography.Text>
+              {textRequired ? (
+                <Space orientation="vertical" className="interrupt-text">
+                  <Input.TextArea aria-label="补充文本" value={answer} disabled={resuming}
+                    onChange={(event) => setAnswer(event.target.value)} autoSize={{ minRows: 2, maxRows: 6 }} />
+                  <Button type="primary" loading={resuming} disabled={resuming || !answer.trim()}
+                    onClick={() => onResume({ answer })}>提交补充并继续</Button>
+                </Space>
+              ) : (
+                <Space>
+                  <Button type="primary" disabled={resuming} loading={resuming} onClick={() => onResume({ approved: true })}>确认并继续</Button>
+                  <Button disabled={resuming} onClick={() => onResume({ approved: false })}>拒绝并继续</Button>
+                </Space>
+              )}
             </div>
           ) : null}
         </>

@@ -346,7 +346,7 @@ def test_active_run_query_restores_pending_interrupt_prompt() -> None:
     assert response.status_code == 200
     assert response.json()["pending_interrupt"] == {
         "interrupt_id": str(INTERRUPT_ID),
-        "interrupt_payload": {"prompt": "是否允许继续执行？"},
+        "interrupt_payload": {"kind": "confirmation", "prompt": "是否允许继续执行？"},
         "created_at": "2026-09-29T10:00:00Z",
     }
 
@@ -385,6 +385,21 @@ def test_resume_uses_same_run_and_returns_accepted_summary() -> None:
             {"approved": True},
         )
     ]
+
+
+def test_active_run_explicitly_projects_remote_prompt_without_internal_identity():
+    from agent_runtime.main import create_app
+    from agent_runtime.runtime.interrupts import RunInterrupt
+    service = FakeAsyncRunService()
+    service.active_run = _run(status="interrupted")
+    service.pending_interrupt = RunInterrupt(run_id=RUN_ID, interrupt_id=INTERRUPT_ID, status="pending",
+        interrupt_payload={"kind": "text", "prompt": "请补充日期", "remote": {"task_id": "内部任务身份"}},
+        resume_payload=None, resume_request_id=None, resume_request_fingerprint=None,
+        created_at=datetime(2026, 9, 29, tzinfo=UTC), resumed_at=None, cancelled_at=None)
+    response = _request(create_app(chat_service=service), "GET", f"/api/v1/chat/sessions/{SESSION_ID}/active-run")
+    assert response.status_code == 200
+    assert response.json()["pending_interrupt"]["interrupt_payload"] == {"kind": "text", "prompt": "请补充日期"}
+    assert "内部任务身份" not in response.text and "remote" not in response.text
 
 
 def test_run_api_maps_application_error_without_leaking_private_details() -> None:

@@ -144,7 +144,7 @@ def test_regenerate_interrupt_resumes_latest_fork_checkpoint() -> None:
             turn=initial_turn,
         )
         assert pending is not None
-        assert pending[1] == {"prompt": "是否重新生成？"}
+        assert pending[1] == {"kind": "confirmation", "prompt": "是否重新生成？"}
 
         resumed_turn = await service._turn_from_run(
             run,
@@ -364,6 +364,7 @@ def test_graph_interrupt_resumes_same_run_without_new_human_message() -> None:
             assert interrupted_run.status == "interrupted"
             assert pending is not None
             assert pending.interrupt_payload == {
+                "kind": "confirmation",
                 "prompt": "是否允许继续执行？"
             }
 
@@ -381,6 +382,7 @@ def test_graph_interrupt_resumes_same_run_without_new_human_message() -> None:
                 assert active.json()["pending_interrupt"] == {
                     "interrupt_id": str(pending.interrupt_id),
                     "interrupt_payload": {
+                        "kind": "confirmation",
                         "prompt": "是否允许继续执行？"
                     },
                     "created_at": pending.created_at.isoformat().replace(

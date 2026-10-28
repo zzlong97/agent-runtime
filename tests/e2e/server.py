@@ -38,13 +38,17 @@ async def _serve() -> None:
         raise RuntimeError("浏览器端到端验收端口必须是整数") from error
     if port < 1024 or port > 65_535:
         raise RuntimeError("浏览器端到端验收端口必须介于 1024 至 65535")
+    base = Settings()
     settings = Settings(
+        database_url=str(base.database_url).rsplit("/", 1)[0] + "/agent_runtime_ra03_probe",
+        redis_url="redis://127.0.0.1:6379/14",
         local_user_id=f"stage-two-playwright-{run_id}",
         dashscope_api_key=None,
         llm_base_url=None,
         llm_model=None,
         runtime_demo_mode=True,
         run_cancel_grace_seconds=0.1,
+        _env_file=None,
     )
     async with open_chat_service(settings) as service:
         await _delete_e2e_sessions(service)

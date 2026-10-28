@@ -45,6 +45,7 @@ from agent_runtime.runtime.interrupts import (
     RunInterrupt,
     _interrupt_from_row,
 )
+from agent_runtime.runtime.interrupt_payloads import validate_resume_payload
 from agent_runtime.runtime.repository import (
     RunNotFoundError,
     RunStateConflictError,
@@ -90,6 +91,7 @@ _ALLOWED_STATE_EVENT_TRANSITIONS = frozenset(
             "cancel_requested",
         ),
         ("interrupted", "run.cancelled", "cancelled"),
+        ("interrupted", "internal.run.cancel_requested", "cancel_requested"),
         ("interrupted", "interrupt.resumed", "running"),
         ("cancel_requested", "run.cancelled", "cancelled"),
         ("cancel_requested", "run.failed", "failed"),
@@ -662,6 +664,15 @@ class PostgresRuntimeEventRepository:
             row = await cursor.fetchone()
             return None if row is None else _event_from_row(row)
 
+    async def get_remote_input_interrupts(self, *, run_id: UUID, invocation_id: UUID):
+        """读取同一 Invocation 已持久的问题顺序，不把内部身份投影成公开事件。"""
+        async with open_database_connection(self._settings) as connection:
+            cursor = await connection.execute(
+                "SELECT interrupt_payload FROM run_interrupts WHERE run_id=%s "
+                "AND interrupt_payload->'remote'->>'invocation_id'=%s ORDER BY created_at, interrupt_id",
+                (run_id, str(invocation_id)))
+            return [row["interrupt_payload"] for row in await cursor.fetchall()]
+
     async def get_cancel_reason(self, *, run_id: UUID) -> str:
         """兼容旧内部事件；只有首次已提交的意图有权决定取消收尾语义。"""
         async with open_database_connection(self._settings) as connection:
@@ -1105,6 +1116,7 @@ class PostgresRuntimeEventRepository:
                         status_code=409,
                     )
                 interrupt = _interrupt_from_row(interrupt_row)
+                validate_resume_payload(interrupt.interrupt_payload, resume_payload)
                 if interrupt.status == "resumed":
                     self._validate_repeated_resume(
                         interrupt=interrupt,

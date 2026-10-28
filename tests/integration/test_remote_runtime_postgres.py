@@ -33,7 +33,10 @@ def _configure_runtime(monkeypatch, *, state="TASK_STATE_COMPLETED", timeout=5):
         return {"resolved_capability_id": capability_id, "task_action": "new"}
     monkeypatch.setattr(chat.StageOneRouter, "route", route)
     base = Settings()
-    settings = Settings(database_url=str(base.database_url).rsplit("/", 1)[0] + "/agent_runtime_ra02_probe",
+    probe_database = os.getenv("REMOTE_RUNTIME_TEST_DATABASE", "agent_runtime_ra02_probe")
+    assert probe_database in {"agent_runtime_ra02_probe", "agent_runtime_ra03_probe"}
+    settings = Settings(database_url=str(base.database_url).rsplit("/", 1)[0] + "/" + probe_database,
+        redis_url="redis://127.0.0.1:6379/14",
         local_user_id=f"ra02-probe-{uuid4()}", remote_a2a_development_mode=True,
         remote_a2a_poll_interval_seconds=0.001, run_coordinator_scan_interval_seconds=60, _env_file=None)
     return fake, settings, capability_id
@@ -53,6 +56,14 @@ def _run(coroutine):
     from agent_runtime.core.event_loop import psycopg_compatible_loop_factory
     with asyncio.Runner(loop_factory=psycopg_compatible_loop_factory) as runner:
         return runner.run(coroutine)
+
+
+async def _assert_input_wait(service, run_id):
+    """RA03接通后合法补参停点精确为interrupted；未知传输仍沿原recovering断言。"""
+    assert (await service._persistent_run_repository.get(run_id)).status == "interrupted"
+    pending = await service._run_interrupt_repository.get_pending(run_id=run_id)
+    assert pending is not None and pending.interrupt_payload["kind"] == "text"
+    return pending
 
 
 @pytest.mark.parametrize("before_binding", [True, False])
@@ -302,7 +313,7 @@ def test_first_cancel_intent_wins_and_state_event_are_atomic(monkeypatch, first_
                 with pytest.raises(SimulatedProcessCrash):
                     await service._defer_remote_run(run, code)
                 armed = False
-                assert (await service._persistent_run_repository.get(run.run_id)).status == "recovering"
+                await _assert_input_wait(service, run.run_id)
                 assert not await service._runtime_event_repository.has_event_type(run_id=run.run_id, event_type="internal.run.cancel_requested")
             await service._defer_remote_run(run, code)
             opposite = "CAPABILITY_REMOTE_CANCEL_UNCONFIRMED" if first_reason == "timeout" else "CAPABILITY_REMOTE_TIMEOUT_UNCONFIRMED"
@@ -411,7 +422,7 @@ def test_manual_policy_cannot_release_unknown_remote_task(monkeypatch):
         _LIVE_SEQUENCERS.clear()
         async with chat.open_chat_service(settings, model=_BuiltinCapabilityFakeModel()) as service:
             await service._run_coordinator.wait_until_idle()
-            assert (await service._persistent_run_repository.get(run.run_id)).status == "recovering"
+            await _assert_input_wait(service, run.run_id)
             assert await service._open_invocation_resolver.resolve(run_id=run.run_id) is not None
             await service.cancel_persistent_run(run_id=run.run_id)
             await service._run_coordinator.wait_until_idle()
@@ -440,7 +451,7 @@ def test_missing_manifest_cannot_terminate_or_delete_durable_remote_binding(monk
             monkeypatch.setattr(chat.LocalYamlCapabilitySource, "load", lambda self: [])
         async with chat.open_chat_service(settings, model=_BuiltinCapabilityFakeModel()) as service:
             await service._run_coordinator.wait_until_idle()
-            assert (await service._persistent_run_repository.get(run.run_id)).status == "recovering"
+            await _assert_input_wait(service, run.run_id)
             with pytest.raises(Exception) as conflict:
                 await service.delete_session(session_id=run.session_id)
             assert conflict.value.status_code == 409
@@ -475,7 +486,10 @@ def test_replacement_identity_receives_no_task_operations(monkeypatch, before_bi
         async with chat.open_chat_service(settings, model=_BuiltinCapabilityFakeModel()) as service:
             submitted = await service.submit_chat_run(request_id=uuid4(), session_id=None, content="身份替换探针")
             await service._run_coordinator.wait_until_idle()
-            assert (await service._persistent_run_repository.get(submitted.run_id)).status == "recovering"
+            if before_binding:
+                assert (await service._persistent_run_repository.get(submitted.run_id)).status == "recovering"
+            else:
+                await _assert_input_wait(service, submitted.run_id)
         _LIVE_SEQUENCERS.clear()
         if change_source:
             fake.manifest["transport"]["agent_card_url"] = "https://agent.example/changed/agent-card.json"
@@ -487,7 +501,10 @@ def test_replacement_identity_receives_no_task_operations(monkeypatch, before_bi
             request_start = 0
         async with chat.open_chat_service(settings, model=_BuiltinCapabilityFakeModel()) as service:
             await service._run_coordinator.wait_until_idle()
-            assert (await service._persistent_run_repository.get(submitted.run_id)).status == "recovering"
+            if before_binding:
+                assert (await service._persistent_run_repository.get(submitted.run_id)).status == "recovering"
+            else:
+                await _assert_input_wait(service, submitted.run_id)
             with pytest.raises(Exception) as conflict:
                 await service.delete_session(session_id=submitted.session_id)
             assert conflict.value.status_code == 409
@@ -530,7 +547,10 @@ def test_old_or_inconsistent_identity_evidence_never_refilled(monkeypatch, corru
         start = len(fake.requests)
         async with chat.open_chat_service(settings, model=_BuiltinCapabilityFakeModel()) as service:
             await service._run_coordinator.wait_until_idle()
-            assert (await service._persistent_run_repository.get(submitted.run_id)).status == "recovering"
+            if corruption == "missing_started_hash":
+                assert (await service._persistent_run_repository.get(submitted.run_id)).status == "recovering"
+            else:
+                await _assert_input_wait(service, submitted.run_id)
             assert all(request.url.path.endswith("agent-card.json") for request in fake.requests[start:])
             async with open_database_connection(settings) as connection:
                 row = await (await connection.execute("SELECT payload FROM runtime_events WHERE run_id=%s AND event_type=%s", (submitted.run_id, kind))).fetchone()

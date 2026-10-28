@@ -1,9 +1,9 @@
 schema_version: 1
 task_id: "RA-001"
-state_version: 16
+state_version: 21
 status: 开发中
 current_role: "dev-team-controller"
-next_action: RA-DEV-02负责人终验通过，提交及双同步核实后再推进RA-DEV-03；父阶段未整体验收
+next_action: RA-DEV-03负责人终验通过，执行本批提交/双同步；父阶段尚未整体验收，不启动真实联调
 baselines:
   requirements:
     path: "docs/requirements.md"
@@ -95,6 +95,36 @@ artifacts:
   -
     path: .dev-team/tasks/RA-DEV-02/evidence/提交输入.json
     version: sha256:7d8279f6abf0f47f717eed8d0ceba3f3eb05eb8a4e44f301ceceeacd866c3e27
+  -
+    path: .dev-team/tasks/RA-DEV-02/handoffs/0006-提交与同步回执.md
+    version: sha256:701600430c3375aa61c09c4a58c268b839cb74c9dd7406908f9a80fc41ccbc6d
+  -
+    path: ".dev-team/tasks/RA-DEV-03/task.md"
+    version: "sha256:6ad1c94852dc1691650470407695cbcee97dff52638c530dec44ba7836a42721"
+  -
+    path: ".dev-team/tasks/RA-001/handoffs/0013-RA03实施落点核对.md"
+    version: "sha256:315c839d090cc236452fb92c6e7b64cbf2dd3b8fdc9fb41304ccb1ed30eceba7"
+  -
+    path: ".dev-team/tasks/RA-DEV-03/handoffs/0001-开发交付.md"
+    version: "sha256:0c6ed3fc530b7c301533212a28c60f7ac76f0ac968b4688776a00263164dc842"
+  -
+    path: ".dev-team/tasks/RA-DEV-03/evidence/候选文件指纹.json"
+    version: "sha256:bdcf146c0690847add0071f60f67c8b49eb3914788cd221591d903a7a92d6a31"
+  -
+    path: ".dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md"
+    version: "sha256:b56b9eefbf84ee1e38ad66712a0fb76a739e4601e90499c320d7e79feadae7aa"
+  -
+    path: ".dev-team/tasks/RA-DEV-03/handoffs/0002-独立审核.md"
+    version: "sha256:6f5efc8a4464b59cab3cad2e69154aa299511c5239efcc91938205da4c8f79cb"
+  -
+    path: ".dev-team/tasks/RA-001/handoffs/0014-RA03技术交付与终验边界.md"
+    version: "sha256:a47c93a07fe3719af17ab35cd11e1d65aedca88427808515da80dd5ad9f8307d"
+  -
+    path: ".dev-team/tasks/RA-DEV-03/handoffs/0003-负责人终验与提交授权.md"
+    version: "sha256:f2ad85d8fb7467db703161772b31e7138e77a2e26b4c4a95e513d2f9e0d8881e"
+  -
+    path: ".dev-team/tasks/RA-DEV-03/evidence/提交输入.json"
+    version: "sha256:bc04d604b4679180cd96b70f368436dd5836ad576ff62c78b117d08070a9bc03"
 checkpoints:
   -
     boundary: "候选阶段规划交付"
@@ -187,14 +217,39 @@ checkpoints:
         path: ".dev-team/tasks/RA-DEV-02/evidence/R01返工验证回执.json"
         version: "sha256:b9acdeb53ef5f136f4ff2b93f6b0573f2042fd77b9485acc3a1b48c229bf05cb"
     validation_status: "已确认有效"
-current_operation:
-  name: "同步前序已验收基线到双远程"
-  kind: "外部操作"
-  operation_key: "sha256:d4afe9d8cdf395c23ee24b169878fd56b66115d541456bf70a1a398bb32bd533"
-  status: "已完成"
-  inputs_ref: ".dev-team/tasks/RA-001/evidence/0002-前序双远程同步输入.json"
-  result_ref: ".dev-team/tasks/RA-001/handoffs/0003-前序双远程同步回执.md"
-latest_handoff: .dev-team/tasks/RA-DEV-02/handoffs/0005-负责人终验与提交授权.md
+  -
+    boundary: "RA-DEV-03技术交付"
+    handoff: ".dev-team/tasks/RA-001/handoffs/0014-RA03技术交付与终验边界.md"
+    operation_key: "RA-001/RA-DEV-03/sha256:eae9a86390468af6ded6d58cb7709532f58b6ec2a1cc00a846d82558891ca95e"
+    baseline_versions:
+      requirements: "sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a"
+      architecture: "sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b"
+    artifact_versions:
+      -
+        path: ".dev-team/tasks/RA-DEV-03/handoffs/0002-独立审核.md"
+        version: "sha256:6f5efc8a4464b59cab3cad2e69154aa299511c5239efcc91938205da4c8f79cb"
+      -
+        path: ".dev-team/tasks/RA-001/handoffs/0014-RA03技术交付与终验边界.md"
+        version: "sha256:a47c93a07fe3719af17ab35cd11e1d65aedca88427808515da80dd5ad9f8307d"
+      -
+        path: ".dev-team/tasks/RA-DEV-03/evidence/候选文件指纹.json"
+        version: "sha256:bdcf146c0690847add0071f60f67c8b49eb3914788cd221591d903a7a92d6a31"
+      -
+        path: ".dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md"
+        version: "sha256:b56b9eefbf84ee1e38ad66712a0fb76a739e4601e90499c320d7e79feadae7aa"
+      -
+        path: ".dev-team/tasks/RA-DEV-03/handoffs/0001-开发交付.md"
+        version: "sha256:0c6ed3fc530b7c301533212a28c60f7ac76f0ac968b4688776a00263164dc842"
+    evidence_refs:
+      -
+        path: ".dev-team/tasks/RA-DEV-03/handoffs/0002-独立审核.md"
+        version: "sha256:6f5efc8a4464b59cab3cad2e69154aa299511c5239efcc91938205da4c8f79cb"
+      -
+        path: ".dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md"
+        version: "sha256:b56b9eefbf84ee1e38ad66712a0fb76a739e4601e90499c320d7e79feadae7aa"
+    validation_status: "已确认有效"
+current_operation: null
+latest_handoff: .dev-team/tasks/RA-DEV-03/handoffs/0003-负责人终验与提交授权.md
 resume_from: null
 blocked_reason: null
 project_gates:
@@ -219,4 +274,4 @@ project_gates:
     status: "待满足"
     evidence_ref: null
 updated_by: dev-team-controller
-updated_at: '2026-10-27T13:30:18Z'
+updated_at: '2026-10-28T02:51:14Z'

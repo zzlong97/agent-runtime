@@ -343,6 +343,35 @@ describe('RuntimeApp Stage 2.5', () => {
     });
   });
 
+  it('文本补参阻止空白与双击，失败保留输入且重试复用原request_id', async () => {
+    const user = userEvent.setup();
+    chatApi.listSessions.mockResolvedValue({ items: [SESSION], next_cursor: null });
+    chatApi.getActiveRun.mockResolvedValue({ ...RUN, status: 'interrupted', pending_interrupt: {
+      interrupt_id: INTERRUPT_ID, interrupt_payload: { kind: 'text', prompt: '请补充日期' }, created_at: '2026-09-30T09:10:00Z',
+    } });
+    let rejectFirst;
+    chatApi.resumeRun.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject; }))
+      .mockResolvedValueOnce({ ...RUN, status: 'running' });
+    render(<RuntimeApp />);
+    await user.click(await screen.findByText('Runtime 会话'));
+    const answer = await screen.findByRole('textbox', { name: '补充文本' });
+    const submit = screen.getByRole('button', { name: '提交补充并继续' });
+    await user.type(answer, '   ');
+    expect(submit).toBeDisabled();
+    await user.clear(answer);
+    await user.type(answer, '2026-10-01 至 2026-10-20');
+    await user.dblClick(submit);
+    expect(chatApi.resumeRun).toHaveBeenCalledTimes(1);
+    expect(submit).toBeDisabled();
+    await act(async () => rejectFirst(new Error('网络暂时不可用')));
+    expect(await screen.findByText('补充提交失败，输入已保留，请重试。')).toBeInTheDocument();
+    expect(answer).toHaveValue('2026-10-01 至 2026-10-20');
+    await user.click(submit);
+    expect(chatApi.resumeRun).toHaveBeenCalledTimes(2);
+    expect(chatApi.resumeRun.mock.calls[1]).toEqual(chatApi.resumeRun.mock.calls[0]);
+    expect(chatApi.createChatRun).not.toHaveBeenCalled();
+  });
+
   it('显式 Cancel 展示 cancel_requested，并等待 SSE 取消终态', async () => {
     const user = userEvent.setup();
     let publishCancelled;

@@ -1634,7 +1634,20 @@ Operation。绑定必须在 Send 正常退出标记 succeeded 前落盘。身份
 取消、执行超时和 Session 删除先确认远程终态。未知时 Run 保持 cancel_requested，
 删除返回可重试 409。内部首次取消意图区分 explicit/timeout，重建后分别维持
 stopped/cancelled 与 CAPABILITY_TIMEOUT/incomplete/failed；不向产品协议暴露 reason。
-远程 input-required 当前仅保留内部未决边界，文本 Interrupt/Resume API 与页面归 RA-DEV-03。
+远程 input-required 经执行控制器与 Gateway 保留 open Invocation，由 Parent 调用
+LangGraph Interrupt；先持久 Checkpoint，再提交 Run/interruption 投影和公开事件。
+等待时不占用执行槽，同一 Session 仍由原 Run 占用。公开待处理提示只含
+`{"kind":"text","prompt":"请补充日期"}`；`confirmation` 使用相同提示结构，
+旧的单 `prompt` 持久记录按 confirmation 读取。
+
+Resume 仍为 `/api/v1/chat/runs/{run_id}/resume`，外层字段为
+`interrupt_id`、`request_id`、`resume_payload`。text 只接收 `{"answer":"非空文本"}`，
+confirmation 只接收 `{"approved":true}` 或 `false`；额外键、混用与隐式类型转换拒绝。
+回答沿用同 Run/Invocation/本地 Task/远程 Task/context，不新增 HumanMessage。
+补参 messageId 由 Invocation 与远程问题消息 ID 确定；每轮独立 Send 账本，Get 仍不入账。
+`/chat` 提供文本输入及确认按钮，失败保留输入，同一内容重试复用请求 ID。
+顺序补参的问题身份仅在既有 Checkpoint/interruption/Operation 恢复事实中保存，
+不进入 Parent 业务 State、公共消息或业务日志。上述实现仍需本批独立审核与负责人终验。
 
 显式范围拒绝使用 Task metadata 的 `control_signal="OUT_OF_SCOPE"`；还必须由 Get
 确认同 Task/context 的 rejected 终态，且无 Artifact、公开输出、业务 State 或 Child
@@ -1646,3 +1659,9 @@ Send 行并恢复原 current。普通 rejected、其他 Operation 与未知结�
 `tests/integration/test_remote_runtime_postgres.py`；显式设置 `RUN_POSTGRES_TESTS=1`，
 仅使用项目 Compose 中已建立的 `agent_runtime_ra02_probe` 测试库。它验证服务重建、
 绑定前后崩溃、取消删除屏障和原子拒绝，不替代真实远程 Agent 四条链路验收。
+
+文本补参探针为 `tests/integration/test_remote_interrupt_resume_postgres.py`，只使用
+`agent_runtime_ra03_probe`；复验受影响旧探针时可显式设置测试环境变量
+`REMOTE_RUNTIME_TEST_DATABASE=agent_runtime_ra03_probe`。浏览器远程链路使用
+`frontend/playwright.remote.config.js` 启动独立 `tests.e2e.remote_server`，采用正式
+Runtime 和 Fake A2A，不使用演示图或真实 Agent/模型。它与原 confirmation 演示回归分开运行。

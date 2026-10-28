@@ -28,6 +28,9 @@ class MemoryRemoteEvents:
             self.original_identity = self.identity_provider()
         return SimpleNamespace(payload={"remote_agent_identity_hash": self.original_identity})
 
+    async def get_remote_input_interrupts(self, *, invocation_id):
+        return []
+
     async def get_remote_agent_event(self, *, invocation_id, event_type):
         return self.events.get((invocation_id, event_type))
 

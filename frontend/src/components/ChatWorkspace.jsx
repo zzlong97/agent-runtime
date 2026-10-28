@@ -24,6 +24,7 @@ export function ChatWorkspace({
   onSend,
   onCancel,
   onResume,
+  resuming,
   onRegenerate,
   onFeedback,
 }) {
@@ -62,7 +63,7 @@ export function ChatWorkspace({
         </Space>
       </header>
 
-      <RunStatusPanel run={run} onResume={onResume} />
+      <RunStatusPanel key={run.pendingInterrupt?.interrupt_id ?? run.runId} run={run} onResume={onResume} resuming={resuming} />
 
       {nextBefore ? (
         <div className="older-messages-control">

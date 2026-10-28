@@ -15,7 +15,7 @@ from agent_runtime.capabilities.contracts import AgentResult, AgentResultMetadat
 from agent_runtime.runtime.agent_contract import AgentTextEvent
 from agent_runtime.runtime.event_models import RuntimeEventDraft
 from agent_runtime.runtime.event_schemas import RemoteTaskBoundPayload, RemoteTaskTerminalPayload
-from agent_runtime.capabilities.remote_a2a.errors import RemoteA2AError, protocol_error
+from agent_runtime.capabilities.remote_a2a.errors import RemoteA2AError, RemoteExecutionPending, RemoteInputRequired, protocol_error
 from a2a.types import a2a_pb2 as wire
 from langchain_core.messages import HumanMessage
 
@@ -27,21 +27,6 @@ _TERMINAL = {wire.TASK_STATE_COMPLETED: "completed", wire.TASK_STATE_FAILED: "fa
 def initial_message_id(invocation_id):
     """同一 Invocation 永远重送同一消息身份，不依赖进程或恢复次数。"""
     return uuid5(_MESSAGE_NAMESPACE, str(invocation_id))
-
-
-class RemoteExecutionPending(Exception):
-    """远程结果尚未确认的内部控制信号，不能映射为执行失败。"""
-
-    def __init__(self, code="CAPABILITY_REMOTE_STATE_UNKNOWN"):
-        super().__init__("远程执行结果待确认")
-        self.code = code
-
-
-class RemoteInputRequired(RemoteExecutionPending):
-    """文本补参接线前保留 open Invocation，由后续任务接入 Interrupt。"""
-
-    def __init__(self):
-        super().__init__("CAPABILITY_REMOTE_INPUT_REQUIRED")
 
 
 class RemoteA2ACapability:
@@ -152,12 +137,28 @@ class RemoteA2ACapability:
         """普通 SDK 不持有绑定写入权限，远程仅允许受信 Gateway 调用。"""
         raise protocol_error()
 
-    async def invoke_bound(self, run_context, agent_context, task_input, *, sequencer):
+    async def invoke_bound(self, run_context, agent_context, task_input, *, sequencer, resume_inputs=()):
         """受信 Gateway 注入绑定出口，远程实现只接收当前文本。"""
         if sequencer is None:
             raise protocol_error()
         try:
+            # 节点重放先按持久中断顺序重建 interrupt 调用位置。远程已进入下一题时，
+            # 仍须先消费旧位置的 Resume，不能将旧答案用于当前远程题目。
+            history = await sequencer.get_remote_input_interrupts(invocation_id=run_context.invocation_id)
+            if len(resume_inputs) < len(history):
+                raise RemoteInputRequired(history[len(resume_inputs)])
             task = await self.acquire_task(run_context, task_input, sequencer=sequencer)
+            for resumed in resume_inputs:
+                identity = resumed["interrupt_payload"]["remote"]
+                if (identity["invocation_id"] != str(run_context.invocation_id)
+                        or identity["task_id"] != task.id or identity["context_id"] != task.context_id):
+                    raise RemoteExecutionPending("CAPABILITY_REMOTE_IDENTITY_CHANGED")
+                message_id = uuid5(run_context.invocation_id, "remote_input:" + identity["message_id"])
+                await run_context.cancellation.raise_if_requested()
+                async with run_context.operation(f"remote_send:{message_id}") as operation:
+                    if operation.should_execute:
+                        task = await self.client.send_message(message_id=str(message_id),
+                            text=resumed["resume_payload"]["answer"], task_id=task.id, context_id=task.context_id)
             while True:
                 await run_context.cancellation.raise_if_requested()
                 task = await self.confirm_task(run_context, task, sequencer=sequencer)
@@ -171,7 +172,16 @@ class RemoteA2ACapability:
                 if state in _TERMINAL or state == wire.TASK_STATE_AUTH_REQUIRED:
                     raise CapabilityError(code="CAPABILITY_REMOTE_TASK_FAILED", message="远程任务执行失败", retryable=False)
                 if state == wire.TASK_STATE_INPUT_REQUIRED:
-                    raise RemoteInputRequired()
+                    question_id = task.status.message.message_id
+                    if any(item["interrupt_payload"]["remote"]["message_id"] == question_id for item in resume_inputs):
+                        # 已提交问题的陈旧 Get 不能制造第二个 pending 或重复消费回答。
+                        raise RemoteExecutionPending()
+                    prompt = "".join(part.text for part in task.status.message.parts if part.WhichOneof("content") == "text").strip()
+                    if not prompt or len(prompt) > 4000:
+                        raise protocol_error()
+                    raise RemoteInputRequired({"kind": "text", "prompt": prompt, "remote": {
+                        "invocation_id": str(run_context.invocation_id), "task_id": task.id,
+                        "context_id": task.context_id, "message_id": question_id}})
                 await asyncio.sleep(self._poll_interval_seconds)
         except RemoteA2AError as error:
             binding = await sequencer.get_remote_agent_event(invocation_id=run_context.invocation_id, event_type="internal.remote_agent.task_bound")

@@ -99,6 +99,7 @@ export default function RuntimeApp() {
   const [nextBefore, setNextBefore] = useState(null);
   const [senderValue, setSenderValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [run, setRun] = useState(IDLE_RUN);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -107,6 +108,8 @@ export default function RuntimeApp() {
   const [deleteSaving, setDeleteSaving] = useState(false);
   const mountedRef = useRef(true);
   const submittingRef = useRef(false);
+  const resumeSubmittingRef = useRef(false);
+  const resumeRequestRef = useRef(null);
   const runRef = useRef(IDLE_RUN);
   const runControllerRef = useRef(null);
   const initialSessionRestoreRef = useRef(false);
@@ -420,19 +423,33 @@ export default function RuntimeApp() {
     }
   }
 
-  async function handleResume(approved) {
-    const pending = run.pendingInterrupt;
-    if (!run.runId || !pending) return;
+  async function handleResume(resumePayload) {
+    const currentRun = runRef.current;
+    const pending = currentRun.pendingInterrupt;
+    if (!currentRun.runId || !pending || resumeSubmittingRef.current) return;
+    if (pending.interrupt_payload?.kind === 'text' && !resumePayload.answer?.trim()) return;
+    const payloadKey = JSON.stringify([currentRun.runId, pending.interrupt_id, resumePayload]);
+    // 同一次内容的网络重试沿用原标识，直到问题或内容变化；引用锁覆盖同帧双击。
+    if (resumeRequestRef.current?.payloadKey !== payloadKey) {
+      resumeRequestRef.current = { payloadKey, requestId: crypto.randomUUID(), resumePayload };
+    }
+    const submission = resumeRequestRef.current;
+    resumeSubmittingRef.current = true;
+    setResuming(true);
     try {
-      const summary = await resumeRun(run.runId, {
+      const summary = await resumeRun(currentRun.runId, {
         interruptId: pending.interrupt_id,
-        requestId: crypto.randomUUID(),
-        resumePayload: { approved },
+        requestId: submission.requestId,
+        resumePayload: submission.resumePayload,
       });
+      if (!mountedRef.current || runRef.current.runId !== currentRun.runId) return;
       updateRun((current) => projectSummary(summary, current));
       await connectRun(summary);
     } catch (error) {
-      toast.error(productErrorMessage(error));
+      toast.error(error?.code ? productErrorMessage(error) : '补充提交失败，输入已保留，请重试。');
+    } finally {
+      resumeSubmittingRef.current = false;
+      if (mountedRef.current) setResuming(false);
     }
   }
 
@@ -536,6 +553,7 @@ export default function RuntimeApp() {
         onSend={handleSend}
         onCancel={handleCancel}
         onResume={handleResume}
+        resuming={resuming}
         onRegenerate={handleRegenerate}
         onFeedback={handleFeedback}
       />

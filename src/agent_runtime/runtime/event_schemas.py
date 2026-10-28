@@ -500,7 +500,7 @@ class InterruptRequiredPayload(_ClosedPayload):
 
 
 class InterruptResumedPayload(_ClosedPayload):
-    """同一 Run 已消费审批输入并恢复的公开通知。"""
+    """同一 Run 已消费确认或文本补参并恢复的公开通知。"""
 
     interrupt_id: UUID = Field(
         description="本次恢复所消费的原待处理 Interrupt 服务端 UUID。"
@@ -616,7 +616,7 @@ class MessageFinalizedEvent(_PublicEventBase):
 
 class InterruptRequiredEvent(_PublicEventBase):
     event_type: Literal["interrupt.required"] = Field(
-        description="公开事件类型，表示 Run 等待一次人工审批输入。"
+        description="公开事件类型，表示 Run 等待一次人工确认或文本补参输入。"
     )
     payload: InterruptRequiredPayload = Field(
         description="已持久化的待处理 Interrupt 标识。"
@@ -625,7 +625,7 @@ class InterruptRequiredEvent(_PublicEventBase):
 
 class InterruptResumedEvent(_PublicEventBase):
     event_type: Literal["interrupt.resumed"] = Field(
-        description="公开事件类型，表示同一 Run 已从审批中恢复。"
+        description="公开事件类型，表示同一 Run 已从确认或文本补参中恢复。"
     )
     payload: InterruptResumedPayload = Field(
         description="被消费并用于恢复的 Interrupt 标识。"

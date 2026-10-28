@@ -7,6 +7,22 @@ class RemoteA2AError(ApplicationError):
     """禁止携带远程响应、URL、用户输入或凭据的受控错误。"""
 
 
+class RemoteExecutionPending(Exception):
+    """远程结果尚未确认的内部控制信号，不能映射为执行失败。"""
+
+    def __init__(self, code="CAPABILITY_REMOTE_STATE_UNKNOWN"):
+        super().__init__("远程执行结果待确认")
+        self.code = code
+
+
+class RemoteInputRequired(RemoteExecutionPending):
+    """仅经 Gateway 交给 Parent 的补参控制信号，内部身份不得公开。"""
+
+    def __init__(self, payload):
+        super().__init__("CAPABILITY_REMOTE_INPUT_REQUIRED")
+        self.payload = payload
+
+
 def protocol_error() -> RemoteA2AError:
     """不把底层解析错误中的原始数据带出信任边界。"""
     return RemoteA2AError(

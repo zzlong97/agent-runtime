@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import TypeVar
 
 from agent_runtime.capabilities.contracts import CapabilityError
+from agent_runtime.capabilities.remote_a2a.errors import RemoteExecutionPending
 from agent_runtime.capabilities.manifest import (
     ConcurrencyPolicy,
     ExecutionPolicy,
@@ -263,6 +264,11 @@ class CapabilityExecutionController:
                 status="force_cancelled" if forced else "cooperative_cancelled",
                 duration_ms=_elapsed_ms(started_at),
             )
+            raise
+        except RemoteExecutionPending:
+            # 远程等待是控制出口；子任务已结束，finally 释放观察任务与并发槽。
+            log_business_event(logger, "Capability受控执行等待", capability_id=self._capability_id,
+                status="pending", duration_ms=_elapsed_ms(started_at))
             raise
         except Exception:
             local_cancel_requested.set()

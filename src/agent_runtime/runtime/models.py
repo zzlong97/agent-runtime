@@ -64,7 +64,7 @@ _RUN_TRANSITIONS: dict[str, frozenset[str]] = {
     "recovering": frozenset(
         {"running", "failed", "interrupted", "cancel_requested"}
     ),
-    "interrupted": frozenset({"running", "cancelled"}),
+    "interrupted": frozenset({"running", "cancelled", "cancel_requested"}),
     "cancel_requested": frozenset({"cancelled"}),
     "completed": frozenset(),
     "failed": frozenset(),

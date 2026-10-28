@@ -42,6 +42,8 @@ class FakeA2A:
         self.cancel_state = "TASK_STATE_CANCELED"
         self.out_of_scope = False
         self.business_creations = 0
+        self.input_prompts = None
+        self.answers = {}
         self.status_code = None
         self.raw_response = None
         self.redirect = None
@@ -81,8 +83,17 @@ class FakeA2A:
                 }
                 if self.state == "TASK_STATE_REJECTED" and self.out_of_scope:
                     task["metadata"] = {"control_signal": "OUT_OF_SCOPE"}
-                else:
+                elif not message.get("taskId"):
                     self.business_creations += 1
+                if self.input_prompts is not None and message.get("taskId"):
+                    self.answers[key] = "".join(part["text"] for part in message["parts"])
+                    answered = sum(1 for _, stored_id in self.messages.values() if stored_id == task_id)  # 初始消息也占一次。
+                    if answered >= len(self.input_prompts):
+                        task["status"] = {"state": "TASK_STATE_COMPLETED"}
+                        task["artifacts"] = [{"artifactId": "answer", "parts": [{"text": "参数已采用：" + "；".join(self.answers.values())}]}]
+                    else:
+                        task["status"] = {"state": "TASK_STATE_INPUT_REQUIRED", "message": {
+                            "messageId": f"input-{answered + 1}", "role": "ROLE_AGENT", "parts": [{"text": self.input_prompts[answered]}]}}
                 if self.state == "TASK_STATE_COMPLETED":
                     task["artifacts"] = [
                         {
@@ -90,11 +101,11 @@ class FakeA2A:
                             "parts": [{"text": "第一段"}, {"text": "第二段"}],
                         }
                     ]
-                elif self.state == "TASK_STATE_INPUT_REQUIRED":
+                elif self.state == "TASK_STATE_INPUT_REQUIRED" and "message" not in task["status"] and task["status"]["state"] != "TASK_STATE_COMPLETED":
                     task["status"]["message"] = {
                         "messageId": "input-1",
                         "role": "ROLE_AGENT",
-                        "parts": [{"text": "请补充日期"}],
+                        "parts": [{"text": self.input_prompts[0] if self.input_prompts else "请补充日期"}],
                     }
                 self.tasks[task_id] = task
                 self.messages[key] = (fingerprint, task_id)

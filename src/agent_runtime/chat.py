@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -172,6 +172,7 @@ class PreparedChatTurn:
     is_resume: bool = False
     is_recovery: bool = False
     resume_payload: dict[str, JsonValue] | None = None
+    resume_already_applied: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -675,9 +676,10 @@ class ChatService:
 
         async with coordinator.claim_guard(run_id):
             run = await repository.get(run_id)
-            if run.status in {"queued", "interrupted"}:
+            remote_interrupted = run.status == "interrupted" and await self._is_remote_open(run)
+            if run.status in {"queued", "interrupted"} and not remote_interrupted:
                 run = await self._finalize_persistent_cancellation_shielded(run)
-            elif run.status in {"running", "recovering"}:
+            elif run.status in {"running", "recovering"} or remote_interrupted:
                 event_repository = self._runtime_event_repository
                 if event_repository is None:
                     raise ChatRuntimeError(
@@ -740,6 +742,8 @@ class ChatService:
         dispatch_reason: str = "submit",
         *,
         recovery_config: RunnableConfig | None = None,
+        resumed_interrupt: RunInterrupt | None = None,
+        resume_already_applied: bool = False,
     ) -> None:
         """执行新 Run、现场 Resume 或按 Checkpoint 对账后的恢复尝试。"""
 
@@ -774,11 +778,9 @@ class ChatService:
         ):
             await self._recover_persistent_run(run)
             return
-        resumed_interrupt = None
         if is_resume:
-            resumed_interrupt = await self._require_interrupt_repository().get_latest_resumed(
-                run_id=run.run_id
-            )
+            if resumed_interrupt is None:
+                resumed_interrupt = await self._require_interrupt_repository().get_latest_resumed(run_id=run.run_id)
             if (
                 resumed_interrupt is None
                 or resumed_interrupt.resume_payload is None
@@ -839,6 +841,8 @@ class ChatService:
                 ),
                 recovery_config=recovery_config,
             )
+            if resume_already_applied:
+                turn = replace(turn, resume_already_applied=True)
             attempt = await event_repository.next_message_attempt(
                 run_id=run.run_id
             )
@@ -1139,7 +1143,7 @@ class ChatService:
         """结果未知只投影非终态，不生成公共失败消息或关闭 Invocation。"""
         repository, _ = self._persistent_runtime_dependencies()
         current = await repository.get(run.run_id)
-        if code in {"CAPABILITY_REMOTE_CANCEL_UNCONFIRMED", "CAPABILITY_REMOTE_TIMEOUT_UNCONFIRMED"} and current.status in {"running", "recovering"}:
+        if code in {"CAPABILITY_REMOTE_CANCEL_UNCONFIRMED", "CAPABILITY_REMOTE_TIMEOUT_UNCONFIRMED"} and current.status in {"running", "recovering", "interrupted"}:
             sequencer = RunSequencer.for_run(run_id=run.run_id, response_message_id=run.response_message_id,
                 repository=self._runtime_event_repository, publisher=self._runtime_event_publisher)
             await sequencer.transition_run(target_status="cancel_requested", event=self._internal_runtime_event_draft(
@@ -1313,9 +1317,16 @@ class ChatService:
                     )
             return
         recovery_evaluator = self._capability_recovery_policy_evaluator
+        resumed_graph_interrupt = (
+            await self._require_interrupt_repository().get(run_id=run.run_id, interrupt_id=graph_interrupt[0])
+            if graph_interrupt is not None else None
+        )
         requires_capability_policy = (
             recovery_evaluator is not None
-            and graph_interrupt is None
+            # 未消费中断只补投影；已经消费回答后的崩溃重放仍须服从原恢复策略，
+            # 不能借旧interrupt快照绕过manual或Operation归属校验。
+            and (graph_interrupt is None or (
+                resumed_graph_interrupt is not None and resumed_graph_interrupt.status == "resumed"))
             and (
                 final_message is None
                 or final_message.runtime_status == "incomplete"
@@ -1467,6 +1478,7 @@ class ChatService:
                 claimed_run,
                 graph_interrupt=graph_interrupt,
                 sequencer=sequencer,
+                recovery_config=inspector.recovery_config(claimed_run, snapshot),
             )
             return
 
@@ -1955,11 +1967,13 @@ class ChatService:
         *,
         graph_interrupt: tuple[UUID, dict[str, JsonValue]],
         sequencer: RunSequencer,
+        recovery_config: RunnableConfig | None = None,
     ) -> None:
         """Checkpoint 已有中断时只补 Interrupt、Run 与事件的原子投影。"""
 
         repository, coordinator = self._persistent_runtime_dependencies()
         interrupt_id, interrupt_payload = graph_interrupt
+        resumed = await self._require_interrupt_repository().get(run_id=run.run_id, interrupt_id=interrupt_id)
         async with coordinator.claim_guard(run.run_id):
             current = await repository.get(run.run_id)
             if current.status == "cancel_requested":
@@ -1968,16 +1982,38 @@ class ChatService:
                 return
             if current.status not in {"running", "recovering"}:
                 return
-            await sequencer.require_interrupt(
-                interrupt_id=interrupt_id,
-                interrupt_payload=interrupt_payload,
-                event=self._runtime_event_draft(
-                    "interrupt.required",
-                    InterruptRequiredPayload(interrupt_id=interrupt_id),
-                ),
-                updated_at=datetime.now(UTC),
-            )
+            if resumed is not None and resumed.status == "resumed":
+                # Resume 事务已经提交，但 Command 尚未执行：用原持久答案继续同一快照，
+                # 不能重新 INSERT pending，也不能取下一轮问题的答案。
+                activation = await sequencer.transition_run(target_status="running", event=self._internal_runtime_event_draft(
+                    "internal.run.recovery_activated", RunRecoveryActivatedPayload(status="running", recovery_attempt=current.recovery_attempts)),
+                    updated_at=datetime.now(UTC))
+                active_run = activation.run
+            else:
+                await sequencer.require_interrupt(
+                    interrupt_id=interrupt_id, interrupt_payload=interrupt_payload,
+                    event=self._runtime_event_draft("interrupt.required", InterruptRequiredPayload(interrupt_id=interrupt_id)),
+                    updated_at=datetime.now(UTC))
             await self._session_service.touch_session(session_id=run.session_id)
+        if resumed is not None and resumed.status == "resumed":
+            applied = False
+            if "remote" in resumed.interrupt_payload:
+                from langgraph._internal._constants import RESUME
+                history = await sequencer.get_remote_input_interrupts(invocation_id=UUID(resumed.interrupt_payload["remote"]["invocation_id"]))
+                position = history.index(resumed.interrupt_payload) + 1
+                saved = await self._parent_graph.checkpointer.aget_tuple(recovery_config)
+                applied = saved is not None and any(channel == RESUME and isinstance(value, list) and len(value) >= position
+                    for _task_id, channel, value in saved.pending_writes or ())
+                if applied:
+                    # 已写入节点的恢复列表不能再追加同一个答案。单进程活动 Run 的最新
+                    # 快照必须仍是精确目标，随后以普通 None 输入保留已持久 resume writes。
+                    latest = await self._parent_graph.aget_state({"configurable": {"thread_id": str(run.session_id)}})
+                    if self._checkpoint_id(latest.config) != self._checkpoint_id(recovery_config):
+                        raise ChatRuntimeError(code="INTERRUPT_CHECKPOINT_INVALID", message="恢复目标已偏离当前中断快照", status_code=409)
+                    recovery_config = {**recovery_config, "configurable": {key: value for key, value in recovery_config["configurable"].items() if key != "checkpoint_id"}}
+            await self.execute_persistent_run(active_run, "resume", recovery_config=recovery_config, resumed_interrupt=resumed,
+                resume_already_applied=applied)
+            return
         log_business_event(
             logger,
             "持久RunCheckpoint中断投影完成",
@@ -2407,7 +2443,8 @@ class ChatService:
             prompt = value.strip()
         elif (
             isinstance(value, dict)
-            and set(value) == {"prompt"}
+            and (set(value) == {"prompt"} or set(value) == {"kind", "prompt"}
+                 or (set(value) == {"kind", "prompt", "remote"} and value.get("kind") == "text"))
             and isinstance(value.get("prompt"), str)
         ):
             prompt = value["prompt"].strip()
@@ -2427,7 +2464,16 @@ class ChatService:
             run.run_id,
             f"{checkpoint_id}:{raw_interrupt.id}",
         )
-        return interrupt_id, {"prompt": prompt}
+        kind = value.get("kind", "confirmation") if isinstance(value, dict) else "confirmation"
+        if kind not in {"confirmation", "text"}:
+            raise ChatRuntimeError(code="INTERRUPT_PAYLOAD_INVALID", message="Interrupt 展示类型无效", status_code=409)
+        payload = {"kind": kind, "prompt": prompt}
+        if isinstance(value, dict) and "remote" in value:
+            payload["remote"] = value["remote"]
+            # 同一节点内连续 interrupt 共用图任务 ID 和 checkpoint；远程问题消息 ID
+            # 才能区分顺序补参，同时保持重建后的同一问题身份不变。
+            interrupt_id = uuid5(run.run_id, "remote_input:" + value["remote"]["invocation_id"] + ":" + value["remote"]["message_id"])
+        return interrupt_id, payload
 
     @staticmethod
     def _checkpoint_id(config: RunnableConfig) -> str | None:
@@ -2899,14 +2945,24 @@ class ChatService:
     ) -> AsyncIterator[BaseMessage]:
         """只转发 Parent custom stream 中的公共消息事件。"""
 
-        if turn.is_resume:
+        if turn.resume_already_applied:
+            graph_input = None
+        elif turn.is_resume:
             if turn.resume_payload is None:
                 raise ChatRuntimeError(
                     code="INTERRUPT_RESUME_INPUT_INVALID",
                     message="Interrupt 恢复输入不能为空",
                     status_code=409,
                 )
-            graph_input = Command(resume=turn.resume_payload)
+            snapshot = (
+                await self._parent_graph.aget_state(turn.config)
+                if set(turn.resume_payload) == {"answer"} else None
+            )
+            if snapshot is not None and len(snapshot.interrupts) == 1 and isinstance(snapshot.interrupts[0].value, dict) and "remote" in snapshot.interrupts[0].value:
+                # 使用 LangGraph 的定向恢复映射，不留下可能被下一轮消费的全局回答。
+                graph_input = Command(resume={snapshot.interrupts[0].id: turn.resume_payload})
+            else:
+                graph_input = Command(resume=turn.resume_payload)
         elif turn.is_recovery:
             graph_input = None
         else:

@@ -269,6 +269,8 @@ class CapabilityInvocationGateway:
                     cancellation: AgentCancellation,
                 ) -> AgentResult:
                     invoke_options = {"sequencer": sequencer} if remote else {}
+                    if remote and config.get("metadata", {}).get("remote_resume_inputs"):
+                        invoke_options["resume_inputs"] = config["metadata"]["remote_resume_inputs"]
                     invoke = entry.capability.invoke_bound if remote else entry.capability.invoke
                     result = await invoke(
                         RunContext(

@@ -15,9 +15,11 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Checkpointer, Command
+from langgraph.errors import GraphInterrupt
+from langgraph.types import Checkpointer, Command, interrupt
 
 from agent_runtime.capabilities.manifest import validate_capability_id
+from agent_runtime.capabilities.remote_a2a.errors import RemoteInputRequired, RemoteExecutionPending
 from agent_runtime.core.errors import ApplicationError
 from agent_runtime.core.logging import log_business_event
 from agent_runtime.graph.child_result import CapabilityInvocation
@@ -212,7 +214,27 @@ def build_parent_graph(
         )
         capability_started_at = perf_counter()
         try:
-            invocation = await invoke_capability(state, config)
+            resume_inputs = []
+            while True:
+                try:
+                    invoke_config = config
+                    if resume_inputs:
+                        invoke_config = {**config, "metadata": {**config.get("metadata", {}), "remote_resume_inputs": resume_inputs}}
+                    invocation = await invoke_capability(state, invoke_config)
+                    break
+                except RemoteInputRequired as signal:
+                    log_business_event(logger, "Parent等待远程文本补参", session_id=session_id,
+                        message_id=message_id, capability_id=capability_id, status="interrupted")
+                    # 身份仅保存在 LangGraph 控制快照，不进入 Parent State 或公共 messages。
+                    answer = interrupt(signal.payload)
+                    resume_inputs.append({"interrupt_payload": signal.payload, "resume_payload": answer})
+        except GraphInterrupt:
+            # LangGraph 正常持久化控制出口，不作为业务失败记录。
+            raise
+        except RemoteExecutionPending:
+            log_business_event(logger, "Parent等待远程状态确认", session_id=session_id,
+                message_id=message_id, capability_id=capability_id, status="recovering")
+            raise
         except Exception as error:
             log_business_event(
                 logger,

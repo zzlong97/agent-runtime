@@ -159,6 +159,23 @@ test('HTTP 202 延迟期间重复提交只创建一个 Session 和 Run', async (
   expect(completionRequests).toBe(1);
 });
 
+test('旧确认提示刷新后仍可拒绝并沿用同一Run结束', async ({ page, request }) => {
+  await page.goto('/chat');
+  const accepted = page.waitForResponse((response) => response.url().endsWith('/api/v1/chat/completions') && response.status() === 202);
+  const sender = page.getByPlaceholder('输入消息，Enter 发送，Shift+Enter 换行');
+  await sender.fill('/demo interrupt');
+  await sender.press('Enter');
+  const run = await (await accepted).json();
+  await expect(page.getByText('是否继续完成演示运行？')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: '拒绝并继续' }).click();
+  await expect(page.getByText('演示运行已按拒绝结果结束。')).toBeVisible();
+  await expect(page.getByLabel('运行状态')).toContainText('completed');
+  const { items } = await (await request.get(`/api/v1/chat/sessions/${run.session_id}/messages`)).json();
+  expect(items.map((item) => item.role)).toEqual(['user', 'assistant']);
+  expect(items[1].message_id).toBe(run.response_message_id);
+});
+
 test('多屏会话在流式结束与权威历史回读期间保留消息列表和阅读位置', async ({ page, request }, testInfo) => {
   const sessionId = await seedConversation(request);
   await page.addInitScript((id) => {
