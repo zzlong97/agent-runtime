@@ -1567,10 +1567,12 @@ Operation 和权限的事实权威源；Redis 只是短期公开实时事件旁�
 若实际代码与本手册不一致，应停止扩展并按项目文档优先级报告冲突，不要在 Capability
 内部绕过 Runtime 契约。
 
-## 13. 远程 A2A 接入（RA-DEV-01/02）
+## 13. 远程 A2A 静态接入与本机联调
 
 当前实现静态发现、受信 Runtime Adapter、持久绑定、恢复和远程取消确认屏障。
-远程配置不加入默认运行目录；真实联调仍需 RA-DEV-03 文本补参及后续审核门禁。
+默认运行目录已提供关闭的 `semantic_pattern_mining` Manifest；禁用时不构造远程客户端或
+读取 Card。参数齐全、逐轮补参、取消和 Runtime 重建恢复已通过隔离真实任务验证；
+普通真实 Router 的选路与日常主环境启用仍需按下节完成，不能用固定 Router 联调替代。
 普通 SDK 的 `invoke()` 不提供远程绑定权限，正式调用由 Invocation Gateway 注入受控出口。
 
 远程 Manifest 使用下面的 `transport`，其余必填字段沿用第 3 节；`state_scope` 只能是
@@ -1647,7 +1649,7 @@ confirmation 只接收 `{"approved":true}` 或 `false`；额外键、混用与�
 补参 messageId 由 Invocation 与远程问题消息 ID 确定；每轮独立 Send 账本，Get 仍不入账。
 `/chat` 提供文本输入及确认按钮，失败保留输入，同一内容重试复用请求 ID。
 顺序补参的问题身份仅在既有 Checkpoint/interruption/Operation 恢复事实中保存，
-不进入 Parent 业务 State、公共消息或业务日志。上述实现仍需本批独立审核与负责人终验。
+不进入 Parent 业务 State、公共消息或业务日志。日常启用和新增真实调用仍按各自范围验收。
 
 显式范围拒绝使用 Task metadata 的 `control_signal="OUT_OF_SCOPE"`；还必须由 Get
 确认同 Task/context 的 rejected 终态，且无 Artifact、公开输出、业务 State 或 Child
@@ -1665,3 +1667,110 @@ Send 行并恢复原 current。普通 rejected、其他 Operation 与未知结�
 `REMOTE_RUNTIME_TEST_DATABASE=agent_runtime_ra03_probe`。浏览器远程链路使用
 `frontend/playwright.remote.config.js` 启动独立 `tests.e2e.remote_server`，采用正式
 Runtime 和 Fake A2A，不使用演示图或真实 Agent/模型。它与原 confirmation 演示回归分开运行。
+
+### 13.1 语义模式挖掘的日常本机接入
+
+正式配置为
+[`src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml`](../src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml)，
+当前 `enabled: false`。其余策略固定为单 Invocation、automatic + idempotent、并发1、
+执行900秒、取消宽限2秒；全局 HTTP 超时仍为10秒。启用沿用既有静态机制，不增加配置项。
+
+获得相应主环境操作范围后，按顺序执行：
+
+1. 确认对方团队提供的 `http://127.0.0.1:18080/.well-known/agent-card.json` 与同源 `/api`
+   当前可达、运行版本及认证符合已确认交付。2026-10-29初次只读预检为连接拒绝，随后
+   03:14 UTC恢复预检确认原交付Card、API/Worker版本匹配；两次事实分别保存在
+   `.dev-team/tasks/RA-INT-02/evidence/外部入口预检.json` 和同目录的
+   `恢复后执行预检.json`。Runtime团队不重启对方服务或修复Docker，实际启用时仍重查。
+2. 记录原 Manifest 开关、原用户权限和原进程开发开关；将该正式文件唯一的
+   `enabled: false` 改为 `enabled: true`。此修改不会热加载，启动前必须完成后续配置。
+3. 按第2.7节已有授权脚本，将唯一的 `capability_id="text_statistics"` 替换为
+   `capability_id="semantic_pattern_mining"`，为同一 `Settings.local_user_id` 显式allow。
+   该操作写入主用户权限，须包含在本次操作范围中；应用启动不会自动授权。
+4. 本机 HTTP/none 仅在启动终端显式设置以下既有开关，模型配置继续使用受控配置：
+
+   ```powershell
+   $env:REMOTE_A2A_DEVELOPMENT_MODE = "true"
+   $env:RUNTIME_DEMO_MODE = "false"
+   uv run --env-file .env python -m agent_runtime
+   ```
+
+   已运行的主 Runtime 须先确认活动 Run 的处理方式再正常重启，不强杀未知远程任务。
+   正常 setup 会同时补齐项目自有表及字段注释，框架表注释保持原样。
+5. 确认 Registry 中远程能力初始化及健康检查通过，使用普通 `/chat` 与真实 Router
+   执行已批准的数据/调用额度；不能注入固定路由输出。核验实际能力ID、唯一非空公共
+   AIMessage、持久Run终态和公开SSE，不把主环境可启动当作真实选路已经通过。
+
+回退时恢复本次记录的开关及权限原值，并正常重启。已有远程Run先查询并确认终态，
+保留Task、Operation、事件及Checkpoint，不删除事实以重复未知任务。主环境尚未启用时，
+保持正式Manifest为false即可；开发联调准备不意味着已授权主环境写入或付费调用。
+
+### 13.2 普通真实Router的独立验证入口
+
+`tests/e2e/real_router_runtime.py` 只在显式批准后启动独立回环Runtime。它复制上述三个
+正式Manifest到临时隔离目录，仅在副本中启用远程，保留原两本地候选；正式
+`open_chat_service(settings)` 构造真实模型和普通Router，不传入替身模型，不启用演示。
+测试入口不会修改主源码Manifest、主用户或主业务库。默认导入/离线测试不调用在线模型。
+
+本次受控复测的固定对象（已执行，新增远程额度已用满）：
+
+| 对象 | 值 |
+| --- | --- |
+| 批次 | `29e46ecf-dcc4-5cf2-967f-f899f4e8b308` |
+| 独立Runtime | `http://127.0.0.1:18782` |
+| 专用PostgreSQL库 | `agent_runtime_ra_int02_29e46ecf` |
+| 固定测试用户 | `ra-int02-29e46ecf-dcc4-5cf2-967f-f899f4e8b308` |
+| Redis短期事件库 | 本机Compose Redis的13号库，不清库或删除他人键 |
+| request_id | `d3e517ba-0747-5446-a0c6-8e061d045f0e`，同批次固定名 `full-parameters-observed-recheck` |
+| 输入范围 | 原受信50条/5类合成隔离数据，2026-10-01～2026-10-20，Asia/Shanghai含结束日 |
+| 远程任务累计上限 | 同批次累计1个，当前已用1/1；查询既有Run不创建新Task |
+
+此入口启动会对专用库执行正常setup并给固定测试用户写三条显式能力权限，还会读取远程
+Card；库应由总控在获准后创建，已存在时先核查并复用，不删除重建。启动要求本机Compose
+PostgreSQL及完整真实模型配置，缺失会报错，不回退到确定性模型。
+
+只有负责人明确批准上述测试库/权限初始化、在线模型和新任务范围后，才执行：
+
+```powershell
+$env:RA_INT02_APPROVED = "29e46ecf-dcc4-5cf2-967f-f899f4e8b308"
+$env:RA_INT02_ALLOW_TEST_SETUP = "true"
+$env:LOG_LEVEL = "INFO"
+uv run --env-file .env python -m tests.e2e.real_router_runtime
+```
+
+另一个具有相同批次批准变量的终端默认仅查询，提交必须显式选择动作：
+
+```powershell
+uv run python -m tests.e2e.real_router_probe status
+uv run python -m tests.e2e.real_router_probe submit
+uv run python -m tests.e2e.real_router_probe verify
+```
+
+探针先查固定request_id的旧Run，再独占保存提交意图，仅POST一次。回执在
+`.dev-team/tasks/RA-INT-02/evidence/普通Router受控复测回执.json`，只含身份/状态和布尔验证。
+响应丢失后查询原Run；已有意图但查不到Run时停止，不换ID重试，也不删除回执释放额度。
+远程健康丢失不妨碍查询原Run，但三个候选未就绪时禁止新提交。完成后`verify`只读公共
+历史和SSE，核验能力ID、非空结果、同Run及唯一终态；失败/错误选路保留原记录，不自动
+换请求重跑。该独立验证通过仍不代表日常主Runtime已启用。
+
+2026-10-29已按新批准执行一次普通真实Router Run；结果为`failed/ROUTER_CALL_FAILED`，
+未进入Invocation、未创建远程Task。失败回执及诊断保留在RA-INT-02交付中，不能将该次
+执行算作真实选路成功。独立入口的Uvicorn日志重配导致每日文件停止写入的问题已通过
+`log_config=None`修正，并完成16项离线回归；它改善后续取证，不能证明原模型错误已解决。
+主环境仍未启用，后续新请求/Run须按明确受控复测范围执行，不自动替换本次失败请求。
+
+本次新本地请求仅依据首次确定失败且Task/Operation/Invocation均为0后的明确续行范围
+人工准备；旧request_id `56a29c21-6f27-5427-9394-1fd829270989` 的failed Run和
+[原回执](../.dev-team/tasks/RA-INT-02/evidence/普通Router运行回执.json)不删除、不修改。
+失败事实及取证限制见[首次失败交付](../.dev-team/tasks/RA-INT-02/handoffs/0005-真实Router失败诊断与日志纠正交付.md)。
+Root在复测前再次核对旧终态和零远程副作用，写入独立意图；若本次再失败，收集证据并停止，
+不能自动生成第三个请求。测试入口旁路仅记录原Router异常类、最多八层原因链类、HTTP状态
+及静态白名单错误码，不读取str(error)、错误正文或认证信息；原输入、模型、结果与异常
+均沿真实route原样传递，旁路失败也不替换原异常。该受控版本准备阶段没有生成或Task调用。
+
+2026-10-29受控复测的开发运行记录已为completed：普通真实Router选中远程能力，唯一
+远程Task及本地Run完成，公开AI非空且与远端Artifact哈希一致；实际证据见
+[真实复测交付](../.dev-team/tasks/RA-INT-02/handoffs/0010-真实Router受控复测开发交付.md)。
+本批额度已用满，以上探针用于查询/验证既有请求，不用于生成新请求。当前审核/终验/
+提交状态以本任务state为准，正式Manifest仍false、日常主Runtime尚未启用。
+本次业务结果表新增0条，未验收语义挖掘或GPU推理质量；当前成功不倒推首次模型失败原因。

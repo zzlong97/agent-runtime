@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "task_id": "RA-INT-02",
+  "operation_key": "sha256:2eab0cf360d5c00873fe26777ca30607944f483e50e1d1aae3cec525d12b48d6",
+  "collected_at": "2026-10-29T10:14:25.564895+00:00",
+  "result": {
+    "attempt_known_terminal": true,
+    "run_result": "failed",
+    "error_code": "ROUTER_CALL_FAILED",
+    "original_underlying_error_type": null,
+    "original_error_type_available": false,
+    "remote_send_reached": false,
+    "new_remote_tasks": 0,
+    "ordinary_real_router_acceptance_passed": false,
+    "logging_fix_only_verified_offline": true
+  },
+  "input_ref": ".dev-team/tasks/RA-INT-02/evidence/真实Router联调执行输入.json",
+  "executed_input_versions": [
+    {
+      "path": "src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml",
+      "version": "sha256:0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de"
+    },
+    {
+      "path": "docs/capability_development_guide.md",
+      "version": "sha256:4b4a4b172c8bea055ccc7b90d2234847b6a6eb1aa86f250b59d628ce3d4b7448"
+    },
+    {
+      "path": "tests/e2e/real_router_runtime.py",
+      "version": "sha256:1c9af04cbbfaa61e9522029e4770b2aac8f072bb9ebba8761659b871e0204df2"
+    },
+    {
+      "path": "tests/e2e/real_router_probe.py",
+      "version": "sha256:0a690812c4ac745f68bdeec72728fc9bf13c707fda6a8c5ed3270f996054c6e6"
+    }
+  ],
+  "runtime_processes": {
+    "initial": {
+      "managed_session_id": 1972,
+      "pids": [
+        6860,
+        16404
+      ],
+      "initial_level": "DEBUG",
+      "run_before_stop": "fixed request 404; no receipt",
+      "model_calls_before_stop": 0,
+      "stop": "Ctrl+C",
+      "exit_code": 1,
+      "stop_note": "KeyboardInterrupt/CancelledError during close; not a clean exit0"
+    },
+    "actual": {
+      "managed_session_id": 46891,
+      "pids": [
+        204,
+        22180
+      ],
+      "effective_level": "INFO",
+      "level_evidence": "startup business log explicitly recorded INFO twice; no env file edit",
+      "interrupted_cleanup_ref": ".dev-team/tasks/RA-INT-02/evidence/中断恢复核对.json",
+      "normal_ctrl_c_claimed": false
+    },
+    "remaining_test_module_processes": 0
+  },
+  "submission": {
+    "post_count": 1,
+    "request_id": "56a29c21-6f27-5427-9394-1fd829270989",
+    "http_status": 202,
+    "initial_status": "queued",
+    "intent_at": "2026-10-29T03:21:11.275321+00:00",
+    "additional_request_ids_created": 0,
+    "terminal_run_not_modified": true,
+    "receipt_ref": ".dev-team/tasks/RA-INT-02/evidence/普通Router运行回执.json"
+  },
+  "local_readonly_validation": {
+    "exit_code": 0,
+    "method": "docker exec psql -X -U runtime -d agent_runtime_ra_int02_29e46ecf; BEGIN READ ONLY/COMMIT; IDs/status/events/metadata only",
+    "run": {
+      "run_id": "5d19887d-7914-47ca-aada-9705b635f9d8",
+      "status": "failed",
+      "created_at": "2026-10-29T03:21:11.328005+00:00",
+      "error_code": "ROUTER_CALL_FAILED",
+      "request_id": "56a29c21-6f27-5427-9394-1fd829270989",
+      "session_id": "604e3845-d4a7-4317-b93a-5689dd9ac5c5",
+      "started_at": "2026-10-29T03:21:11.414778+00:00",
+      "finished_at": "2026-10-29T03:21:42.334407+00:00",
+      "recovery_attempts": 0,
+      "response_message_id": "cc89e0c4-9cbd-49cf-a908-64773d22c1d5",
+      "input_payload_cleared": true
+    },
+    "counts": {
+      "runs": 1,
+      "tasks": 0,
+      "operations": 0,
+      "active_runs": 0,
+      "identity_events": 0
+    },
+    "events": {
+      "items": [
+        {
+          "seq": 1,
+          "code": null,
+          "status": "running",
+          "event_type": "run.started",
+          "capability_id": null,
+          "runtime_status": null,
+          "response_message_id": null
+        },
+        {
+          "seq": 2,
+          "code": null,
+          "status": null,
+          "event_type": "message.started",
+          "capability_id": null,
+          "runtime_status": null,
+          "response_message_id": "cc89e0c4-9cbd-49cf-a908-64773d22c1d5"
+        },
+        {
+          "seq": 3,
+          "code": null,
+          "status": null,
+          "event_type": "message.finalized",
+          "capability_id": null,
+          "runtime_status": "incomplete",
+          "response_message_id": "cc89e0c4-9cbd-49cf-a908-64773d22c1d5"
+        },
+        {
+          "seq": 4,
+          "code": "ROUTER_CALL_FAILED",
+          "status": "failed",
+          "event_type": "run.failed",
+          "capability_id": null,
+          "runtime_status": null,
+          "response_message_id": null
+        }
+      ]
+    },
+    "tables": {
+      "all_tables": 13,
+      "self_tables": 9,
+      "self_chinese_comments": 9
+    },
+    "columns": {
+      "all_columns": 102,
+      "self_columns": 79,
+      "self_chinese_comments": 79
+    }
+  },
+  "public_success_verification": {
+    "completed_remote_reply": false,
+    "successful_http_sse_flow": false,
+    "public_failure_durable_events_recorded": true,
+    "body_not_read_or_saved": true
+  },
+  "safe_model_configuration_check": {
+    "model_endpoint": {
+      "scheme": "https",
+      "host": "dashscope.aliyuncs.com",
+      "port": 443,
+      "model": "deepseek-v4-flash-0731"
+    },
+    "sdk": {
+      "model_request_timeout": null,
+      "max_retries": 2,
+      "timeout": {
+        "connect": null,
+        "read": null,
+        "write": null,
+        "pool": null
+      }
+    },
+    "proxy_environment_present": {
+      "HTTP_PROXY": false,
+      "HTTPS_PROXY": false,
+      "ALL_PROXY": false,
+      "NO_PROXY": false,
+      "http_proxy": false,
+      "https_proxy": false,
+      "all_proxy": false,
+      "no_proxy": false
+    },
+    "network_probes": {
+      "dns": {
+        "ok": true,
+        "address_count": 1,
+        "elapsed_ms": 15
+      },
+      "tcp": {
+        "ok": true,
+        "elapsed_ms": 16
+      },
+      "tls": {
+        "ok": true,
+        "version": "TLSv1.3",
+        "elapsed_ms": 516
+      }
+    },
+    "business_requests": 0,
+    "model_requests": 0,
+    "precise_sdk_timeout": {
+      "root_async_client_timeout": null,
+      "httpx_connect": null,
+      "httpx_read": null,
+      "httpx_write": null,
+      "httpx_pool": null,
+      "max_retries": 2
+    },
+    "meaning": "These are post-incident checks; they do not recover original HTTP/structured-output exception or prove generation endpoint compatibility"
+  },
+  "model_directory_check": {
+    "checked_at": "2026-10-29T10:07:26.876025+00:00",
+    "operation": "SDK GET models.list",
+    "generation_requests": 0,
+    "max_retries": 0,
+    "timeout_seconds": 15,
+    "configured_model": "deepseek-v4-flash-0731",
+    "http_status": 200,
+    "directory_available": true,
+    "configured_model_exactly_listed": true,
+    "has_next_page": false
+  },
+  "observability": {
+    "dedicated_log_bytes_at_recovery": 315,
+    "dedicated_safe_events": 2,
+    "router_event_found_in_dedicated_or_checked_shared_log": false,
+    "underlying_error_recoverable": false,
+    "reproduction": {
+      "network_requests": 0,
+      "before_uvicorn_config_written": true,
+      "after_default_uvicorn_config_written": false
+    },
+    "cause": "Inline app configures daily Handler before uvicorn.Config; default log_config reconfiguration closes that Handler",
+    "working_production_pattern": "python -m agent_runtime passes app import string, so ASGI application configures logging after Uvicorn config",
+    "fix_scope": "test-only real_router_runtime.py server constructor uses log_config=None; no model/timeout/retry/Router change",
+    "original_runtime_sha256": "1c9af04cbbfaa61e9522029e4770b2aac8f072bb9ebba8761659b871e0204df2",
+    "original_snapshot_ref": ".dev-team/tasks/RA-INT-02/evidence/联调入口修正前源码.py",
+    "runtime_diff": "--- executed/tests/e2e/real_router_runtime.py\n+++ current/tests/e2e/real_router_runtime.py\n@@ -55,12 +55,21 @@\n             yield service\n \n \n+def build_server(app):\n+    \"\"\"保留应用业务日志Handler，避免Uvicorn重配日志后每日文件停止写入。\"\"\"\n+    import uvicorn\n+\n+    return uvicorn.Server(uvicorn.Config(\n+        app, host=\"127.0.0.1\", port=18782, log_level=\"warning\",\n+        access_log=False, log_config=None,\n+    ))\n+\n+\n async def serve():\n     \"\"\"新批次批准后才加载受控配置、初始化专用库、授权测试用户并启动回环服务。\"\"\"\n     if os.getenv(\"RA_INT02_APPROVED\") != BATCH or os.getenv(\"RA_INT02_ALLOW_TEST_SETUP\") != \"true\":\n         raise RuntimeError(\"启动前必须记录新批次批准，并显式允许专用测试库初始化及权限写入\")\n \n-    import uvicorn\n     from fastapi import HTTPException\n     from agent_runtime.api.schemas.runs import RunSummaryResponse\n     from agent_runtime.capabilities.persistence import UserCapabilityPermissionRepository\n@@ -114,8 +123,7 @@\n                 return {\"request_id\": str(run.request_id),\n                         **RunSummaryResponse.model_validate(run).model_dump(mode=\"json\")}\n \n-            await uvicorn.Server(uvicorn.Config(app, host=\"127.0.0.1\", port=18782,\n-                                               log_level=\"warning\", access_log=False)).serve()\n+            await build_server(app).serve()\n \n \n if __name__ == \"__main__\":\n",
+    "tests": {
+      "command": ".venv/Scripts/python.exe -X utf8 -m pytest tests/e2e/test_real_router_preparation.py tests/capabilities/test_semantic_manifest.py -q --tb=short",
+      "passed": 16,
+      "exit_code": 0,
+      "elapsed_seconds": 4.24,
+      "online_requests_after_fix": 0
+    }
+  },
+  "remaining_conditions": [
+    "Preserve original failed Run and receipt; do not reuse or mutate terminal Run",
+    "Root to independently review local logging correction and record any next controlled request input/intent",
+    "Successful generation/structured-output call remains unverified; exact original failure cannot be named from missing log",
+    "Cumulative new remote Task limit remains1; this failed Router attempt did not create a remote Task"
+  ],
+  "scope": {
+    "diagnostic_generation_requests": 0,
+    "diagnostic_directory_requests": 1,
+    "remote_tasks_created": 0,
+    "main_environment_changes": 0,
+    "counterpart_service_changes": 0,
+    "env_file_changes": 0,
+    "commit_or_push": false
+  }
+}

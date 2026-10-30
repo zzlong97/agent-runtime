@@ -1,0 +1,80 @@
+{
+  "task_id": "RA-INT-02",
+  "operation": "普通真实Router单Task隔离联调",
+  "inputs": {
+    "artifacts": [
+      {
+        "path": "src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml",
+        "version": "sha256:0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de"
+      },
+      {
+        "path": "tests/e2e/real_router_runtime.py",
+        "version": "sha256:1c9af04cbbfaa61e9522029e4770b2aac8f072bb9ebba8761659b871e0204df2"
+      },
+      {
+        "path": "tests/e2e/real_router_probe.py",
+        "version": "sha256:0a690812c4ac745f68bdeec72728fc9bf13c707fda6a8c5ed3270f996054c6e6"
+      },
+      {
+        "path": "docs/capability_development_guide.md",
+        "version": "sha256:4b4a4b172c8bea055ccc7b90d2234847b6a6eb1aa86f250b59d628ce3d4b7448"
+      }
+    ],
+    "batch_id": "29e46ecf-dcc4-5cf2-967f-f899f4e8b308",
+    "runtime_url": "http://127.0.0.1:18782",
+    "database": "agent_runtime_ra_int02_29e46ecf",
+    "local_user_id": "ra-int02-29e46ecf-dcc4-5cf2-967f-f899f4e8b308",
+    "redis_database": 13,
+    "capability_allow_ids": [
+      "general_chat",
+      "en_to_zh",
+      "semantic_pattern_mining"
+    ],
+    "runtime_flags": {
+      "runtime_demo_mode": false,
+      "remote_a2a_development_mode": true
+    },
+    "remote_enabled_override": "仅隔离目录副本设为true，正式Manifest保持false",
+    "request_id": "56a29c21-6f27-5427-9394-1fd829270989",
+    "agent_card_url": "http://127.0.0.1:18080/.well-known/agent-card.json",
+    "remote_interface_url": "http://127.0.0.1:18080/api",
+    "remote_revision": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+    "remote_image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+    "data_scope": {
+      "remote_database": "semantic_a2a_integration",
+      "source_rows": 50,
+      "categories": 5,
+      "date_from": "2026-10-01",
+      "date_to": "2026-10-20",
+      "timezone": "Asia/Shanghai",
+      "end_date_inclusive": true
+    },
+    "max_new_remote_tasks": 1,
+    "online_model_policy": "允许普通Router及唯一远程Task必要的已配置真实模型调用，存在费用；无自动替代请求",
+    "runtime_policy": "仅独立回环测试Runtime；终态确认后可正常关闭，不启停主Runtime或对方API/Worker",
+    "local_write_policy": "经批准后新建专用库或只读核对后复用同批库，正常setup及固定测试用户三能力allow；Redis13仅本批，不删除或重建已有事实",
+    "remote_write_policy": "仅既有隔离库及专用产物卷；不改源50条数据，不清幂等事实",
+    "stop_policy": "错误选路/响应未知/超时先查同一Run与Task，不换request_id，不自动POST重送；必要取消仅此Task并确认远程终态",
+    "main_environment_changes": false,
+    "env_file_changes": false,
+    "commit_or_push": false
+  },
+  "approval_status": "已批准，待按同一固定输入执行",
+  "prepared_at": "2026-10-29T02:51:28.098809+00:00",
+  "preconditions": [
+    "对方恢复原交付版本，Card与运行版本只读预检通过",
+    "回环18782未被其它进程占用；不自动结束其它进程",
+    "负责人批准本候选准确范围后记录实际批准来源",
+    "准备独立审核通过且当前产物版本仍与本候选一致"
+  ],
+  "next_intent": "本次实际批准已保存；先核查旧回执/Run及数据库，再登记同操作键执行，禁止自动替代请求",
+  "candidate_version": "sha256:0a90fdba9c3b152c21809f2118943b55453ddacec98076253dc102c19b0a1423",
+  "approval": {
+    "source": "本会话send_user_message_question_reply",
+    "service_reply": "已恢复",
+    "scope_reply": "批准恢复后执行最多1个新Task",
+    "service_question_item_id": "call_aca4a7aba7104fe98b7900c4f6e3b8be/0",
+    "scope_question_item_id": "call_896b40bc04a6488e84fa89cbf2c1d768/0",
+    "recorded_at": "2026-10-29T03:14:02.563273+00:00"
+  }
+}

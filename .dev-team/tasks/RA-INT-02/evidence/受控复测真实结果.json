@@ -1,0 +1,384 @@
+{
+  "schema_version": 1,
+  "task_id": "RA-INT-02",
+  "operation_key": "sha256:13110a56c0ee088974987390ceb6d2ce26685c12201f7b4e5aabe2cbcee1ce6d",
+  "collected_at": "2026-10-29T10:59:55.265503+00:00",
+  "input_ref": ".dev-team/tasks/RA-INT-02/evidence/受控复测执行输入.json",
+  "executed_input_versions": [
+    {
+      "path": "src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml",
+      "version": "sha256:0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de"
+    },
+    {
+      "path": "tests/e2e/real_router_runtime.py",
+      "version": "sha256:7026f60e5e8d93c72e7a1468cff086be6451788379785632d1f30e555a7f5605"
+    },
+    {
+      "path": "tests/e2e/real_router_probe.py",
+      "version": "sha256:947bb0dd61c9904bca63d564e58121ee3bfee42156db1f50e03360bd49dddc9c"
+    },
+    {
+      "path": "docs/capability_development_guide.md",
+      "version": "sha256:f96f4ab04b6f08713391dde644dc0a5a13e1555d0834c821e8b0d0db755524a4"
+    }
+  ],
+  "executed_input_versions_match": true,
+  "result": {
+    "ordinary_real_router_completed": true,
+    "run_status": "completed",
+    "new_remote_tasks_this_recheck": 1,
+    "cumulative_remote_tasks_ra_int02": 1,
+    "cumulative_limit": 1,
+    "prior_failed_run_preserved": true,
+    "first_failure_cause_identified": false,
+    "independent_review_pending": true,
+    "main_runtime_enabled": false
+  },
+  "runtime": {
+    "managed_session_id": 13380,
+    "pids": [
+      36700,
+      35916
+    ],
+    "started_local": "2026-10-29 18:49:06+08:00",
+    "base_url": "http://127.0.0.1:18782",
+    "database": "agent_runtime_ra_int02_29e46ecf",
+    "user_id": "ra-int02-29e46ecf-dcc4-5cf2-967f-f899f4e8b308",
+    "redis_database": 13,
+    "runtime_demo_mode": false,
+    "model_injected": false,
+    "router_mode": "production",
+    "capabilities": [
+      "en_to_zh",
+      "general_chat",
+      "semantic_pattern_mining"
+    ],
+    "effective_log_level": "INFO",
+    "log_level_observed_from_startup": true,
+    "log_config": null,
+    "business_log_after_startup": {
+      "bytes": 9082,
+      "events": 34,
+      "app_started_logged": true
+    },
+    "model": {
+      "model_id": "deepseek-v4-flash-0731",
+      "base_url_scheme": "https",
+      "base_url_host": "dashscope.aliyuncs.com",
+      "base_url_port": 443,
+      "base_url_path": "/compatible-mode/v1",
+      "credential_reference": "DASHSCOPE_API_KEY",
+      "streaming": true,
+      "extra_body": {
+        "enable_thinking": false
+      },
+      "core_model_sha256": "d688078dee7cad8281789ebfced70df730f44c45c315852a0bcc10de95da2821"
+    }
+  },
+  "submission": {
+    "request_id": "d3e517ba-0747-5446-a0c6-8e061d045f0e",
+    "post_count": 1,
+    "intent_at": "2026-10-29T10:49:49.861059+00:00",
+    "http_status": 202,
+    "initial_status": "queued",
+    "automatic_replacement_requests": 0,
+    "resume_requests": 0,
+    "cancel_requests": 0,
+    "receipt_ref": ".dev-team/tasks/RA-INT-02/evidence/普通Router受控复测回执.json"
+  },
+  "identity": {
+    "run_id": "f40fca5f-928c-4591-97a5-9788005d766a",
+    "session_id": "b8c87248-06ce-429e-8af6-4b2c83eb2b98",
+    "response_message_id": "84b026f6-a170-438c-9833-1cbddeb21637",
+    "invocation_id": "aa2626e1-f6f9-4d33-9b16-858e6c480bce",
+    "local_capability_task_id": "32c25214-86f6-4a7c-9b9c-30e13007e742",
+    "remote_task_id": "2202a2e9-4159-4597-91f2-2772b8fdc85e",
+    "remote_context_id": "fbda3c18-d7f2-4c77-aafb-07cedbc0b5e4",
+    "initial_message_id": "cd28b5ef-b302-55aa-acce-c089927f2588",
+    "remote_agent_identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+    "business_run_id": "824e4405-903d-49fd-b149-6377c229f72b",
+    "local_task_status": "active",
+    "local_task_note": "CapabilityTask生命周期独立；不人为修改其active投影，顶层Run/Invocation/远程Task均已完成"
+  },
+  "public_http_and_sse": {
+    "chat_page_http_status": 200,
+    "history_http_status": 200,
+    "messages": [
+      {
+        "message_id": "60d04941-8dd2-4534-b3a6-78e7ceea1621",
+        "role": "user",
+        "runtime_status": null,
+        "capability_id": null,
+        "nonempty": true,
+        "characters": 48,
+        "sha256": "f02335b85deb3346fbfa6c4f5fc29c990b8a09ccdb95c0bc1f9d2673b121ffd4",
+        "md5": "88180473616961af0673179bab6fbe63",
+        "contains_start": true,
+        "contains_end": true
+      },
+      {
+        "message_id": "84b026f6-a170-438c-9833-1cbddeb21637",
+        "role": "assistant",
+        "runtime_status": "completed",
+        "capability_id": "semantic_pattern_mining",
+        "nonempty": true,
+        "characters": 330,
+        "sha256": "135f3de5dd931eba3f14726d49a6bab30cfed98818aeac08d806d50e29603619",
+        "md5": "1a0e47097989d26c0f45be5539e5d585",
+        "contains_start": true,
+        "contains_end": true
+      }
+    ],
+    "sse": {
+      "schema_valid": true,
+      "event_header_matches": true,
+      "same_run": true,
+      "seq_unique_increasing": true,
+      "events": [
+        {
+          "seq": 1,
+          "event_type": "run.started"
+        },
+        {
+          "seq": 2,
+          "event_type": "message.started"
+        },
+        {
+          "seq": 8,
+          "event_type": "message.delta"
+        },
+        {
+          "seq": 10,
+          "event_type": "message.finalized"
+        },
+        {
+          "seq": 11,
+          "event_type": "run.completed"
+        }
+      ],
+      "reconnect_after_terminal_empty": true
+    },
+    "safe_router_events": [
+      {
+        "event": "Router决策开始",
+        "candidate_capability_ids": [
+          "en_to_zh",
+          "general_chat",
+          "semantic_pattern_mining"
+        ],
+        "session_id": "b8c87248-06ce-429e-8af6-4b2c83eb2b98",
+        "message_id": "84b026f6-a170-438c-9833-1cbddeb21637"
+      },
+      {
+        "event": "Router决策完成",
+        "capability_id": "semantic_pattern_mining",
+        "task_action": "new",
+        "confidence": 0.98,
+        "duration_ms": 1110.31,
+        "session_id": "b8c87248-06ce-429e-8af6-4b2c83eb2b98",
+        "message_id": "84b026f6-a170-438c-9833-1cbddeb21637"
+      }
+    ]
+  },
+  "probe_verify": {
+    "command": ".venv/Scripts/python.exe -X utf8 -m tests.e2e.real_router_probe verify",
+    "exit_code": 0,
+    "verification": {
+      "unique_public_turn": true,
+      "remote_capability": true,
+      "nonempty_reply": true,
+      "unique_terminal": true,
+      "seq_unique_increasing": true
+    }
+  },
+  "native_postgres": {
+    "local": {
+      "exit_code": 0,
+      "method": "docker exec agent-runtime-postgres psql -X -U runtime -d agent_runtime_ra_int02_29e46ecf; BEGIN READ ONLY/COMMIT; no body/checkpoint query",
+      "runs": {
+        "items": [
+          {
+            "run_id": "5d19887d-7914-47ca-aada-9705b635f9d8",
+            "status": "failed",
+            "created_at": "2026-10-29T03:21:11.328005+00:00",
+            "error_code": "ROUTER_CALL_FAILED",
+            "request_id": "56a29c21-6f27-5427-9394-1fd829270989",
+            "session_id": "604e3845-d4a7-4317-b93a-5689dd9ac5c5",
+            "started_at": "2026-10-29T03:21:11.414778+00:00",
+            "finished_at": "2026-10-29T03:21:42.334407+00:00",
+            "recovery_attempts": 0,
+            "input_payload_cleared": true
+          },
+          {
+            "run_id": "f40fca5f-928c-4591-97a5-9788005d766a",
+            "status": "completed",
+            "created_at": "2026-10-29T10:49:49.899768+00:00",
+            "error_code": null,
+            "request_id": "d3e517ba-0747-5446-a0c6-8e061d045f0e",
+            "session_id": "b8c87248-06ce-429e-8af6-4b2c83eb2b98",
+            "started_at": "2026-10-29T10:49:50.014752+00:00",
+            "finished_at": "2026-10-29T10:51:34.396224+00:00",
+            "recovery_attempts": 0,
+            "input_payload_cleared": true
+          }
+        ]
+      },
+      "tasks": {
+        "items": [
+          {
+            "status": "active",
+            "task_id": "32c25214-86f6-4a7c-9b9c-30e13007e742",
+            "session_id": "b8c87248-06ce-429e-8af6-4b2c83eb2b98",
+            "last_run_id": "f40fca5f-928c-4591-97a5-9788005d766a",
+            "capability_id": "semantic_pattern_mining",
+            "last_invocation_id": "aa2626e1-f6f9-4d33-9b16-858e6c480bce"
+          }
+        ]
+      },
+      "operations": {
+        "items": [
+          {
+            "run_id": "f40fca5f-928c-4591-97a5-9788005d766a",
+            "status": "succeeded",
+            "task_id": "32c25214-86f6-4a7c-9b9c-30e13007e742",
+            "invocation_id": "aa2626e1-f6f9-4d33-9b16-858e6c480bce",
+            "operation_key": "remote_send:cd28b5ef-b302-55aa-acce-c089927f2588"
+          }
+        ]
+      },
+      "lifecycle": {
+        "bound": 1,
+        "started": 1,
+        "completed": 1,
+        "top_completed": 1,
+        "remote_task_ids": 1,
+        "message_finalized": 1
+      },
+      "tables": {
+        "all_tables": 13,
+        "self_tables": 9,
+        "self_chinese_comments": 9
+      },
+      "columns": {
+        "all_columns": 102,
+        "self_columns": 79,
+        "self_chinese_comments": 79
+      }
+    },
+    "remote": {
+      "exit_code": 0,
+      "method": "docker exec semantic-pattern-mining-integration-postgres psql -X -U postgres -d semantic_a2a_integration; BEGIN READ ONLY/COMMIT; known Task/thread/turn/run IDs only, no business_state/checkpoint read",
+      "remote_task": {
+        "id": "2202a2e9-4159-4597-91f2-2772b8fdc85e",
+        "state": "TASK_STATE_COMPLETED",
+        "context_id": "fbda3c18-d7f2-4c77-aafb-07cedbc0b5e4",
+        "created_at": "2026-10-29T10:49:51.720075+00:00",
+        "error_code": null,
+        "updated_at": "2026-10-29T10:51:33.683515+00:00",
+        "artifact_md5": "1a0e47097989d26c0f45be5539e5d585",
+        "cancel_requested": false,
+        "artifact_nonempty": true
+      },
+      "messages": {
+        "rows": 1,
+        "distinct_message_ids": 1,
+        "fixed_initial_message_present": true
+      },
+      "business": {
+        "rows": 1,
+        "items": [
+          {
+            "run_id": "824e4405-903d-49fd-b149-6377c229f72b",
+            "status": "completed",
+            "turn_id": "2202a2e9-4159-4597-91f2-2772b8fdc85e",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "thread_id": "a2a:2202a2e9-4159-4597-91f2-2772b8fdc85e",
+            "created_at": "2026-10-29T10:49:54.419209+00:00",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "completed_at": "2026-10-29T10:51:33.665041+00:00"
+          }
+        ]
+      },
+      "results": {
+        "traces": 0,
+        "distinct_rows": 0,
+        "common_clauses": 0,
+        "distinct_common_clause_ids": 0
+      },
+      "source": {
+        "rows": 50,
+        "categories": 5
+      }
+    }
+  },
+  "cross_checks": {
+    "one_invocation_started_completed": true,
+    "one_task_binding": true,
+    "one_send_operation_succeeded": true,
+    "one_distinct_remote_task": true,
+    "one_remote_dedup_message": true,
+    "one_remote_business_run": true,
+    "business_thread_and_turn_match_task": true,
+    "remote_artifact_matches_public_ai_md5": true,
+    "authorized_date_range_matches": true,
+    "source_counts_50_rows_5_categories": true,
+    "self_table_and_column_chinese_comments_9_79": true,
+    "task_ledger_within_budget": true
+  },
+  "date_scope": {
+    "range_start_utc": "2026-09-30T16:00:00+00:00",
+    "range_end_exclusive_utc": "2026-10-20T16:00:00+00:00",
+    "timezone": "Asia/Shanghai",
+    "natural_dates": "2026-10-01 through 2026-10-20 inclusive"
+  },
+  "observer": {
+    "safe_router_start_completed_events_persisted": true,
+    "router_duration_ms": 1110.31,
+    "confidence": 0.98,
+    "failure_observation_events": 0,
+    "cause_chain_not_triggered_on_success": true
+  },
+  "shutdown": {
+    "after_local_and_remote_terminal_confirmed": true,
+    "method": "single Ctrl+C to owned managed session",
+    "exit_code": 1,
+    "keyboard_interrupt": true,
+    "cancelled_error_during_cleanup": true,
+    "application_shutdown_complete_logged": true,
+    "chat_service_shutdown_started_logged": true,
+    "clean_exit_zero_claimed": false,
+    "remaining_test_module_processes": 0,
+    "runtime_port_18782_free": true,
+    "hard_kill": false,
+    "main_or_counterpart_stopped": false
+  },
+  "preservation": {
+    "old_run_id": "5d19887d-7914-47ca-aada-9705b635f9d8",
+    "old_run_status": "failed",
+    "old_error_code": "ROUTER_CALL_FAILED",
+    "old_receipt_sha256": "6293fd8a1789e54311eaf01486cb7718ff9ff2df3b7e278908e85951c5ca9c9d",
+    "old_receipt_preserved": true,
+    "old_input_and_execution_snapshot_preserved": true,
+    "database_or_dedup_rows_deleted": false
+  },
+  "limitations": {
+    "business_common_clause_results": 0,
+    "business_trace_results": 0,
+    "report_nonempty": true,
+    "semantic_quality_verified": false,
+    "gpu_inference_verified": false,
+    "model_billing_exactly_once_claimed": false,
+    "initial_failure_cause_unknown": true,
+    "main_runtime_enabled": false,
+    "browser_interactive_test_rerun": false,
+    "chat_html_read_only_status": 200
+  },
+  "scope": {
+    "production_code_changed": false,
+    "main_database_or_user_changed": false,
+    "env_file_changed": false,
+    "counterpart_source_or_service_changed": false,
+    "new_test_database_created": false,
+    "commit_or_push": false
+  }
+}

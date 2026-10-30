@@ -1,0 +1,300 @@
+schema_version: 1
+task_id: RA-INT-02
+state_version: 23
+status: 已验收
+current_role: dev-team-controller
+next_action: 负责人已接受成本缺项并授权三组提交和双同步；按固定范围执行，门禁待真实提交/远程回执满足
+baselines:
+  requirements:
+    path: docs/requirements.md
+    version: sha256:0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad
+    section: 第9节RA-001，不包含MI追加段
+    approval:
+      status: 已批准（仅RA引用范围）
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/RA-INT-02/handoffs/0014-提交候选基线范围等价核对.md
+      source_text: 同意当前任务规划，规划完成后先不要开展工作，我需要另外规划一个能力，再看优先实现哪一个。
+      approved_at: '2026-10-26T17:30:20+08:00'
+  architecture:
+    path: docs/architecture.md
+    version: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+    section: 第17节及15.5引用：0008窄例外、0010/0011既有安全与超时语义实施细化；MI不在范围
+    approval:
+      status: 已批准（仅RA引用范围）
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/RA-INT-02/handoffs/0014-提交候选基线范围等价核对.md
+      source_text: 同意当前任务规划，规划完成后先不要开展工作，我需要另外规划一个能力，再看优先实现哪一个。
+      approved_at: '2026-10-26T17:30:20+08:00'
+artifacts:
+- path: .dev-team/tasks/RA-INT-02/task.md
+  version: sha256:cdbaff62b2d353aa65846e741fedb7ce4aedf118d00d42a41e2d3b9eb090ed60
+- path: AGENTS.md
+  version: sha256:5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd
+- path: .dev-team/tasks/RA-INT-01/handoffs/0011-注释范围纠正与联调复核.md
+  version: sha256:6490bd7281762a250124614bad703e7338a25d68c10629bf4e25feab75ee28cb
+- path: src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml
+  version: sha256:0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de
+- path: docs/capability_development_guide.md
+  version: sha256:c34a0d9aa8922e6739d1a2851f1133b5dab0312f5249e1e39b88feb03fb0e532
+- path: tests/capabilities/test_manifest_source.py
+  version: sha256:ac2d47be86202eaaa272afda96fc2bab929cac151c931a24f11d4d11a916d548
+- path: tests/capabilities/test_semantic_manifest.py
+  version: sha256:92b29edbd4c3ea0182ddb159bffb8e2b7350bed7fa21275ed4350c9f41443ef9
+- path: tests/e2e/real_router_runtime.py
+  version: sha256:7026f60e5e8d93c72e7a1468cff086be6451788379785632d1f30e555a7f5605
+- path: tests/e2e/real_router_probe.py
+  version: sha256:947bb0dd61c9904bca63d564e58121ee3bfee42156db1f50e03360bd49dddc9c
+- path: tests/e2e/test_real_router_preparation.py
+  version: sha256:f8c5ee59440cef73f33ed87ecfe014c6aae5591f170e047a9368a62766c7fedd
+- path: .dev-team/tasks/RA-INT-02/evidence/外部入口预检.json
+  version: sha256:37f9352024ad55a0da24fef431426e918ccc9ba50e03040364903968c4fcd548
+- path: .dev-team/tasks/RA-INT-02/handoffs/0001-日常接入准备开发交付.md
+  version: sha256:a1db4c2ffe3058bb04107731796d2b3fe47917ebc09bfcc5a01c7e77b08a34ad
+- path: .dev-team/tasks/RA-INT-02/handoffs/0002-日常接入准备独立审核.md
+  version: sha256:4a86ab82ea0c52cdad40032fb4ed2e288816f27ceb84d41e4edb12623934236f
+- path: .dev-team/tasks/RA-INT-02/handoffs/0003-接入准备结论与真实联调待执行范围.md
+  version: sha256:44ea29e5e088f58fbb3665314cf5c008b7518993eb75a1e8d6641fe8ce593c1a
+- path: .dev-team/tasks/RA-INT-02/evidence/真实Router联调候选输入.json
+  version: sha256:0a90fdba9c3b152c21809f2118943b55453ddacec98076253dc102c19b0a1423
+- path: .dev-team/tasks/RA-INT-02/evidence/外部入口复检.json
+  version: sha256:1f78591c2da378a58d00a51e5aa2df7af4767545b7a7c3b4528dd5c962da03f9
+- path: .dev-team/tasks/RA-INT-02/handoffs/0004-真实Router联调授权与执行意图.md
+  version: sha256:3cdc27c20de60ec1211057a9337ca8edf5042e27c000951f5716785528f17038
+- path: .dev-team/tasks/RA-INT-02/evidence/真实Router联调执行输入.json
+  version: sha256:134a90f7f935948f70d87e04aa9a99ca4c93356526e042173b9934e99cf37e0b
+- path: .dev-team/tasks/RA-INT-02/evidence/恢复后执行预检.json
+  version: sha256:0450e6da60b1c17f23ffbf39a8b2c26b683a5506d007d898bb3c80f09faeb513
+- path: .dev-team/tasks/RA-INT-02/evidence/专用库准备回执.json
+  version: sha256:9d547cc8b93319c5d60ac1e7e8ba04e30a16b3ff3c49640e9a7cf5a92d548dac
+- path: .dev-team/tasks/RA-INT-02/evidence/联调入口修正前源码.py
+  version: sha256:1c9af04cbbfaa61e9522029e4770b2aac8f072bb9ebba8761659b871e0204df2
+- path: .dev-team/tasks/RA-INT-02/evidence/普通Router运行回执.json
+  version: sha256:6293fd8a1789e54311eaf01486cb7718ff9ff2df3b7e278908e85951c5ca9c9d
+- path: .dev-team/tasks/RA-INT-02/evidence/中断恢复核对.json
+  version: sha256:a97ef5a40fd7c52e89a87d18853ee915ff7127bcca4b00d418148c840d1c5f11
+- path: .dev-team/tasks/RA-INT-02/evidence/真实Router失败诊断.json
+  version: sha256:ba47576f5e4da3bbeef7a6c891081e4915276bbcd3f83b34dbbbc2380b6bfdaa
+- path: .dev-team/tasks/RA-INT-02/handoffs/0005-真实Router失败诊断与日志纠正交付.md
+  version: sha256:0469e60ca425f652e3f8c522053cadf31f0d0a7c7a7c6dc17e893b5cbc7b8c77
+- path: .dev-team/tasks/RA-INT-02/handoffs/0006-失败后续行与受控复测准备范围.md
+  version: sha256:c5e26b4a9638861e79520b7723d7d1d34e4643808162b4606394808ead14d724
+- path: .dev-team/tasks/RA-INT-02/handoffs/0007-受控复测与安全观测准备交付.md
+  version: sha256:8b1f193de7431b6999fc8ae3d387d046d2f1c3a4a25f4d6b8d941270544b98b1
+- path: .dev-team/tasks/RA-INT-02/handoffs/0008-受控复测准备独立复核.md
+  version: sha256:32ac1cddf0e5102459980bfe64fde9ef6101e29c4e051f3df90bfd7278076edc
+- path: .dev-team/tasks/RA-INT-02/handoffs/0009-受控复测执行意图.md
+  version: sha256:c3427cf187a14302089dfcf47634504edc3cabb72c2c8f7a652ef3cdc5d8539f
+- path: .dev-team/tasks/RA-INT-02/evidence/受控复测执行输入.json
+  version: sha256:9ae94661810a71f0b9bbd0b890562455a605c3acda5be8901625fdc93291d3ee
+- path: .dev-team/tasks/RA-INT-02/evidence/受控复测执行前核对.json
+  version: sha256:00a6e720e2a2af7a95af856f1dfe0501e05c26a97d6b06f765fe8778440c6c88
+- path: .dev-team/tasks/RA-INT-02/evidence/复测前只读健康核对.json
+  version: sha256:c383642e9efea96e95904d620b3890e8fae369044b747dfe1c3d7e31b483f686
+- path: .dev-team/tasks/RA-INT-02/evidence/普通Router受控复测回执.json
+  version: sha256:7a6efe5803db3a24e92e25bce0eb10390c68d0a3defa678f8682aff62676aa63
+- path: .dev-team/tasks/RA-INT-02/evidence/受控复测真实结果.json
+  version: sha256:14738154dcf0e54d6004ac2c1434a0efc1974c35f9ef4a239afa50759cf1bd7d
+- path: .dev-team/tasks/RA-INT-02/handoffs/0010-真实Router受控复测开发交付.md
+  version: sha256:e20009bcdab6372c7975b4f091a168f78eed6e43138a0d8594d1589f31bcfe78
+- &id005
+  path: src/agent_runtime/core/model.py
+  version: sha256:d688078dee7cad8281789ebfced70df730f44c45c315852a0bcc10de95da2821
+- &id001
+  path: .dev-team/tasks/RA-INT-02/handoffs/0011-真实Router联调独立验收.md
+  version: sha256:77501ad6238194d396abc4fb997c10fa95ae978ddc328a7674d16831559b2fbd
+- path: .dev-team/tasks/RA-INT-02/handoffs/0012-负责人终验与交付收尾范围.md
+  version: sha256:fd95784df88365feb8866b2ab58fa80caf223f3cbb9a774c6f9111b0b29ce8de
+- path: .dev-team/tasks/RA-INT-02/handoffs/0014-提交候选基线范围等价核对.md
+  version: sha256:0d207106f1e5411c878b13ece80c3828c66d90f281ccbd0b367a8f1548da5fec
+- path: .dev-team/tasks/RA-INT-02/handoffs/0015-提交候选独立复核.md
+  version: sha256:80314bdd9ba789a9b2fb5f0b8d3e05b4259dc029cf6ea36de064e4f01e8fa729
+- path: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
+  version: sha256:d328e78d659f946da41a9b8a2d5ff0bccb784a35fdbc003b7f2ba59d2f7b219c
+- path: .dev-team/tasks/RA-INT-02/evidence/提交同步执行输入.json
+  version: sha256:57f81ed16465f795914f3cba8b6c8e005eca53639363f669502f3722e514cbcb
+checkpoints:
+- boundary: 开发交付
+  handoff: .dev-team/tasks/RA-INT-02/handoffs/0010-真实Router受控复测开发交付.md
+  operation_key: sha256:13110a56c0ee088974987390ceb6d2ce26685c12201f7b4e5aabe2cbcee1ce6d
+  baseline_versions:
+    requirements: sha256:0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad
+    architecture: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+  artifact_versions:
+  - path: src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml
+    version: sha256:0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de
+  - path: tests/e2e/real_router_runtime.py
+    version: sha256:7026f60e5e8d93c72e7a1468cff086be6451788379785632d1f30e555a7f5605
+  - path: tests/e2e/real_router_probe.py
+    version: sha256:947bb0dd61c9904bca63d564e58121ee3bfee42156db1f50e03360bd49dddc9c
+  - path: docs/capability_development_guide.md
+    version: sha256:c34a0d9aa8922e6739d1a2851f1133b5dab0312f5249e1e39b88feb03fb0e532
+  - path: tests/e2e/test_real_router_preparation.py
+    version: sha256:f8c5ee59440cef73f33ed87ecfe014c6aae5591f170e047a9368a62766c7fedd
+  - path: .dev-team/tasks/RA-INT-02/evidence/受控复测执行输入.json
+    version: sha256:9ae94661810a71f0b9bbd0b890562455a605c3acda5be8901625fdc93291d3ee
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0009-受控复测执行意图.md
+    version: sha256:c3427cf187a14302089dfcf47634504edc3cabb72c2c8f7a652ef3cdc5d8539f
+  - path: .dev-team/tasks/RA-INT-02/evidence/普通Router受控复测回执.json
+    version: sha256:7a6efe5803db3a24e92e25bce0eb10390c68d0a3defa678f8682aff62676aa63
+  - path: .dev-team/tasks/RA-INT-02/evidence/受控复测真实结果.json
+    version: sha256:14738154dcf0e54d6004ac2c1434a0efc1974c35f9ef4a239afa50759cf1bd7d
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0010-真实Router受控复测开发交付.md
+    version: sha256:e20009bcdab6372c7975b4f091a168f78eed6e43138a0d8594d1589f31bcfe78
+  evidence_refs:
+  - path: .dev-team/tasks/RA-INT-02/evidence/普通Router受控复测回执.json
+    version: sha256:7a6efe5803db3a24e92e25bce0eb10390c68d0a3defa678f8682aff62676aa63
+  - path: .dev-team/tasks/RA-INT-02/evidence/受控复测真实结果.json
+    version: sha256:14738154dcf0e54d6004ac2c1434a0efc1974c35f9ef4a239afa50759cf1bd7d
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0010-真实Router受控复测开发交付.md
+    version: sha256:e20009bcdab6372c7975b4f091a168f78eed6e43138a0d8594d1589f31bcfe78
+  - *id001
+  validation_status: 已确认有效
+  conclusion: 本次真实受控Run与唯一远程Task completed，公开非空/SSE/日期/元数据核验通过；结果0条如实保留，R01及最终验收待独立审核，不宣称首失败原因已修或主环境已启用；当前文档三处执行后事实由0011独立核对，不声称原报告覆盖新增字节
+- boundary: 接入准备独立审核
+  handoff: .dev-team/tasks/RA-INT-02/handoffs/0008-受控复测准备独立复核.md
+  operation_key: sha256:16792ddd2247dac60bfdf38f7ded5024acb2cbdc54f66069237d8e7ac301dbf7
+  baseline_versions:
+    requirements: sha256:0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad
+    architecture: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+  artifact_versions:
+  - path: .dev-team/tasks/RA-INT-02/task.md
+    version: sha256:cdbaff62b2d353aa65846e741fedb7ce4aedf118d00d42a41e2d3b9eb090ed60
+  - path: AGENTS.md
+    version: sha256:5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd
+  - path: src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml
+    version: sha256:0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de
+  - path: docs/capability_development_guide.md
+    version: sha256:c34a0d9aa8922e6739d1a2851f1133b5dab0312f5249e1e39b88feb03fb0e532
+  - path: tests/e2e/real_router_runtime.py
+    version: sha256:7026f60e5e8d93c72e7a1468cff086be6451788379785632d1f30e555a7f5605
+  - path: tests/e2e/real_router_probe.py
+    version: sha256:947bb0dd61c9904bca63d564e58121ee3bfee42156db1f50e03360bd49dddc9c
+  - path: tests/e2e/test_real_router_preparation.py
+    version: sha256:f8c5ee59440cef73f33ed87ecfe014c6aae5591f170e047a9368a62766c7fedd
+  - path: tests/capabilities/test_semantic_manifest.py
+    version: sha256:92b29edbd4c3ea0182ddb159bffb8e2b7350bed7fa21275ed4350c9f41443ef9
+  - path: tests/capabilities/test_manifest_source.py
+    version: sha256:ac2d47be86202eaaa272afda96fc2bab929cac151c931a24f11d4d11a916d548
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0005-真实Router失败诊断与日志纠正交付.md
+    version: sha256:0469e60ca425f652e3f8c522053cadf31f0d0a7c7a7c6dc17e893b5cbc7b8c77
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0006-失败后续行与受控复测准备范围.md
+    version: sha256:c5e26b4a9638861e79520b7723d7d1d34e4643808162b4606394808ead14d724
+  - &id004
+    path: .dev-team/tasks/RA-INT-02/handoffs/0007-受控复测与安全观测准备交付.md
+    version: sha256:8b1f193de7431b6999fc8ae3d387d046d2f1c3a4a25f4d6b8d941270544b98b1
+  - &id003
+    path: .dev-team/tasks/RA-INT-02/evidence/真实Router失败诊断.json
+    version: sha256:ba47576f5e4da3bbeef7a6c891081e4915276bbcd3f83b34dbbbc2380b6bfdaa
+  - path: .dev-team/tasks/RA-INT-02/evidence/中断恢复核对.json
+    version: sha256:a97ef5a40fd7c52e89a87d18853ee915ff7127bcca4b00d418148c840d1c5f11
+  - path: .dev-team/tasks/RA-INT-02/evidence/联调入口修正前源码.py
+    version: sha256:1c9af04cbbfaa61e9522029e4770b2aac8f072bb9ebba8761659b871e0204df2
+  - path: .dev-team/tasks/RA-INT-02/evidence/普通Router运行回执.json
+    version: sha256:6293fd8a1789e54311eaf01486cb7718ff9ff2df3b7e278908e85951c5ca9c9d
+  - path: .dev-team/tasks/RA-INT-02/evidence/真实Router联调执行输入.json
+    version: sha256:134a90f7f935948f70d87e04aa9a99ca4c93356526e042173b9934e99cf37e0b
+  - &id002
+    path: .dev-team/tasks/RA-INT-02/handoffs/0008-受控复测准备独立复核.md
+    version: sha256:32ac1cddf0e5102459980bfe64fde9ef6101e29c4e051f3df90bfd7278076edc
+  evidence_refs:
+  - *id002
+  - *id003
+  - *id004
+  - *id001
+  validation_status: 已确认有效
+  conclusion: 受控复测准备通过；旧Run确定failed且零远程副作用，21项及安全日志独立探针有效；R01与真实模型成功链路未关闭；当前文档三处执行后事实由0011独立核对，不声称原报告覆盖新增字节
+- boundary: 开发验收
+  handoff: .dev-team/tasks/RA-INT-02/handoffs/0011-真实Router联调独立验收.md
+  operation_key: sha256:d1c26838e50b083e5f41c77ecb9134be2dbd5fb24f1d7268a18ef62fa9c00c0f
+  baseline_versions:
+    requirements: sha256:0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad
+    architecture: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+  artifact_versions:
+  - path: .dev-team/tasks/RA-INT-02/task.md
+    version: sha256:cdbaff62b2d353aa65846e741fedb7ce4aedf118d00d42a41e2d3b9eb090ed60
+  - path: AGENTS.md
+    version: sha256:5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd
+  - path: src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml
+    version: sha256:0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de
+  - path: tests/e2e/real_router_runtime.py
+    version: sha256:7026f60e5e8d93c72e7a1468cff086be6451788379785632d1f30e555a7f5605
+  - path: tests/e2e/real_router_probe.py
+    version: sha256:947bb0dd61c9904bca63d564e58121ee3bfee42156db1f50e03360bd49dddc9c
+  - path: tests/e2e/test_real_router_preparation.py
+    version: sha256:f8c5ee59440cef73f33ed87ecfe014c6aae5591f170e047a9368a62766c7fedd
+  - path: docs/capability_development_guide.md
+    version: sha256:c34a0d9aa8922e6739d1a2851f1133b5dab0312f5249e1e39b88feb03fb0e532
+  - *id005
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0006-失败后续行与受控复测准备范围.md
+    version: sha256:c5e26b4a9638861e79520b7723d7d1d34e4643808162b4606394808ead14d724
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0008-受控复测准备独立复核.md
+    version: sha256:32ac1cddf0e5102459980bfe64fde9ef6101e29c4e051f3df90bfd7278076edc
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0009-受控复测执行意图.md
+    version: sha256:c3427cf187a14302089dfcf47634504edc3cabb72c2c8f7a652ef3cdc5d8539f
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0010-真实Router受控复测开发交付.md
+    version: sha256:e20009bcdab6372c7975b4f091a168f78eed6e43138a0d8594d1589f31bcfe78
+  - path: .dev-team/tasks/RA-INT-02/evidence/受控复测执行输入.json
+    version: sha256:9ae94661810a71f0b9bbd0b890562455a605c3acda5be8901625fdc93291d3ee
+  - path: .dev-team/tasks/RA-INT-02/evidence/受控复测执行前核对.json
+    version: sha256:00a6e720e2a2af7a95af856f1dfe0501e05c26a97d6b06f765fe8778440c6c88
+  - &id007
+    path: .dev-team/tasks/RA-INT-02/evidence/普通Router受控复测回执.json
+    version: sha256:7a6efe5803db3a24e92e25bce0eb10390c68d0a3defa678f8682aff62676aa63
+  - &id006
+    path: .dev-team/tasks/RA-INT-02/evidence/受控复测真实结果.json
+    version: sha256:14738154dcf0e54d6004ac2c1434a0efc1974c35f9ef4a239afa50759cf1bd7d
+  - path: .dev-team/tasks/RA-INT-02/evidence/真实Router失败诊断.json
+    version: sha256:ba47576f5e4da3bbeef7a6c891081e4915276bbcd3f83b34dbbbc2380b6bfdaa
+  - path: .dev-team/tasks/RA-INT-02/evidence/普通Router运行回执.json
+    version: sha256:6293fd8a1789e54311eaf01486cb7718ff9ff2df3b7e278908e85951c5ca9c9d
+  - path: .dev-team/tasks/RA-INT-02/evidence/联调入口修正前源码.py
+    version: sha256:1c9af04cbbfaa61e9522029e4770b2aac8f072bb9ebba8761659b871e0204df2
+  - *id001
+  evidence_refs:
+  - *id001
+  - *id006
+  - *id007
+  validation_status: 已确认有效
+  conclusion: 当前独立普通真实Router和唯一远程Task完成链路技术通过，关闭R01成功链路未验证阻塞；首次异常原因未知，主环境未启用，质量与终验/提交/同步不在本结论中
+- boundary: 负责人终验
+  handoff: .dev-team/tasks/RA-INT-02/handoffs/0012-负责人终验与交付收尾范围.md
+  operation_key: sha256:7f5a96805d2f67b05607c94e5bc27b4ea80d63c5344ca605883be01628fbbeb1
+  baseline_versions:
+    requirements: sha256:0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad
+    architecture: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+  artifact_versions:
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0011-真实Router联调独立验收.md
+    version: sha256:77501ad6238194d396abc4fb997c10fa95ae978ddc328a7674d16831559b2fbd
+  evidence_refs:
+  - path: .dev-team/tasks/RA-INT-02/handoffs/0012-负责人终验与交付收尾范围.md
+    version: sha256:fd95784df88365feb8866b2ab58fa80caf223f3cbb9a774c6f9111b0b29ce8de
+  validation_status: 已确认有效
+  conclusion: 负责人通过当前真实Router交付，已报告限制保留；不替RA-INT-01成本缺项裁决，不构成提交/推送、主环境启用或MI实施授权
+current_operation:
+  name: 已知零远程副作用后的单次真实Router受控复测
+  kind: 外部操作
+  operation_key: sha256:13110a56c0ee088974987390ceb6d2ce26685c12201f7b4e5aabe2cbcee1ce6d
+  status: 已完成
+  inputs_ref: .dev-team/tasks/RA-INT-02/evidence/受控复测执行输入.json
+  result_ref: .dev-team/tasks/RA-INT-02/evidence/受控复测真实结果.json
+latest_handoff: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
+resume_from: null
+blocked_reason: null
+project_gates:
+- name: 真实调用及主环境操作范围
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-INT-02/handoffs/0009-受控复测执行意图.md
+- name: 负责人终验
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-INT-02/handoffs/0012-负责人终验与交付收尾范围.md
+- name: 任务提交
+  status: 待满足
+  evidence_ref: null
+- name: 双远程同步
+  status: 待满足
+  evidence_ref: null
+- name: 远程服务就绪
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-INT-02/evidence/受控复测执行前核对.json
+updated_by: dev-team-controller
+updated_at: '2026-10-30T02:18:38.211572+00:00'

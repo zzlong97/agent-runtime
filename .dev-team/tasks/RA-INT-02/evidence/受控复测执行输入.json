@@ -1,0 +1,103 @@
+{
+  "task_id": "RA-INT-02",
+  "operation": "已知零远程副作用后的单次真实Router受控复测",
+  "inputs": {
+    "artifacts": [
+      {
+        "path": "src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml",
+        "version": "sha256:0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de"
+      },
+      {
+        "path": "tests/e2e/real_router_runtime.py",
+        "version": "sha256:7026f60e5e8d93c72e7a1468cff086be6451788379785632d1f30e555a7f5605"
+      },
+      {
+        "path": "tests/e2e/real_router_probe.py",
+        "version": "sha256:947bb0dd61c9904bca63d564e58121ee3bfee42156db1f50e03360bd49dddc9c"
+      },
+      {
+        "path": "docs/capability_development_guide.md",
+        "version": "sha256:f96f4ab04b6f08713391dde644dc0a5a13e1555d0834c821e8b0d0db755524a4"
+      }
+    ],
+    "batch_id": "29e46ecf-dcc4-5cf2-967f-f899f4e8b308",
+    "runtime_url": "http://127.0.0.1:18782",
+    "database": "agent_runtime_ra_int02_29e46ecf",
+    "local_user_id": "ra-int02-29e46ecf-dcc4-5cf2-967f-f899f4e8b308",
+    "redis_database": 13,
+    "capability_allow_ids": [
+      "general_chat",
+      "en_to_zh",
+      "semantic_pattern_mining"
+    ],
+    "runtime_flags": {
+      "runtime_demo_mode": false,
+      "remote_a2a_development_mode": true
+    },
+    "remote_enabled_override": "仅隔离目录副本设为true，正式Manifest保持false",
+    "request_id": "d3e517ba-0747-5446-a0c6-8e061d045f0e",
+    "agent_card_url": "http://127.0.0.1:18080/.well-known/agent-card.json",
+    "remote_interface_url": "http://127.0.0.1:18080/api",
+    "remote_revision": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+    "remote_image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+    "data_scope": {
+      "remote_database": "semantic_a2a_integration",
+      "source_rows": 50,
+      "categories": 5,
+      "date_from": "2026-10-01",
+      "date_to": "2026-10-20",
+      "timezone": "Asia/Shanghai",
+      "end_date_inclusive": true
+    },
+    "max_new_remote_tasks": 1,
+    "online_model_policy": "允许普通Router及唯一远程Task必要的已配置真实模型调用，存在费用；无自动替代请求",
+    "runtime_policy": "仅独立回环测试Runtime；终态确认后可正常关闭，不启停主Runtime或对方API/Worker",
+    "local_write_policy": "经批准后新建专用库或只读核对后复用同批库，正常setup及固定测试用户三能力allow；Redis13仅本批，不删除或重建已有事实",
+    "remote_write_policy": "仅既有隔离库及专用产物卷；不改源50条数据，不清幂等事实",
+    "stop_policy": "仅此新的人工受控请求显式POST一次；未知结果仅查原Run/Task；不自动创建第三个请求，不删除旧回执或修改旧终态",
+    "main_environment_changes": false,
+    "env_file_changes": false,
+    "commit_or_push": false,
+    "receipt_path": ".dev-team/tasks/RA-INT-02/evidence/普通Router受控复测回执.json",
+    "prior_known_failure": {
+      "request_id": "56a29c21-6f27-5427-9394-1fd829270989",
+      "run_id": "5d19887d-7914-47ca-aada-9705b635f9d8",
+      "status": "failed",
+      "error_code": "ROUTER_CALL_FAILED",
+      "invocations": 0,
+      "remote_tasks": 0,
+      "operations": 0,
+      "evidence": ".dev-team/tasks/RA-INT-02/evidence/真实Router失败诊断.json"
+    },
+    "budget_scope": "整个RA-INT-02累计最多1个远程Task，前次已核实0；不是每个请求各1个",
+    "runtime_model": {
+      "model_id": "deepseek-v4-flash-0731",
+      "base_url_scheme": "https",
+      "base_url_host": "dashscope.aliyuncs.com",
+      "base_url_port": 443,
+      "base_url_path": "/compatible-mode/v1",
+      "credential_reference": "DASHSCOPE_API_KEY",
+      "streaming": true,
+      "extra_body": {
+        "enable_thinking": false
+      },
+      "core_model_sha256": "d688078dee7cad8281789ebfced70df730f44c45c315852a0bcc10de95da2821"
+    },
+    "log_level_override": "INFO，仅独立进程"
+  },
+  "authorization_source": {
+    "original_reply": "批准恢复后执行最多1个新Task",
+    "continuation_reply": "继续",
+    "scope_record": ".dev-team/tasks/RA-INT-02/handoffs/0006-失败后续行与受控复测准备范围.md",
+    "interpretation": "同累计1Task范围内的人工测试实施选择；不把未知请求自动替换，不冒称用户指定了新UUID"
+  },
+  "prepared_at": "2026-10-29T10:37:02.334748+00:00",
+  "execution_status": "未执行；独立审核和执行前零副作用核对后才登记新意图",
+  "preconditions": [
+    "独立审核当前日志/安全观测/固定新请求版本",
+    "原Run仍明确failed且Task/Operation/Invocation为0",
+    "对方Card/Profile/原a74183f镜像版本核对通过",
+    "新回执不存在、18782空闲，主Manifest仍disabled",
+    "旧失败Run/回执/输入/原执行源码快照保留原字节"
+  ]
+}

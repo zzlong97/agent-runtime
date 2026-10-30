@@ -1,0 +1,46 @@
+{
+  "checked_at_utc": "2026-10-29 03:14:02 UTC",
+  "agent_card": {
+    "http_status": 200,
+    "card_sha256": "74f4dbb921e1059a86be284031b721db95c2d50d90cdfe564940d21e7d996b47",
+    "profile_valid": true,
+    "interface_url": "http://127.0.0.1:18080/api",
+    "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+    "formal_enabled": false
+  },
+  "runtime_and_containers": {
+    "containers": [
+      {
+        "name": "/semantic-pattern-mining-integration-api",
+        "status": "running",
+        "running": true,
+        "image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+        "revision": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2"
+      },
+      {
+        "name": "/semantic-pattern-mining-integration-worker",
+        "status": "running",
+        "running": true,
+        "image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+        "revision": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2"
+      },
+      {
+        "name": "/agent-runtime-postgres",
+        "status": "running",
+        "running": true,
+        "image_id": "sha256:04f245f9347bbe4fb697543040b90a3e25ca2da87c3949fcd97f87a80ee24bcc",
+        "revision": ""
+      },
+      {
+        "name": "/agent-runtime-redis",
+        "status": "running",
+        "running": true,
+        "image_id": "sha256:7cfe615a1d33e3f4611a77d40a49ec5fbe69970603ad129268afb317dc33dd50",
+        "revision": ""
+      }
+    ],
+    "runtime_port_18782_free": true,
+    "receipt_exists": false
+  },
+  "scope": "仅只读预检；数据库/模型/远程业务操作未开始"
+}

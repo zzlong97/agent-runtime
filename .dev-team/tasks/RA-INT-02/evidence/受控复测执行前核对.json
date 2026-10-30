@@ -1,0 +1,41 @@
+{
+  "runtime": {
+    "checked_at": "2026-10-29T10:46:00.480494+00:00",
+    "profile_valid": true,
+    "http_status": 200,
+    "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+    "card_sha256": "74f4dbb921e1059a86be284031b721db95c2d50d90cdfe564940d21e7d996b47",
+    "containers": [
+      {
+        "name": "/semantic-pattern-mining-integration-api",
+        "running": true,
+        "image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+        "revision": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2"
+      },
+      {
+        "name": "/semantic-pattern-mining-integration-worker",
+        "running": true,
+        "image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+        "revision": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2"
+      }
+    ],
+    "port_18782_free": true,
+    "new_receipt_absent": true,
+    "old_receipt_unchanged": true,
+    "request_id": "d3e517ba-0747-5446-a0c6-8e061d045f0e",
+    "database": "agent_runtime_ra_int02_29e46ecf",
+    "user": "ra-int02-29e46ecf-dcc4-5cf2-967f-f899f4e8b308",
+    "formal_enabled": false,
+    "input_artifacts_match": true
+  },
+  "local_database": {
+    "old_run_status": "failed",
+    "run_count": 1,
+    "active_run_count": 0,
+    "new_request_rows": 0,
+    "task_rows": 0,
+    "operation_rows": 0,
+    "internal_event_rows": 0
+  },
+  "scope": "仅只读/端口绑定预检，未生成或提交Task"
+}

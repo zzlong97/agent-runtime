@@ -184,7 +184,7 @@ def test_missing_source_directory_is_an_empty_snapshot(tmp_path: Path) -> None:
     assert source.load() == []
 
 
-def test_repository_test_manifests_are_valid_and_not_loaded_implicitly() -> None:
+def test_repository_manifests_keep_local_defaults_and_remote_opt_in() -> None:
     capability_root = (
         Path(__file__).resolve().parents[2]
         / "src"
@@ -198,13 +198,19 @@ def test_repository_test_manifests_are_valid_and_not_loaded_implicitly() -> None
     assert [document.raw_document["capability_id"] for document in documents] == [
         "en_to_zh",
         "general_chat",
+        "semantic_pattern_mining",
     ]
     manifests = [
         CapabilityManifest.model_validate(document.raw_document)
         for document in documents
     ]
     assert all(manifest.state_scope == "invocation" for manifest in manifests)
-    assert all(manifest.side_effect_policy == "none" for manifest in manifests)
+    local = [manifest for manifest in manifests if manifest.transport.type == "local"]
+    assert len(local) == 2
+    assert all(manifest.side_effect_policy == "none" and manifest.enabled for manifest in local)
+    remote = next(manifest for manifest in manifests if manifest.capability_id == "semantic_pattern_mining")
+    assert remote.enabled is False
+    assert remote.side_effect_policy == "idempotent"
 
 
 def test_document_record_has_only_source_payload_and_load_error() -> None:

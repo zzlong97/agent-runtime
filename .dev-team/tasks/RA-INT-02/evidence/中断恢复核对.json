@@ -1,0 +1,49 @@
+{
+  "checked_at_utc": "2026-10-29 10:00:37 UTC",
+  "run": {
+    "run_id": "5d19887d-7914-47ca-aada-9705b635f9d8",
+    "session_id": "604e3845-d4a7-4317-b93a-5689dd9ac5c5",
+    "request_id": "56a29c21-6f27-5427-9394-1fd829270989",
+    "status": "failed",
+    "error_code": "ROUTER_CALL_FAILED",
+    "input_cleared": true
+  },
+  "local_facts": {
+    "run_statuses": {
+      "failed": 1
+    },
+    "task_rows": 0,
+    "operation_rows": 0,
+    "event_types": {
+      "message.finalized": 1,
+      "message.started": 1,
+      "run.failed": 1,
+      "run.started": 1
+    },
+    "invocation_identity_events": 0,
+    "remote_identity_events": 0
+  },
+  "cleanup": {
+    "managed_session_id": 46891,
+    "managed_session_status": "Unavailable: Unknown process id",
+    "identity_checked_module": "tests.e2e.real_router_runtime",
+    "stopped_pids": [
+      22180
+    ],
+    "parent_pid_204_exited": true,
+    "remaining_test_module_processes": 0,
+    "reason": "仅一条失败Run且无Task/Operation；托管会话中断后定点清理已记录独立进程，不冒称正常Ctrl+C"
+  },
+  "dedicated_log": {
+    "path": "logs/ra-int02-29e46ecf/agent-runtime-2026-10-29.log",
+    "bytes_at_check": 315,
+    "safe_event_count": 2,
+    "observed_event_kind": "仅初始化，未取得此处Router失败类型"
+  },
+  "scope": {
+    "new_requests_submitted": 0,
+    "model_requests_during_recovery": 0,
+    "remote_tasks_during_recovery": 0,
+    "main_runtime_changes": 0
+  }
+}

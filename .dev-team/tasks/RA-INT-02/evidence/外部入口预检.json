@@ -1,0 +1,24 @@
+{
+  "checked_at_utc": "2026-10-29 02:26:00 UTC",
+  "operation": "只读Card与回环TCP预检",
+  "card_url": "http://127.0.0.1:18080/.well-known/agent-card.json",
+  "card_result": {
+    "status": "unreachable",
+    "error_type": "URLError",
+    "http_status": null
+  },
+  "tcp_result": {
+    "host": "127.0.0.1",
+    "port": 18080,
+    "status": "connection_refused",
+    "error_type": "ConnectionRefusedError",
+    "errno": 10061,
+    "winerror": 10061
+  },
+  "business_requests": 0,
+  "online_model_calls": 0,
+  "remote_tasks_created": 0,
+  "service_mutations": 0,
+  "scope": "不重启对方服务；本地开发及Fake验证继续，真实联调需恢复服务及新额度",
+  "user_notification": "已异步请求负责人联系对方团队恢复原a74183f交付版本，等待恢复信息"
+}

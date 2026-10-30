@@ -1,0 +1,19 @@
+{
+  "batch_id": "29e46ecf-dcc4-5cf2-967f-f899f4e8b308",
+  "request_id": "d3e517ba-0747-5446-a0c6-8e061d045f0e",
+  "status": "accepted",
+  "run": {
+    "run_id": "f40fca5f-928c-4591-97a5-9788005d766a",
+    "session_id": "b8c87248-06ce-429e-8af6-4b2c83eb2b98",
+    "response_message_id": "84b026f6-a170-438c-9833-1cbddeb21637",
+    "status": "completed",
+    "recovery_attempts": 0
+  },
+  "verification": {
+    "unique_public_turn": true,
+    "remote_capability": true,
+    "nonempty_reply": true,
+    "unique_terminal": true,
+    "seq_unique_increasing": true
+  }
+}

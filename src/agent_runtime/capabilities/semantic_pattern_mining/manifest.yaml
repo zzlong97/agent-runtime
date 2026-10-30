@@ -1,0 +1,26 @@
+# 正式本机开发接入配置；启用/授权/重启步骤见 Capability 开发者接入手册第13.1节。
+# 默认关闭，避免普通启动依赖远程服务；不得将该文件当作付费调用授权。
+manifest_schema_version: 1
+capability_id: semantic_pattern_mining
+name: 语义模式挖掘
+description: 按用户指定日期提取授权数据中的共性条款，缺参时逐项询问，并支持历史批次与详情查询。
+enabled: false
+transport:
+  type: remote_a2a
+  agent_card_url: http://127.0.0.1:18080/.well-known/agent-card.json
+  auth:
+    type: none
+version: 1.0.0
+state_scope: invocation
+state_schema_version: "1"
+compatible_state_schema_versions: []
+allow_degraded: false
+concurrency:
+  mode: bounded
+  max_concurrency: 1
+  acquire_timeout_seconds: 1.0
+execution:
+  timeout_seconds: 900.0
+  cancel_grace_seconds: 2.0
+recovery_policy: automatic
+side_effect_policy: idempotent

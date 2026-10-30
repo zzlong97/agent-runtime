@@ -1,0 +1,12 @@
+{
+  "batch_id": "29e46ecf-dcc4-5cf2-967f-f899f4e8b308",
+  "request_id": "56a29c21-6f27-5427-9394-1fd829270989",
+  "status": "accepted",
+  "run": {
+    "run_id": "5d19887d-7914-47ca-aada-9705b635f9d8",
+    "session_id": "604e3845-d4a7-4317-b93a-5689dd9ac5c5",
+    "response_message_id": "cc89e0c4-9cbd-49cf-a908-64773d22c1d5",
+    "status": "failed",
+    "recovery_attempts": 0
+  }
+}

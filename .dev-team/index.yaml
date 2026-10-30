@@ -54,3 +54,9 @@ tasks:
     state_file: .dev-team/tasks/DB-002/state.yaml
     parent_task: RA-001
     depends_on: []
+  RA-INT-02:
+    title: 日常聊天入口接入准备与真实Router联调
+    state_file: .dev-team/tasks/RA-INT-02/state.yaml
+    parent_task: RA-001
+    depends_on:
+      - RA-INT-01
