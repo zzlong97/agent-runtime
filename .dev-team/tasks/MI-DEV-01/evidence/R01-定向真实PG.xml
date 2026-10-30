@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="9" time="7.790" timestamp="2026-10-30T16:01:47.559533+08:00" hostname="LAPTOP-4ESSFHSK"><testcase classname="tests.runtime.test_ownership_postgres" name="test_slow_serialization_has_no_run_lock_and_does_not_consume_transaction_budget[blob]" file="tests\runtime\test_ownership_postgres.py" line="493" time="1.037"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_4fe51adc7f4444098d9c392544d439f2" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+{"phase": "blob", "serialization_delay_ms": 450, "transaction_budget_ms": 300, "run_lock_free_during_serialization": [true], "success": true}
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase><testcase classname="tests.runtime.test_ownership_postgres" name="test_slow_serialization_has_no_run_lock_and_does_not_consume_transaction_budget[checkpoint_json]" file="tests\runtime\test_ownership_postgres.py" line="493" time="0.907"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_8bd8e31c80594a1093a39ed8d941fba6" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+{"phase": "checkpoint_json", "serialization_delay_ms": 450, "transaction_budget_ms": 300, "run_lock_free_during_serialization": [true], "success": true}
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase><testcase classname="tests.runtime.test_ownership_postgres" name="test_slow_serialization_has_no_run_lock_and_does_not_consume_transaction_budget[metadata_json]" file="tests\runtime\test_ownership_postgres.py" line="493" time="1.063"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_9a185f72169c443b8ecbb7aae42e0000" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+{"phase": "metadata_json", "serialization_delay_ms": 450, "transaction_budget_ms": 300, "run_lock_free_during_serialization": [true], "success": true}
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase><testcase classname="tests.runtime.test_ownership_postgres" name="test_slow_serialization_has_no_run_lock_and_does_not_consume_transaction_budget[writes]" file="tests\runtime\test_ownership_postgres.py" line="493" time="1.096"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_b93884187b5240c2a759c5fd7700cf71" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+{"phase": "writes", "serialization_delay_ms": 450, "transaction_budget_ms": 300, "run_lock_free_during_serialization": [true], "success": true}
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase><testcase classname="tests.runtime.test_ownership_postgres" name="test_missing_token_is_rejected_before_serialization[aput]" file="tests\runtime\test_ownership_postgres.py" line="559" time="0.514"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_28ec14073db0493fb0e583fe2b6e66d8" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase><testcase classname="tests.runtime.test_ownership_postgres" name="test_missing_token_is_rejected_before_serialization[aput_writes]" file="tests\runtime\test_ownership_postgres.py" line="559" time="0.582"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_2309f0e53bb54d29b23b9b65fb4690f0" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase><testcase classname="tests.runtime.test_ownership_postgres" name="test_execution_rights_are_rechecked_after_serialization[expired]" file="tests\runtime\test_ownership_postgres.py" line="585" time="0.796"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_0a7f17a7a73e412491bc3f010014b5e7" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase><testcase classname="tests.runtime.test_ownership_postgres" name="test_execution_rights_are_rechecked_after_serialization[takeover]" file="tests\runtime\test_ownership_postgres.py" line="585" time="0.805"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_18c7e775921e409782ab0affc5c03753" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase><testcase classname="tests.runtime.test_ownership_postgres" name="test_execution_rights_are_rechecked_after_serialization[contract]" file="tests\runtime\test_ownership_postgres.py" line="585" time="0.585"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_4da42b81312d4be8938f85e3427efeb0" /></properties><system-out>--------------------------------- Captured Log ---------------------------------
+
+--------------------------------- Captured Out ---------------------------------
+
+</system-out><system-err>--------------------------------- Captured Err ---------------------------------
+
+</system-err></testcase></testsuite></testsuites>

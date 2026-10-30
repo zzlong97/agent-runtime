@@ -1,0 +1,102 @@
+schema_version: 1
+task_id: MI-001
+state_version: 13
+status: 开发中
+current_role: dev-team-controller
+next_action: MI-DEV-01负责人终验及提交双同步已授权；正在完成本批提交收尾，门禁满足后方可开展依赖单元
+baselines:
+  requirements:
+    path: docs/requirements.md
+    version: sha256:edd84d6c507c6c4ac5c301f74f446f9223a345197a4f5e312a44b29aa12e5118
+    section: 第 10 节
+    approval:
+      status: 已批准
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+      source_text: 批准规划，开始 MI-DEV-01
+      approved_at: '2026-10-30T05:57:08.174986+00:00'
+  architecture:
+    path: docs/architecture.md
+    version: sha256:567b599c4604d8c1e8ee106ce29c9e78040870a37e89b9c831407370bdfc03b0
+    section: 第 18 节
+    approval:
+      status: 已批准
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+      source_text: 批准规划，开始 MI-DEV-01
+      approved_at: '2026-10-30T05:57:08.174986+00:00'
+artifacts:
+- path: .dev-team/tasks/MI-001/handoffs/0002-选定任务与基线恢复.md
+  version: sha256:ef3e696175f1f087849dc9c4cf7a2c598d81afcf3db0166634c2cc32d2d7b149
+- &id001
+  path: docs/requirements.md
+  version: sha256:edd84d6c507c6c4ac5c301f74f446f9223a345197a4f5e312a44b29aa12e5118
+- &id002
+  path: docs/architecture.md
+  version: sha256:567b599c4604d8c1e8ee106ce29c9e78040870a37e89b9c831407370bdfc03b0
+- &id003
+  path: docs/decisions.md
+  version: sha256:28c5e51f47a62134aabf05b8aa2ce37e9a6e6e6c129681f0106ee90aab7bcd85
+- &id004
+  path: .dev-team/tasks/MI-001/task.md
+  version: sha256:1227725b446860a7e9be45db97b0d2193a3739ddbbc2985d4a03d2480df48878
+- &id005
+  path: .dev-team/tasks/MI-001/handoffs/0003-当前实现复核与首批范围.md
+  version: sha256:c69cf04bd1271cec44911700d8f59570604b4e6ace348c2d583e0c2ddd4ef920
+- path: .dev-team/tasks/MI-001/handoffs/0004-候选方案独立审核.md
+  version: sha256:49b65994607f32f47457fa27948fda1bccb1a1570cdecb6515ef795e9c2ce0bd
+- path: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+  version: sha256:dacd2e60c8e13b6513ea59bf29abb55648fb51554f86fa5c3815e1a522240015
+- path: .dev-team/tasks/MI-DEV-01/task.md
+  version: sha256:707d7c6b0827e425cd7931c00bad1fef425115f41ab92b127829b1af650bfe24
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0005-R01序列化边界返工交付.md
+  version: sha256:347bd6d7d20ef8e98f84742e9896dffe8249c38a67dd988659174f4f16ebf0e7
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0006-R01独立复核.md
+  version: sha256:a1b6489d2ab33e1492d4cee822ded796d9efea62ffea8eb6dd67ff04a95958af
+- path: .dev-team/tasks/MI-001/handoffs/0006-首批技术验收与待负责人验收.md
+  version: sha256:6c72051df01da7691913d83678360c20fb85d45f04d5590869c4700ed434aefe
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
+  version: sha256:3c7bd5da10413c3fc54e83a611e8b5e67f0ea3ac878e3cd8a5ac2b4efe9f96a5
+checkpoints:
+- boundary: 架构交付
+  handoff: .dev-team/tasks/MI-001/handoffs/0003-当前实现复核与首批范围.md
+  operation_key: sha256:acef1557a4bfbfa0361d1794034b7b2c53786174cb76f305b8900bf2c84147f4
+  baseline_versions:
+    requirements: sha256:edd84d6c507c6c4ac5c301f74f446f9223a345197a4f5e312a44b29aa12e5118
+    architecture: sha256:567b599c4604d8c1e8ee106ce29c9e78040870a37e89b9c831407370bdfc03b0
+  artifact_versions:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  evidence_refs:
+  - *id005
+  - path: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+    version: sha256:dacd2e60c8e13b6513ea59bf29abb55648fb51554f86fa5c3815e1a522240015
+  validation_status: 已确认有效
+  conclusion: 当前技术方案由0003/0004核对，负责人0005批准；批准状态文字与获批原技术正文等价，不冒称旧审核已读新增批准元数据
+current_operation:
+  name: 完整MI候选与首批范围独立审核
+  kind: 基线复核
+  operation_key: sha256:27ac7fbbdc27b4089a152be4834cd975b76dcbf66fa60a502e73e740e5416ef7
+  status: 已完成
+  inputs_ref: .dev-team/tasks/MI-001/handoffs/0003-当前实现复核与首批范围.md
+  result_ref: .dev-team/tasks/MI-001/handoffs/0004-候选方案独立审核.md
+latest_handoff: .dev-team/tasks/MI-001/handoffs/0006-首批技术验收与待负责人验收.md
+resume_from: null
+blocked_reason: null
+project_gates:
+- name: 开始开发授权
+  status: 已满足
+  evidence_ref: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+- name: 负责人终验
+  status: 待满足
+  evidence_ref: null
+- name: 任务提交
+  status: 待满足
+  evidence_ref: null
+- name: 双远程同步
+  status: 待满足
+  evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-30T08:24:20.516052+00:00'

@@ -1,0 +1,9 @@
+{
+  "issue": "MI01-R01",
+  "red_exit_code": 1,
+  "old_guarded_saver_sha256": "3d3c77cca20322a32fa9b7fc87d6fb24a3a839afa6b5eaaf8a5f86a0db33ee84",
+  "red_test_file_sha256": "dad5fa4353d0358f097a5ba2dd58365e74c69e540a7c0136068de03d29ba8460",
+  "test": "test_slow_serialization_has_no_run_lock_and_does_not_consume_transaction_budget[blob]",
+  "assertion": "独立连接观察锁空闲应为[True]，实际为[False]",
+  "junit": "R01-红灯.xml"
+}

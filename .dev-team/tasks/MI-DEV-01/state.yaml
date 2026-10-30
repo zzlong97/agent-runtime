@@ -1,0 +1,263 @@
+schema_version: 1
+task_id: MI-DEV-01
+state_version: 11
+status: 已验收
+current_role: dev-team-controller
+next_action: 提交前31项定向测试exit0零失败/跳过，精确提交输入已保存；暂存核对后正常提交及双远程同步
+baselines:
+  requirements:
+    path: docs/requirements.md
+    version: sha256:edd84d6c507c6c4ac5c301f74f446f9223a345197a4f5e312a44b29aa12e5118
+    section: 第10节，MI-AC-01/02/03/07/11基础证据；不是完整多进程通过
+    approval:
+      status: 已批准
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+      source_text: 批准规划，开始 MI-DEV-01
+      approved_at: '2026-10-30T05:57:08.174986+00:00'
+  architecture:
+    path: docs/architecture.md
+    version: sha256:567b599c4604d8c1e8ee106ce29c9e78040870a37e89b9c831407370bdfc03b0
+    section: 18.2～18.4及18.9 MI-DEV-01，首批原语和同事务saver探针
+    approval:
+      status: 已批准
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+      source_text: 批准规划，开始 MI-DEV-01
+      approved_at: '2026-10-30T05:57:08.174986+00:00'
+artifacts:
+- path: .dev-team/tasks/MI-DEV-01/task.md
+  version: sha256:707d7c6b0827e425cd7931c00bad1fef425115f41ab92b127829b1af650bfe24
+- path: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+  version: sha256:dacd2e60c8e13b6513ea59bf29abb55648fb51554f86fa5c3815e1a522240015
+- path: docs/decisions.md
+  version: sha256:28c5e51f47a62134aabf05b8aa2ce37e9a6e6e6c129681f0106ee90aab7bcd85
+- path: AGENTS.md
+  version: sha256:5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd
+- path: src/agent_runtime/core/config.py
+  version: sha256:57b0dd0b69b657d63aa2ef35b0ae4cb117e1b7808ddd06dc05cf3612a456ff3a
+- path: src/agent_runtime/runtime/ownership.py
+  version: sha256:fb888dfe3c66465ac31a7076abb9f423fba7d33eee3c0c6afb5e9ec4d1acf3ae
+- path: src/agent_runtime/persistence/guarded_checkpointer.py
+  version: sha256:134b3cc503e838e1b65a4cd103ba88e6192a3b554d190a033cf4c8e3bf5bd837
+- path: tests/runtime/test_ownership.py
+  version: sha256:2b8bfb535ae5b2a6f05601b4e08d9698a5f3f82cc8ca173658b6155611d4ca26
+- path: tests/runtime/test_ownership_postgres.py
+  version: sha256:2b27d3453ae054d66fae3f129e27cf8773707b6412258f9db0c1a5ca8df77721
+- path: .dev-team/tasks/MI-DEV-01/evidence/候选版本.json
+  version: sha256:3ba85d538d32429ac4fd5dcca44e2195d8371c201891f20f4b44dc9b8d8ef8ec
+- path: .dev-team/tasks/MI-DEV-01/evidence/单进程Fake回归.xml
+  version: sha256:43901ab3739cc7750591acd06eb3b9f48bdba4fcf20cf25bae802a16d80e1a2d
+- path: .dev-team/tasks/MI-DEV-01/evidence/增量结构下原单进程PG回归.xml
+  version: sha256:ae4c3e90efa4cc8bc74251e8d53cf344d6ce29889ba50bb84e60b674999c2cd7
+- path: .dev-team/tasks/MI-DEV-01/evidence/真实数据库观察.json
+  version: sha256:92159433da0c35bf9d960140b492ba1137ab66241fc33668b0cfa578c8a51fc3
+- path: .dev-team/tasks/MI-DEV-01/evidence/租约与同事务真实PG探针.xml
+  version: sha256:8a23df6e1cace1833d01821bbed310e1cee50ea508eca50d365ddb516fede8d9
+- path: .dev-team/tasks/MI-DEV-01/evidence/红灯记录.md
+  version: sha256:a42ae86ec5d28fb344e6390a691c139afe3f0dfcef7c7be69e987816cf623959
+- path: .dev-team/tasks/MI-DEV-01/evidence/运行验证.py
+  version: sha256:91b63a428f02ebfe61132760bf3db529afc8c4ae9db92d8d171bdf308c6dd222
+- path: .dev-team/tasks/MI-DEV-01/evidence/验证结果.json
+  version: sha256:591379041842f08df8849a29435b2e6954c1b0d0bccf6e368b9b0299bd505327
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0001-隔离数据库验证意图.md
+  version: sha256:96d84bf4b3b3b5b49227df05b1f2da155706890e7663dd31e765e1d8be0c230c
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0002-开发交付与真实PG证据.md
+  version: sha256:dc244bfe9ca37a5cdb8bc1bdfc175f26704cf0077a5b149543a6ddfe5cdd74b5
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0003-交接引用核对与独立审核派工.md
+  version: sha256:3dfebc2ba6869efd6abed7f25f9bd1149f5ac87515bc7d75633305aca353d86f
+- path: .dev-team/tasks/MI-DEV-01/evidence/独立审核探针意图.md
+  version: sha256:1eed47bd4aeeb4b3df98b1672bed4c1a0bf2931c8f206e0d2eacc5e6904baeaf
+- path: .dev-team/tasks/MI-DEV-01/evidence/独立审核探针.py
+  version: sha256:1d971dee69fa366aa50906f17dc2bc448219b2a63d0f1b5d6966e15b280d0a99
+- path: .dev-team/tasks/MI-DEV-01/evidence/独立审核探针结果.json
+  version: sha256:7b01cffcab62c4e9542c277dc44b60d8cd5b7119db1abdcc5111acb948974369
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0004-首批交付独立审核.md
+  version: sha256:ea7d260c9bae1862846bb1bc3182938ddf8ee7029b3477a2151b6c90ca92f1af
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-候选版本.json
+  version: sha256:b9a25383b6847e8c92b66f1d7bd177b3e8162cc0db5e16de6c8b81066885fbbb
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-完整原语与Saver回归.xml
+  version: sha256:6e4da3b5f0e60d44ad0dcdaca858e76f0f404aa609b678a21cffd65b50838a49
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-定向真实PG.xml
+  version: sha256:0e577dc9f4a4e0c735c14b38512a0241a808ab4cd31425104d04bdcdc573ccc2
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯.xml
+  version: sha256:06294343d77e47498612a1e85bcd6f7032cb48859567b684c946c368100f4acb
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯版本.json
+  version: sha256:07136545f8eae112829c2ed9a2d5d0f457b0c12ff84ae564d91ac64ca2d2e0f0
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py
+  version: sha256:977317d8878b21389da5f9d74b5b2bfcc416ec9bf1dd19013784ee7d43f9b1f0
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-验证结果.json
+  version: sha256:821f2be0e2b0995f975eb5a34036183ba11039a7ee86c61881a02fea8f8603eb
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0005-R01序列化边界返工交付.md
+  version: sha256:347bd6d7d20ef8e98f84742e9896dffe8249c38a67dd988659174f4f16ebf0e7
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针意图.md
+  version: sha256:3413ccb6fd518b4de45431e7977d0d74c79b44778526f95c3773f8a46ffae1ba
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针.py
+  version: sha256:61fcc58557e8474b93d325ae88cceea582c123f03dcd7c18caed98bab63787bc
+- path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针结果.json
+  version: sha256:adfd9d180c561ca1a519bfbf9e96bb7c61988e339bb34f31352917e6a7b932e1
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0006-R01独立复核.md
+  version: sha256:a1b6489d2ab33e1492d4cee822ded796d9efea62ffea8eb6dd67ff04a95958af
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
+  version: sha256:3c7bd5da10413c3fc54e83a611e8b5e67f0ea3ac878e3cd8a5ac2b4efe9f96a5
+- path: .dev-team/tasks/MI-DEV-01/evidence/提交前定向验证.xml
+  version: sha256:bc5b734cd278baaab464947afacec1b5ffd9cfa6487b3b86b3ec106414647b4f
+- path: .dev-team/tasks/MI-DEV-01/evidence/提交前验证结果.json
+  version: sha256:46a37bae4c8e06b89e39e68132eb5117cdb770d75dd7369ed4e5f05f3f5a32a8
+- path: .dev-team/tasks/MI-DEV-01/evidence/提交输入.json
+  version: sha256:de4e0a5109febe1bb0bece3744d7321ec51218702596bc7985ffb756f88629b9
+checkpoints:
+- boundary: 开发交付
+  handoff: .dev-team/tasks/MI-DEV-01/handoffs/0005-R01序列化边界返工交付.md
+  operation_key: sha256:238de6403425ca04f3a46f4fe76374f473c522f76d0a489ac68b2abfa0be158f
+  baseline_versions:
+    requirements: sha256:edd84d6c507c6c4ac5c301f74f446f9223a345197a4f5e312a44b29aa12e5118
+    architecture: sha256:567b599c4604d8c1e8ee106ce29c9e78040870a37e89b9c831407370bdfc03b0
+  artifact_versions:
+  - path: src/agent_runtime/core/config.py
+    version: sha256:57b0dd0b69b657d63aa2ef35b0ae4cb117e1b7808ddd06dc05cf3612a456ff3a
+  - path: src/agent_runtime/runtime/ownership.py
+    version: sha256:fb888dfe3c66465ac31a7076abb9f423fba7d33eee3c0c6afb5e9ec4d1acf3ae
+  - path: src/agent_runtime/persistence/guarded_checkpointer.py
+    version: sha256:134b3cc503e838e1b65a4cd103ba88e6192a3b554d190a033cf4c8e3bf5bd837
+  - path: tests/runtime/test_ownership.py
+    version: sha256:2b8bfb535ae5b2a6f05601b4e08d9698a5f3f82cc8ca173658b6155611d4ca26
+  - path: tests/runtime/test_ownership_postgres.py
+    version: sha256:2b27d3453ae054d66fae3f129e27cf8773707b6412258f9db0c1a5ca8df77721
+  - path: tests/persistence/test_checkpointers.py
+    version: sha256:59cc24c05cb17d4fcb67448a0decaf2e77d2042088ac6ec71c34799d1579f532
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py
+    version: sha256:977317d8878b21389da5f9d74b5b2bfcc416ec9bf1dd19013784ee7d43f9b1f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-候选版本.json
+    version: sha256:b9a25383b6847e8c92b66f1d7bd177b3e8162cc0db5e16de6c8b81066885fbbb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-完整原语与Saver回归.xml
+    version: sha256:6e4da3b5f0e60d44ad0dcdaca858e76f0f404aa609b678a21cffd65b50838a49
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-定向真实PG.xml
+    version: sha256:0e577dc9f4a4e0c735c14b38512a0241a808ab4cd31425104d04bdcdc573ccc2
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯.xml
+    version: sha256:06294343d77e47498612a1e85bcd6f7032cb48859567b684c946c368100f4acb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯版本.json
+    version: sha256:07136545f8eae112829c2ed9a2d5d0f457b0c12ff84ae564d91ac64ca2d2e0f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py
+    version: sha256:977317d8878b21389da5f9d74b5b2bfcc416ec9bf1dd19013784ee7d43f9b1f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-验证结果.json
+    version: sha256:821f2be0e2b0995f975eb5a34036183ba11039a7ee86c61881a02fea8f8603eb
+  - path: .dev-team/tasks/MI-DEV-01/handoffs/0005-R01序列化边界返工交付.md
+    version: sha256:347bd6d7d20ef8e98f84742e9896dffe8249c38a67dd988659174f4f16ebf0e7
+  evidence_refs:
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-候选版本.json
+    version: sha256:b9a25383b6847e8c92b66f1d7bd177b3e8162cc0db5e16de6c8b81066885fbbb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-完整原语与Saver回归.xml
+    version: sha256:6e4da3b5f0e60d44ad0dcdaca858e76f0f404aa609b678a21cffd65b50838a49
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-定向真实PG.xml
+    version: sha256:0e577dc9f4a4e0c735c14b38512a0241a808ab4cd31425104d04bdcdc573ccc2
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯.xml
+    version: sha256:06294343d77e47498612a1e85bcd6f7032cb48859567b684c946c368100f4acb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯版本.json
+    version: sha256:07136545f8eae112829c2ed9a2d5d0f457b0c12ff84ae564d91ac64ca2d2e0f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py
+    version: sha256:977317d8878b21389da5f9d74b5b2bfcc416ec9bf1dd19013784ee7d43f9b1f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-验证结果.json
+    version: sha256:821f2be0e2b0995f975eb5a34036183ba11039a7ee86c61881a02fea8f8603eb
+  validation_status: 已确认有效
+  note: R01局部返工31项通过；待独立复核，不改变旧审核不通过事实或负责人门禁
+- boundary: 开发验收
+  handoff: .dev-team/tasks/MI-DEV-01/handoffs/0006-R01独立复核.md
+  operation_key: sha256:7765c7c7df4964cfd373437ff6e3977d966ca819f2f6b9a2556f40a92ba64a03
+  baseline_versions:
+    requirements: sha256:edd84d6c507c6c4ac5c301f74f446f9223a345197a4f5e312a44b29aa12e5118
+    architecture: sha256:567b599c4604d8c1e8ee106ce29c9e78040870a37e89b9c831407370bdfc03b0
+  artifact_versions:
+  - path: src/agent_runtime/core/config.py
+    version: sha256:57b0dd0b69b657d63aa2ef35b0ae4cb117e1b7808ddd06dc05cf3612a456ff3a
+  - path: src/agent_runtime/runtime/ownership.py
+    version: sha256:fb888dfe3c66465ac31a7076abb9f423fba7d33eee3c0c6afb5e9ec4d1acf3ae
+  - path: src/agent_runtime/persistence/guarded_checkpointer.py
+    version: sha256:134b3cc503e838e1b65a4cd103ba88e6192a3b554d190a033cf4c8e3bf5bd837
+  - path: tests/runtime/test_ownership.py
+    version: sha256:2b8bfb535ae5b2a6f05601b4e08d9698a5f3f82cc8ca173658b6155611d4ca26
+  - path: tests/runtime/test_ownership_postgres.py
+    version: sha256:2b27d3453ae054d66fae3f129e27cf8773707b6412258f9db0c1a5ca8df77721
+  - path: tests/persistence/test_checkpointers.py
+    version: sha256:59cc24c05cb17d4fcb67448a0decaf2e77d2042088ac6ec71c34799d1579f532
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py
+    version: sha256:977317d8878b21389da5f9d74b5b2bfcc416ec9bf1dd19013784ee7d43f9b1f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-候选版本.json
+    version: sha256:b9a25383b6847e8c92b66f1d7bd177b3e8162cc0db5e16de6c8b81066885fbbb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-完整原语与Saver回归.xml
+    version: sha256:6e4da3b5f0e60d44ad0dcdaca858e76f0f404aa609b678a21cffd65b50838a49
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-定向真实PG.xml
+    version: sha256:0e577dc9f4a4e0c735c14b38512a0241a808ab4cd31425104d04bdcdc573ccc2
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯.xml
+    version: sha256:06294343d77e47498612a1e85bcd6f7032cb48859567b684c946c368100f4acb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯版本.json
+    version: sha256:07136545f8eae112829c2ed9a2d5d0f457b0c12ff84ae564d91ac64ca2d2e0f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-验证结果.json
+    version: sha256:821f2be0e2b0995f975eb5a34036183ba11039a7ee86c61881a02fea8f8603eb
+  - path: .dev-team/tasks/MI-DEV-01/handoffs/0005-R01序列化边界返工交付.md
+    version: sha256:347bd6d7d20ef8e98f84742e9896dffe8249c38a67dd988659174f4f16ebf0e7
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针意图.md
+    version: sha256:3413ccb6fd518b4de45431e7977d0d74c79b44778526f95c3773f8a46ffae1ba
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针.py
+    version: sha256:61fcc58557e8474b93d325ae88cceea582c123f03dcd7c18caed98bab63787bc
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针结果.json
+    version: sha256:adfd9d180c561ca1a519bfbf9e96bb7c61988e339bb34f31352917e6a7b932e1
+  evidence_refs:
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-候选版本.json
+    version: sha256:b9a25383b6847e8c92b66f1d7bd177b3e8162cc0db5e16de6c8b81066885fbbb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-完整原语与Saver回归.xml
+    version: sha256:6e4da3b5f0e60d44ad0dcdaca858e76f0f404aa609b678a21cffd65b50838a49
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-定向真实PG.xml
+    version: sha256:0e577dc9f4a4e0c735c14b38512a0241a808ab4cd31425104d04bdcdc573ccc2
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯.xml
+    version: sha256:06294343d77e47498612a1e85bcd6f7032cb48859567b684c946c368100f4acb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-红灯版本.json
+    version: sha256:07136545f8eae112829c2ed9a2d5d0f457b0c12ff84ae564d91ac64ca2d2e0f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py
+    version: sha256:977317d8878b21389da5f9d74b5b2bfcc416ec9bf1dd19013784ee7d43f9b1f0
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-验证结果.json
+    version: sha256:821f2be0e2b0995f975eb5a34036183ba11039a7ee86c61881a02fea8f8603eb
+  - path: .dev-team/tasks/MI-DEV-01/evidence/单进程Fake回归.xml
+    version: sha256:43901ab3739cc7750591acd06eb3b9f48bdba4fcf20cf25bae802a16d80e1a2d
+  - path: .dev-team/tasks/MI-DEV-01/evidence/增量结构下原单进程PG回归.xml
+    version: sha256:ae4c3e90efa4cc8bc74251e8d53cf344d6ce29889ba50bb84e60b674999c2cd7
+  - path: .dev-team/tasks/MI-DEV-01/evidence/真实数据库观察.json
+    version: sha256:92159433da0c35bf9d960140b492ba1137ab66241fc33668b0cfa578c8a51fc3
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针意图.md
+    version: sha256:3413ccb6fd518b4de45431e7977d0d74c79b44778526f95c3773f8a46ffae1ba
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针.py
+    version: sha256:61fcc58557e8474b93d325ae88cceea582c123f03dcd7c18caed98bab63787bc
+  - path: .dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针结果.json
+    version: sha256:adfd9d180c561ca1a519bfbf9e96bb7c61988e339bb34f31352917e6a7b932e1
+  validation_status: 已确认有效
+  note: MI01-R01独立复核关闭；当前31项含28真实PG及独立慢序列化/框架表示差分/准备异常探针通过。0004原候选失败及旧证据完整保留；本批不代表全多活或负责人终验。
+current_operation:
+  name: MI-DEV-01提交与双远程同步
+  kind: 提交推送
+  operation_key: sha256:6b67c233ff554a02a413e90905472136492f866be75ebedff6f5bd2b107e50d0
+  status: 执行中
+  inputs_ref: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
+  targets:
+  - github:refs/heads/master
+  - origin:refs/heads/master
+  expected_base: f7e6fb917dc7ea3c7adcc874667f62e2f59d7265
+  result_ref: null
+  verification_ref: .dev-team/tasks/MI-DEV-01/evidence/提交前验证结果.json
+latest_handoff: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
+resume_from: null
+blocked_reason: null
+project_gates:
+- name: 开始开发授权
+  status: 已满足
+  evidence_ref: .dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md
+- name: 负责人终验
+  status: 已满足
+  evidence_ref: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
+- name: 任务提交
+  status: 待满足
+  evidence_ref: null
+- name: 双远程同步
+  status: 待满足
+  evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-30T08:26:31.981066+00:00'

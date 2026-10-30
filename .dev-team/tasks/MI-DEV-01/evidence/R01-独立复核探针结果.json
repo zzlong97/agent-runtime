@@ -1,0 +1,37 @@
+{
+  "issue": "MI01-R01",
+  "operation_key": "mi-dev01-review-r01-20261030-6d2f8b90",
+  "database": "mi_dev01_20261030_6d2f8b90",
+  "schema": "mi01_review_r01_6d2f8b90",
+  "observed_at": "2026-10-30T08:14:30.809376+00:00",
+  "module_file": "C:\\Users\\zzlong\\.codex\\worktrees\\ra-closeout\\agent_runtime\\src\\agent_runtime\\__init__.py",
+  "packages": {
+    "psycopg": "3.3.5",
+    "langgraph-checkpoint-postgres": "3.1.2"
+  },
+  "files": {
+    "src/agent_runtime/persistence/guarded_checkpointer.py": "134b3cc503e838e1b65a4cd103ba88e6192a3b554d190a033cf4c8e3bf5bd837",
+    "tests/runtime/test_ownership_postgres.py": "2b27d3453ae054d66fae3f129e27cf8773707b6412258f9db0c1a5ca8df77721"
+  },
+  "original_slow_blob_recheck": {
+    "serialization_delay_ms": 450,
+    "transaction_budget_ms": 300,
+    "guard_not_entered_during_serialization": true,
+    "independent_nowait_run_lock_free": true,
+    "write_succeeded": true,
+    "elapsed_ms": 483
+  },
+  "locked_framework_differential": {
+    "primitive_blob_delta_snapshot_roundtrip_identical": true,
+    "raw_checkpoint_metadata_json_identical": true,
+    "parent_links_preserved": true,
+    "input_unchanged": true,
+    "namespace_isolation": true
+  },
+  "preparation_exception": {
+    "guard_not_entered": true,
+    "three_table_counts_unchanged": true,
+    "run_lock_free": true
+  },
+  "probe_exit": 0
+}

@@ -113,6 +113,16 @@ class Settings(BaseSettings):
             "Stage 2.5 默认 1 秒，只补偿进程内唤醒丢失，不提供多实例 Lease。"
         ),
     )
+    run_transaction_timeout_seconds: float = Field(
+        default=5.0,
+        gt=0,
+        le=5,
+        allow_inf_nan=False,
+        description=(
+            "执行权原语和受控Checkpoint完整持锁事务的最长秒数；必须大于0且不超过5秒，"
+            "同时约束语句、锁等待与空闲事务；初始化迁移不使用该预算。"
+        ),
+    )
     run_cancel_grace_seconds: float = Field(
         default=2.0,
         gt=0,

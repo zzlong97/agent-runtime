@@ -2157,3 +2157,243 @@ AgentRuntime 团队只向对方提供：
 本候选架构不引入独立远程聊天 API、Remote Agent 管理平台、动态发现/热加载、跨 Run
 远程上下文、远程 token 流、Push、文件/二进制 Artifact、OAuth2/mTLS、远程数据删除、
 Workflow、多 Agent 编排、多实例 Worker 或分布式事务。
+
+---
+
+# 18. 多实例部署架构：MI-001（完整规划已批准）
+
+本节对应 requirements 第 10 节。负责人已确认 PostgreSQL 调度与同构多活副本，并在
+RA-001 交付后明确选定推进 MI-001，并批准当前完整规划、开始 MI-DEV-01。不重写
+第17节已验收的单进程基线；本阶段补充跨实例执行权和远程部署规则，首批仅实施原语及探针。
+
+## 18.1 部署拓扑与责任
+
+```text
+统一入口（已有可用服务，不依赖粘滞路由）
+  ├─ Runtime A：API + SSE Gateway + Coordinator + Executor
+  └─ Runtime B：API + SSE Gateway + Coordinator + Executor
+        ├─ 共享 PostgreSQL：Run、Checkpoint、Task、Ledger、持久事件与执行权
+        ├─ 共享 Redis：短期公开实时事件，可降级
+        └─ Remote Capability 统一入口（复用已交付 Adapter，真实多副本另行验收）
+             ├─ Remote 实例 A
+             └─ Remote 实例 B
+                  → 对方自治的状态、幂等、任务调度与故障接管
+```
+
+Runtime 可以跨应用主机部署；本地 Docker Desktop 双容器仅验证进程故障，不证明
+宿主机、数据库或入口高可用。首期不拆独立 API/Worker，不新增消息中间件。
+
+## 18.2 最小持久化变化
+
+只增加当前领取、删除、部署一致性和全局并发实际需要的事实：
+
+| 对象 | 新增内容 | 当前写入者和读取者 | 生命周期 |
+| --- | --- | --- | --- |
+| runs | owner_instance_id UUID 可空、execution_epoch BIGINT 非负默认 0、lease_expires_at TIMESTAMPTZ 可空 | Coordinator 领取/续租；所有受保护写入校验执行权 | 随 Run；终态清 owner/expiry，保留 epoch |
+| sessions | deletion_requested_at TIMESTAMPTZ 可空 | 删除 API 设屏障；消息/Regenerate/Resume 拒绝；清理扫描续做 | 随 Session，完成后整行删除 |
+| runtime_cluster_config | singleton_id=1 主键、contract_hash CHAR(64) | 受控初始化/停机迁移写；启动、readiness、领取和续租读取 | 当前部署契约；不保存配置正文或凭据 |
+| capability_execution_slots | capability_id + slot_no 联合主键、run_id 外键、invocation_id、execution_epoch | bounded 准入插入占用；释放/过期回收删除 | 仅保存占用行，随 Run 删除级联清理 |
+
+owner_instance_id 是每次进程启动新生成的 UUID，不复用主机名；epoch 只标识执行权
+代次，不进入 Invocation ID、thread_id、Task ID 或业务幂等键。Invocation 仍不建表。
+
+slot_no 为 1～max_concurrency；槽位关联 Run 租约，不再保存第二份心跳或过期时间。
+runtime_cluster_config 的 contract_hash 覆盖执行协议版本、有效 Manifest、Capability
+实现摘要、State Schema、固定用户和影响执行的策略；不含端口、实例 ID、密钥或凭据。
+契约不同的实例不得 readiness 成功、领取或续租，不自动覆盖数据库里的 hash。
+
+初始化继续使用现有幂等 setup，不引入 Alembic。首轮从单进程升级须停止旧版本进程后
+执行增量初始化；旧版本不理解执行权隔离，禁止与多实例版本混跑。所有新增表/字段和
+项目自行设计的表及字段中文注释须实际写入 PostgreSQL 元数据并测试；LangChain /
+LangGraph 管理的表及字段不要求补注释，保留已有注释，不重置现有数据卷。
+
+## 18.3 Run 领取、心跳与 30 秒接管
+
+租约使用 PostgreSQL 的 `clock_timestamp()`；取得行锁后重新取时校验，不能以事务开始
+时固定的 `now()` 或应用主机时间决定租约是否有效。默认心跳间隔 5 秒、租约有效期
+15 秒、补偿扫描间隔不超过 2 秒。受保护连接在事务开始前配置不超过 5 秒的
+`transaction_timeout`，配合锁等待、语句及空闲事务超时，约束整个持锁事务而非只约束
+单条 SQL；初始化/停机迁移使用独立连接边界，不对 DDL 机械套用执行事务时限。
+序列化、模型、HTTP 和人工等待放在短事务外，超时连接须回滚/丢弃，不能继续复用失败事务。
+
+```text
+短事务 SELECT 候选 Run FOR UPDATE SKIP LOCKED
+→ 在同一事务复查状态、Session 删除屏障、部署契约和旧租约
+→ 领取无 owner 的可执行 Run，或旧租约已过期的可执行 Run
+→ execution_epoch + 1，设置 owner_instance_id 和 lease_expires_at
+→ 同事务记录领取/接管结果
+→ COMMIT 后绑定只读执行令牌并开始图执行
+```
+
+执行令牌包含 run_id、instance_id、execution_epoch。续租必须条件更新匹配同一令牌且
+尚未过期的租约；过期后即使没有其他实例接管也不能直接续活，必须重新竞争领取。
+扫描发现其他实例租约仍有效的 Run 时直接跳过，不把它当成需要恢复的 Run。
+
+候选标识可以先读，但实际领取按 Session 行、Run 行的顺序加锁并重新检查；不得持 Run
+锁反向等待 Session 锁。新提交、Regenerate 和 Resume 沿用同一顺序；心跳等仅锁 Run
+的事务不再反向取 Session 锁。owner 与 expiry 必须同时为空或同时存在，epoch 非负。
+
+正常 interrupted 等待输入时不持执行租约，不因周期扫描继续图。Resume 事务保存输入后
+可能是无 owner 的 running Run，必须依据持久 Interrupt/Checkpoint 纳入领取，不能因
+不再是 queued 或 expiry 为 NULL 而漏分派。保留已有启动时 stopped Checkpoint 对账：
+仅对账路径可短暂领取 interrupted Run、投影已保存终态后释放租约，不运行或恢复图；
+没有可投影结果时立即释放，不能把普通 interrupted 当成可自动恢复任务。
+cancel_requested 的领取者只执行取消/对账路径。接管继续从精确 Checkpoint、open
+Invocation 和持久 Resume 投影恢复；正常心跳和领取冲突不增加 recovery_attempts。
+真实崩溃恢复仍沿用本地最多三次及 manual policy；未确认远程 Task 的特殊规则沿用
+第 17 节，不能仅因租约变化将它标为 failed。
+
+30 秒是实测门禁：至少两实例、依赖正常、有可用容量，从进程强退/暂停发生时计时，
+到另一实例取得令牌并进入恢复路径。配置数值不能代替故障演练证据。
+
+## 18.4 旧执行者隔离：覆盖完整写入面
+
+所有执行者写入必须在同一 PostgreSQL 事务内完成：锁定 Run、校验有效租约/epoch/
+部署契约、执行实际写入，然后提交。禁止“先查租约，再由另一个连接无条件写入”。
+
+必须保护的写入包括 Parent/Child Checkpointer 的 aput/aput_writes、Task/Context、
+Operation 状态、Invocation/Task 事件、Interrupt Checkpoint 与最终公共消息、Run
+状态和序号分配。受控 Checkpointer 仍使用原有 LangGraph 表结构和隔离 thread_id；
+受保护 saver 的事务与 Run 行锁必须同连接，不能只在 Python 外层包一把锁。
+当前 Repository 各自开连接，现有 saver 的 pipeline 也不等于上述原子事务：执行路径
+必须显式复用受保护事务连接；saver 完成实际 SQL/管线同步后才可提交，同步失败须连同
+Run 校验事务一起回滚。不得临时改写共享 saver 的 conn 来绑定某个 Run。执行令牌由
+Runtime 的执行上下文传递，不进入 Parent/Child State、公共事件或业务幂等键；执行写入
+缺令牌即拒绝，初始化、控制 API 和删除只能走各自明确的事务入口，不设通用绕过开关。
+
+事务提交前发生的锁序和数据库超时须有测试。接管会等待旧短事务结束；新 epoch 生效
+后，旧 epoch 的后续事务全部失败。RunOwnershipLost 属于内部控制结果：旧执行器
+停止/丢弃结果，不得走普通异常处理去写新执行者的 invocation.failed 或 run.failed。
+
+控制 API 并不需要持有执行者租约：它们在受信入口校验用户、删除屏障和当前状态，
+通过短事务写 Cancel/Resume 意图；不得代替执行者写业务结果。清理写入只允许在
+Session 删除屏障已设置、活动 Run 已终止且删除步骤获得数据库互斥后执行。
+
+首个开发单元必须使用真实 PostgreSQL 验证同事务 Guarded Checkpointer：分别验证有效
+令牌写入、无令牌拒绝、租约到期和接管后旧令牌的 aput/aput_writes 被拒绝，及中途 SQL/
+管线失败时 checkpoints、blobs、writes 无部分提交。至少使用独立数据库连接观察 Run
+锁的实际阻塞/释放，并验证正常读取和原 thread_id 隔离。探针失败先纠正该适配，不允许
+以“仅 Run 终态检查 epoch”降低范围；完整旧进程暂停/恢复演练仍由最终双进程验收完成。
+
+外部 HTTP 无法由本地数据库锁撤回。调用前检查执行权，已发出的请求继续依靠原
+Invocation/Operation 幂等键和对方契约收敛；未知结果保持 pending，不做 Saga/补偿。
+
+## 18.5 跨实例 Sequencer 与 SSE
+
+MI 阶段不再跨请求缓存 seq 号段。执行事件与控制 API 事件都在锁定同一 Run 行的短
+事务中原子分配 seq；durable 事件同时写入，transient 只更新高水位后尽力发布 Redis。
+这样取消 API 在 B 分配序号后，执行者 A 不会再使用缓存里的旧号段发布倒退事件。
+
+执行者序号分配须校验令牌；控制事件只走固定白名单的状态事务。新执行尝试先持久化
+message.started(attempt)；接管前已分配却迟到的瞬时事件序号小于新尝试标记，Gateway
+按 seq/attempt 丢弃，不得覆盖新草稿或最终历史。
+
+Gateway 可运行在任意副本，在推进游标前补读相应范围的 PostgreSQL durable 事件，
+再合并 Redis 并去重；允许迟到 transient 缺失，不允许跳过已提交 durable 终态。
+不引入 Outbox；终态消息仍由 Parent 历史回补。文本可有限批次合并后形成事件，
+不要求每个模型 token 都执行一次 SQL。
+
+## 18.6 跨实例 Cancel、Resume 和 Session 删除
+
+Cancel 事务提交 cancel_requested 后，执行者以数据库状态轮询发现它；本地 Event
+只是加速。数据库轮询周期不超过补偿扫描周期。执行者失联由租约接管者完成取消；
+没有有效令牌的 API 副本不能直接宣布 cancelled。
+
+Resume 继续按 interrupt_id + request_id + 指纹单事务消费一次 pending Interrupt，
+沿用同 Run 并写入持久分派意图；无论 API 请求落到哪一实例，数据库扫描都能补偿。
+不新增 HumanMessage，不引入另一个 retry Run。
+
+Session 删除先在 Session 行锁下设置 deletion_requested_at 并提交。所有新执行入口
+在同一 Session 锁下检查屏障，防止在删除过程中插入新 Run。随后取消并等待活动 Run，
+再按已收集标识幂等清理 Checkpoint、Task/Operation、Interrupt/Event/Run、Feedback，
+最后删除 Session。每个实际清理步骤使用同连接的数据库互斥，不持锁等待 Run 结束。
+清理标识必须在删除其来源前取得；崩溃后仍能按 Session/namespace 找回遗留线程。
+
+其他实例定期扫描删除屏障续做未完成清理；重复 DELETE 可续做。远程终态未知时
+不能推进清理。进程内 deleting set 不再承担全局正确性。
+
+普通消息和 Regenerate 也必须在持续持有同一 Session 行锁的事务边界内，重新确认无
+活动 Run、删除屏障及活动 Parent 分支，再完成源消息/最新 completed 目标校验和新 Run
+提交；不能沿用锁外校验过的旧 Regenerate 目标。该边界只等待数据库，不等待模型或
+远程 HTTP。MI-DEV-03 验证另一副本完成新轮后旧目标仍被提交的竞争，以及删除/Resume
+竞争；持久 request_id 幂等重读继续返回原 Run，内容冲突仍拒绝。
+
+## 18.7 集群并发、部署契约和退出
+
+bounded 准入在数据库中按 capability_id 串行检查/占用槽位，再执行 Invocation；
+只有与有效 Run 租约和 epoch 一致的占用才计数。旧 epoch、过期租约占用可回收；
+release 必须匹配 invocation_id/epoch，避免旧实例释放新占用。unlimited 不建槽位。
+等待超时、取消、Interrupt 与终态都释放本次占用；恢复后重新准入。
+回收在独立短事务中先锁关联 Run、再取 Capability 槽位互斥；关联 Run 锁忙时跳过本轮，
+不得在已持 Capability 互斥后反向等待其他 Run，避免与续租/正常准入形成锁环。
+
+这是 Runtime 集群的有效执行并发上限，不能约束旧进程已经发出的外部请求数。
+远程 Capability 还需按其所有客户端自行限流，不把 Runtime 配额视为全服务资源上限。
+
+保留 /health 作为存活检查，新增 /health/ready：数据库可达、部署契约一致、初始化
+完成且未在退出时才返回就绪。Redis 异常只降级。启动和定期续租校验契约，配置
+变化不热加载；相同执行契约的 Runtime 兼容版本可滚动，不兼容变化停止全部副本后
+受控迁移并更新 contract_hash，不提供配置管理平台。
+
+收到退出信号后先 readiness=false、停止领取新 Run，现有 Run 继续续租和执行，默认
+宽限期 60 秒。超时退出后由租约接管；不得因进程关闭主动把所有 Run 置为 cancelled。
+滚动时至少保留一个健康副本。SSE 可断线重连，长 Run 可恢复，不承诺逐 token 无感。
+
+## 18.8 远程 Capability 的规范与测试向量
+
+统一入口同时覆盖 Agent Card、SendMessage、GetTask、CancelTask；Card 接口地址必须
+是逻辑服务地址。Runtime 不记录物理副本 ID，不选择远程 Worker，也不介入对方私有
+Checkpoint 或调度系统。内部实现可共享状态或服务端路由，只有可观察契约被强制。
+
+远程部署规范必须交付以下黑盒测试：
+
+1. 向两个副本交替/并发发送同一 messageId：同内容只有一个 Task，不同内容冲突。
+2. A 创建 Task，B 查询、补参和取消：taskId/contextId、状态和最终结果一致。
+3. 任务执行者强退或暂停：其他副本 30 秒内接管可恢复任务；旧副本恢复不重复提交
+   业务结果，依靠对方自己的执行权和业务幂等机制保证。
+4. input-required 期间替换副本：提示与待补参状态仍可查询，同一补参只消费一次。
+5. 滚动退出：入口不返回失效单副本地址；已受理 Task 和幂等记录不丢失。
+
+对方必须说明内部共享依赖、自动恢复适用条件、任务/幂等记录保留和过载错误策略。
+当前团队只交付规范、测试向量和可复用 Fake 测试；真实远程业务适配由对方实施。
+Runtime 复用已交付 RA-001；当前核心和 Fake 验收允许真实远程服务关闭，真实远程
+多实例联测待对方交付及独立范围授权，不把本机单实例 RA 联调写成远程多副本通过。
+
+## 18.9 已批准的实施拆分
+
+| 编号 | 范围与预期模块 | 依赖 | 验收/交付证据 |
+| --- | --- | --- | --- |
+| MI-DEV-01 | Run 租约、Session 删除屏障字段和 cluster_config 的增量 setup；runtime 的领取/续租原语与执行令牌；persistence/checkpointers 同连接受控 saver 探针；core/config 的必要连接时限 | 完整规划及首批实施范围获准 | MI-AC-01/02/03/07/11 基础证据：真实数据库租约竞争、过期拒绝、写入回滚/同连接、中文元数据；不宣称已通过完整双进程接管 |
+| MI-DEV-02 | 将 MI-DEV-01 受控 saver 接到实际 Parent/Child；runtime/coordinator、sequencer、event_repository 及 capabilities Task/Operation/Invocation 的全部执行写入隔离 | MI-DEV-01 | MI-AC-03/07；旧执行令牌全部拒绝，真实图内部写入上下文不丢失；公开 seq 不倒退 |
+| MI-DEV-03 | chat、runs、session_deletion、Interrupt Repository 和 sessions Repository；跨实例 Cancel/Resume/删除屏障 | MI-DEV-02 | MI-AC-04/06；请求跨实例、删除者退出续做及无孤儿数据 |
+| MI-DEV-04 | capabilities/execution、Registry 契约校验、并发槽；main 生命周期及 health readiness | MI-DEV-02 | MI-AC-05/08；集群上限、槽位回收、配置拒绝与滚动退出 |
+| MI-DEV-05 | Dockerfile/compose 双副本开发部署、入口示例、tests/integration 多进程故障用例；维护 README 和远程规范向量 | MI-DEV-03/04 | MI-AC-01～11；故障时间线、Stage 3 回归、双副本 Fake 协议向量 |
+
+每项开发先补充能实际复现目标故障的测试，再实施并执行对应验证；不得把函数存在或
+同进程 mock 当成跨实例验收。执行权隔离未完成前，多副本部署不得 readiness 成功。
+新增字段或文件只服务上述使用方，不进行无关架构重构。
+
+首批 MI-DEV-01 仅接通持久化原语和受控 saver 探针，不替换普通服务的分派/写入流程，
+不把部分保护的 Coordinator 暴露成多活模式。Session 删除字段在本批由领取查询读取，
+API 写入屏障在 MI-DEV-03 接通；并发槽表留给实际准入使用的 MI-DEV-04，不提前建表。
+最小顺序为：元数据新/旧/重复初始化 → 两连接领取/续租与锁等待到期探针 → saver 原子
+写入/拒绝/回滚探针 → 受影响单进程回归。后续 MI-DEV-02～04 完成完整写入、控制和治理
+后，才由 MI-DEV-05 启用双进程/容器演练；当前只登记并推进MI-DEV-01，不声称多活已可用。
+首批探针还须实测连续短 SQL、锁等待和空闲事务的实际总预算及连接失效回收，不只检查
+配置字符串存在；未知 SQL/提交结果先查询实际数据库，不盲目重放业务写入。
+
+## 18.10 验证顺序与回退边界
+
+先验证数据库租约竞争和 Guarded Checkpointer，再验证事件/控制/全局并发，最后才
+进行至少两进程或两容器的 kill、暂停后恢复、数据库网络隔离和滚动退出演练。
+记录 instance_id、epoch、故障发生时间和接管开始时间；日志继续脱敏，不记录正文。
+
+保留原有业务 ID 和数据；升级前后验证既有 Session、Run 和 Checkpoint 仍可读取。
+回退到旧单进程版本必须先停止全部新副本，保留数据再按实际兼容性决定恢复，不能
+直接混跑或重置数据库。当前规划不执行任何部署、迁移或回退操作。
+
+本方案使用 PostgreSQL 既有行锁和 SKIP LOCKED 作为领取原语，超时机制约束短事务；
+具体租约与隔离行为属于本项目设计，不能仅凭数据库提供锁就宣称已实现。
+参考：[PostgreSQL 17 SELECT](https://www.postgresql.org/docs/17/sql-select.html)、
+[连接与事务超时](https://www.postgresql.org/docs/17/runtime-config-client.html)、
+[数据库当前时间语义](https://www.postgresql.org/docs/17/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT)。

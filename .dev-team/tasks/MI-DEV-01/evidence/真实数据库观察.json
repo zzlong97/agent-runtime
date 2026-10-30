@@ -1,0 +1,766 @@
+{
+  "operation_key": "mi-dev01-pg-20261030-6d2f8b90",
+  "database": "mi_dev01_20261030_6d2f8b90",
+  "observed_at": "2026-10-30T07:40:33.285871+00:00",
+  "cases": [
+    {
+      "test": "test_new_old_and_repeated_schema_preserve_data_structure_acl_and_comments",
+      "schema": "mi01_c1686bdebcd24be09090e38440ce6b98",
+      "tables": [
+        "checkpoint_blobs",
+        "checkpoint_migrations",
+        "checkpoint_writes",
+        "checkpoints",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {
+        "checkpoints": 0,
+        "checkpoint_blobs": 0,
+        "checkpoint_writes": 0
+      },
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_fresh_schema_has_all_chinese_metadata_before_any_business_row",
+      "schema": "mi01_d34694d85c65458f91e907a857ea1c43",
+      "tables": [
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {},
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_schema_initialization_failure_rolls_back_all_additions",
+      "schema": "mi01_36d19bb039e542bb9b370de169c68573",
+      "tables": [
+        "run_interrupts",
+        "runs",
+        "sessions"
+      ],
+      "row_counts": {},
+      "new_column_metadata": []
+    },
+    {
+      "test": "test_contract_is_explicit_immutable_and_checked_for_claim_renew_and_guard",
+      "schema": "mi01_2eec354552ad471fbd113d1a90f04b86",
+      "tables": [
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {},
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_competing_claim_takeover_renew_and_explicit_reconciliation",
+      "schema": "mi01_7308761a1e284c01aea422b13fd2e74d",
+      "tables": [
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {},
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_renew_checks_database_clock_after_waiting_for_run_lock",
+      "schema": "mi01_5e73849496514524a31421ee304e02ad",
+      "tables": [
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {},
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_takeover_cannot_advance_epoch_until_old_short_transaction_finishes",
+      "schema": "mi01_508fe818b95440c1abe7efb1b91f4329",
+      "tables": [
+        "mi01_old_transaction",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {
+        "mi01_old_transaction": 1
+      },
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_guarded_saver_reads_thread_isolation_and_refuses_both_writes[missing]",
+      "schema": "mi01_f4d07a49a7544a028adde740b2126003",
+      "tables": [
+        "checkpoint_blobs",
+        "checkpoint_migrations",
+        "checkpoint_writes",
+        "checkpoints",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {
+        "checkpoints": 1,
+        "checkpoint_blobs": 1,
+        "checkpoint_writes": 1
+      },
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_guarded_saver_reads_thread_isolation_and_refuses_both_writes[expired]",
+      "schema": "mi01_fc95edb08bbc4fa2bf10dd4e3b471c18",
+      "tables": [
+        "checkpoint_blobs",
+        "checkpoint_migrations",
+        "checkpoint_writes",
+        "checkpoints",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {
+        "checkpoints": 1,
+        "checkpoint_blobs": 1,
+        "checkpoint_writes": 1
+      },
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_guarded_saver_reads_thread_isolation_and_refuses_both_writes[stale]",
+      "schema": "mi01_760b7e897ecb4063838b9659165cbca6",
+      "tables": [
+        "checkpoint_blobs",
+        "checkpoint_migrations",
+        "checkpoint_writes",
+        "checkpoints",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {
+        "checkpoints": 1,
+        "checkpoint_blobs": 1,
+        "checkpoint_writes": 1
+      },
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_pipeline_failures_rollback_checkpoint_blobs_and_writes",
+      "schema": "mi01_9ef86dd2560d427fbcb82ec719e4304f",
+      "tables": [
+        "checkpoint_blobs",
+        "checkpoint_migrations",
+        "checkpoint_writes",
+        "checkpoints",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {
+        "checkpoints": 1,
+        "checkpoint_blobs": 1,
+        "checkpoint_writes": 1
+      },
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_saver_actual_sql_and_guard_share_connection_and_hold_run_lock",
+      "schema": "mi01_2d69e8a3219247d3b60acf675c014924",
+      "tables": [
+        "checkpoint_blobs",
+        "checkpoint_migrations",
+        "checkpoint_writes",
+        "checkpoints",
+        "mi01_checkpoint_connection",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {
+        "checkpoints": 1,
+        "checkpoint_blobs": 1,
+        "checkpoint_writes": 0
+      },
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ],
+      "actual_checkpoint_backend_pids": [
+        7662
+      ]
+    },
+    {
+      "test": "test_whole_transaction_budget_rolls_back_and_replaces_failed_connection[continuous]",
+      "schema": "mi01_7b3df48ec0ec4162a7cb9bf12272808f",
+      "tables": [
+        "mi01_budget",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {},
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_whole_transaction_budget_rolls_back_and_replaces_failed_connection[lock]",
+      "schema": "mi01_8783070758264ab981e9d56f57bc208b",
+      "tables": [
+        "mi01_budget",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {},
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    },
+    {
+      "test": "test_whole_transaction_budget_rolls_back_and_replaces_failed_connection[idle]",
+      "schema": "mi01_2d6ae1a6f2dd4405b07b2aa6ed08f349",
+      "tables": [
+        "mi01_budget",
+        "run_interrupts",
+        "runs",
+        "runtime_cluster_config",
+        "sessions"
+      ],
+      "row_counts": {},
+      "new_column_metadata": [
+        {
+          "relname": "runs",
+          "attname": "owner_instance_id",
+          "type": "uuid",
+          "comment": "当前执行者每次进程启动生成的实例UUID；与租约到期时间同时为空或同时存在。"
+        },
+        {
+          "relname": "runs",
+          "attname": "execution_epoch",
+          "type": "bigint",
+          "comment": "Run执行权代次；每次领取递增，终态保留，不进入业务幂等键或Child线程标识。"
+        },
+        {
+          "relname": "runs",
+          "attname": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "comment": "依据数据库实际时钟计算的执行权到期时间；过期执行者不得续活或写入。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "singleton_id",
+          "type": "integer",
+          "comment": "执行契约单例主键，唯一允许值为1。"
+        },
+        {
+          "relname": "runtime_cluster_config",
+          "attname": "contract_hash",
+          "type": "character(64)",
+          "comment": "当前已初始化执行契约的小写SHA256摘要；领取、续租与执行写入必须严格匹配，不自动覆盖。"
+        },
+        {
+          "relname": "sessions",
+          "attname": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "comment": "会话删除屏障的持久请求时间；为空表示尚未请求删除，删除完成后随会话行清理。"
+        }
+      ]
+    }
+  ],
+  "server": {
+    "database": "mi_dev01_20261030_6d2f8b90",
+    "version": "17.11 (Debian 17.11-1.pgdg13+2)"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "operation_key": "mi-dev01-review-20261030-6d2f8b90",
+  "database": "mi_dev01_20261030_6d2f8b90",
+  "schema": "mi01_review_6d2f8b90",
+  "observed_at": "2026-10-30T07:50:35.977201+00:00",
+  "module_file": "C:\\Users\\zzlong\\.codex\\worktrees\\ra-closeout\\agent_runtime\\src\\agent_runtime\\__init__.py",
+  "files": {
+    "src/agent_runtime/runtime/ownership.py": "fb888dfe3c66465ac31a7076abb9f423fba7d33eee3c0c6afb5e9ec4d1acf3ae",
+    "src/agent_runtime/persistence/guarded_checkpointer.py": "3d3c77cca20322a32fa9b7fc87d6fb24a3a839afa6b5eaaf8a5f86a0db33ee84"
+  },
+  "existing_schema_metadata_matches": 15,
+  "serialization_observation": {
+    "run_lock_held_during_serialization": true,
+    "artificial_serialization_delay_ms": 450,
+    "transaction_budget_ms": 300,
+    "error_type": "OperationalError",
+    "elapsed_ms": 498,
+    "failed_connection_closed": true,
+    "rollback_three_tables_empty": true,
+    "fresh_connection_normal_write_succeeded": true
+  },
+  "probe_exit": 0
+}

@@ -1,0 +1,252 @@
+{
+  "task": "MI-DEV-01",
+  "base_commit": "f7e6fb917dc7ea3c7adcc874667f62e2f59d7265",
+  "approval_ref": ".dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md",
+  "targets": [
+    "github:refs/heads/master",
+    "origin:refs/heads/master"
+  ],
+  "paths_to_stage": [
+    ".dev-team/index.yaml",
+    ".dev-team/tasks/MI-001/handoffs/0001-planning.md",
+    ".dev-team/tasks/MI-001/handoffs/0002-选定任务与基线恢复.md",
+    ".dev-team/tasks/MI-001/handoffs/0003-当前实现复核与首批范围.md",
+    ".dev-team/tasks/MI-001/handoffs/0004-候选方案独立审核.md",
+    ".dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md",
+    ".dev-team/tasks/MI-001/handoffs/0006-首批技术验收与待负责人验收.md",
+    ".dev-team/tasks/MI-001/state.yaml",
+    ".dev-team/tasks/MI-001/task.md",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-候选版本.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-完整原语与Saver回归.xml",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-定向真实PG.xml",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针.py",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针意图.md",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针结果.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-红灯.xml",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-红灯版本.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-验证结果.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/候选版本.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/单进程Fake回归.xml",
+    ".dev-team/tasks/MI-DEV-01/evidence/增量结构下原单进程PG回归.xml",
+    ".dev-team/tasks/MI-DEV-01/evidence/提交前定向验证.xml",
+    ".dev-team/tasks/MI-DEV-01/evidence/提交前验证结果.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/提交输入.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/独立审核探针.py",
+    ".dev-team/tasks/MI-DEV-01/evidence/独立审核探针意图.md",
+    ".dev-team/tasks/MI-DEV-01/evidence/独立审核探针结果.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/真实数据库观察.json",
+    ".dev-team/tasks/MI-DEV-01/evidence/租约与同事务真实PG探针.xml",
+    ".dev-team/tasks/MI-DEV-01/evidence/红灯记录.md",
+    ".dev-team/tasks/MI-DEV-01/evidence/运行验证.py",
+    ".dev-team/tasks/MI-DEV-01/evidence/验证结果.json",
+    ".dev-team/tasks/MI-DEV-01/handoffs/0001-隔离数据库验证意图.md",
+    ".dev-team/tasks/MI-DEV-01/handoffs/0002-开发交付与真实PG证据.md",
+    ".dev-team/tasks/MI-DEV-01/handoffs/0003-交接引用核对与独立审核派工.md",
+    ".dev-team/tasks/MI-DEV-01/handoffs/0004-首批交付独立审核.md",
+    ".dev-team/tasks/MI-DEV-01/handoffs/0005-R01序列化边界返工交付.md",
+    ".dev-team/tasks/MI-DEV-01/handoffs/0006-R01独立复核.md",
+    ".dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md",
+    ".dev-team/tasks/MI-DEV-01/state.yaml",
+    ".dev-team/tasks/MI-DEV-01/task.md",
+    "docs/architecture.md",
+    "docs/decisions.md",
+    "docs/requirements.md",
+    "src/agent_runtime/core/config.py",
+    "src/agent_runtime/persistence/guarded_checkpointer.py",
+    "src/agent_runtime/runtime/ownership.py",
+    "tests/runtime/test_ownership.py",
+    "tests/runtime/test_ownership_postgres.py"
+  ],
+  "immutable_files": [
+    {
+      "path": ".dev-team/index.yaml",
+      "version": "sha256:ed6ac468e1a6ccf339fe7b7ca00b3761d68cdc8377cbccc222fdf2ea0e57f5d9"
+    },
+    {
+      "path": ".dev-team/tasks/MI-001/handoffs/0001-planning.md",
+      "version": "sha256:7a5e89710c1dbad53ae03cb30bccc0a9335d91758f5a7f27bed0e87d9a3e2430"
+    },
+    {
+      "path": ".dev-team/tasks/MI-001/handoffs/0002-选定任务与基线恢复.md",
+      "version": "sha256:ef3e696175f1f087849dc9c4cf7a2c598d81afcf3db0166634c2cc32d2d7b149"
+    },
+    {
+      "path": ".dev-team/tasks/MI-001/handoffs/0003-当前实现复核与首批范围.md",
+      "version": "sha256:c69cf04bd1271cec44911700d8f59570604b4e6ace348c2d583e0c2ddd4ef920"
+    },
+    {
+      "path": ".dev-team/tasks/MI-001/handoffs/0004-候选方案独立审核.md",
+      "version": "sha256:49b65994607f32f47457fa27948fda1bccb1a1570cdecb6515ef795e9c2ce0bd"
+    },
+    {
+      "path": ".dev-team/tasks/MI-001/handoffs/0005-规划批准与首批启动授权.md",
+      "version": "sha256:dacd2e60c8e13b6513ea59bf29abb55648fb51554f86fa5c3815e1a522240015"
+    },
+    {
+      "path": ".dev-team/tasks/MI-001/handoffs/0006-首批技术验收与待负责人验收.md",
+      "version": "sha256:6c72051df01da7691913d83678360c20fb85d45f04d5590869c4700ed434aefe"
+    },
+    {
+      "path": ".dev-team/tasks/MI-001/task.md",
+      "version": "sha256:1227725b446860a7e9be45db97b0d2193a3739ddbbc2985d4a03d2480df48878"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-候选版本.json",
+      "version": "sha256:b9a25383b6847e8c92b66f1d7bd177b3e8162cc0db5e16de6c8b81066885fbbb"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-完整原语与Saver回归.xml",
+      "version": "sha256:6e4da3b5f0e60d44ad0dcdaca858e76f0f404aa609b678a21cffd65b50838a49"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-定向真实PG.xml",
+      "version": "sha256:0e577dc9f4a4e0c735c14b38512a0241a808ab4cd31425104d04bdcdc573ccc2"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针.py",
+      "version": "sha256:61fcc58557e8474b93d325ae88cceea582c123f03dcd7c18caed98bab63787bc"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针意图.md",
+      "version": "sha256:3413ccb6fd518b4de45431e7977d0d74c79b44778526f95c3773f8a46ffae1ba"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-独立复核探针结果.json",
+      "version": "sha256:adfd9d180c561ca1a519bfbf9e96bb7c61988e339bb34f31352917e6a7b932e1"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-红灯.xml",
+      "version": "sha256:06294343d77e47498612a1e85bcd6f7032cb48859567b684c946c368100f4acb"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-红灯版本.json",
+      "version": "sha256:07136545f8eae112829c2ed9a2d5d0f457b0c12ff84ae564d91ac64ca2d2e0f0"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py",
+      "version": "sha256:977317d8878b21389da5f9d74b5b2bfcc416ec9bf1dd19013784ee7d43f9b1f0"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/R01-验证结果.json",
+      "version": "sha256:821f2be0e2b0995f975eb5a34036183ba11039a7ee86c61881a02fea8f8603eb"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/候选版本.json",
+      "version": "sha256:3ba85d538d32429ac4fd5dcca44e2195d8371c201891f20f4b44dc9b8d8ef8ec"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/单进程Fake回归.xml",
+      "version": "sha256:43901ab3739cc7750591acd06eb3b9f48bdba4fcf20cf25bae802a16d80e1a2d"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/增量结构下原单进程PG回归.xml",
+      "version": "sha256:ae4c3e90efa4cc8bc74251e8d53cf344d6ce29889ba50bb84e60b674999c2cd7"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/提交前定向验证.xml",
+      "version": "sha256:bc5b734cd278baaab464947afacec1b5ffd9cfa6487b3b86b3ec106414647b4f"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/提交前验证结果.json",
+      "version": "sha256:46a37bae4c8e06b89e39e68132eb5117cdb770d75dd7369ed4e5f05f3f5a32a8"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/独立审核探针.py",
+      "version": "sha256:1d971dee69fa366aa50906f17dc2bc448219b2a63d0f1b5d6966e15b280d0a99"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/独立审核探针意图.md",
+      "version": "sha256:1eed47bd4aeeb4b3df98b1672bed4c1a0bf2931c8f206e0d2eacc5e6904baeaf"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/独立审核探针结果.json",
+      "version": "sha256:7b01cffcab62c4e9542c277dc44b60d8cd5b7119db1abdcc5111acb948974369"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/真实数据库观察.json",
+      "version": "sha256:92159433da0c35bf9d960140b492ba1137ab66241fc33668b0cfa578c8a51fc3"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/租约与同事务真实PG探针.xml",
+      "version": "sha256:8a23df6e1cace1833d01821bbed310e1cee50ea508eca50d365ddb516fede8d9"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/红灯记录.md",
+      "version": "sha256:a42ae86ec5d28fb344e6390a691c139afe3f0dfcef7c7be69e987816cf623959"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/运行验证.py",
+      "version": "sha256:91b63a428f02ebfe61132760bf3db529afc8c4ae9db92d8d171bdf308c6dd222"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/evidence/验证结果.json",
+      "version": "sha256:591379041842f08df8849a29435b2e6954c1b0d0bccf6e368b9b0299bd505327"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/handoffs/0001-隔离数据库验证意图.md",
+      "version": "sha256:96d84bf4b3b3b5b49227df05b1f2da155706890e7663dd31e765e1d8be0c230c"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/handoffs/0002-开发交付与真实PG证据.md",
+      "version": "sha256:dc244bfe9ca37a5cdb8bc1bdfc175f26704cf0077a5b149543a6ddfe5cdd74b5"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/handoffs/0003-交接引用核对与独立审核派工.md",
+      "version": "sha256:3dfebc2ba6869efd6abed7f25f9bd1149f5ac87515bc7d75633305aca353d86f"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/handoffs/0004-首批交付独立审核.md",
+      "version": "sha256:ea7d260c9bae1862846bb1bc3182938ddf8ee7029b3477a2151b6c90ca92f1af"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/handoffs/0005-R01序列化边界返工交付.md",
+      "version": "sha256:347bd6d7d20ef8e98f84742e9896dffe8249c38a67dd988659174f4f16ebf0e7"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/handoffs/0006-R01独立复核.md",
+      "version": "sha256:a1b6489d2ab33e1492d4cee822ded796d9efea62ffea8eb6dd67ff04a95958af"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md",
+      "version": "sha256:3c7bd5da10413c3fc54e83a611e8b5e67f0ea3ac878e3cd8a5ac2b4efe9f96a5"
+    },
+    {
+      "path": ".dev-team/tasks/MI-DEV-01/task.md",
+      "version": "sha256:707d7c6b0827e425cd7931c00bad1fef425115f41ab92b127829b1af650bfe24"
+    },
+    {
+      "path": "docs/architecture.md",
+      "version": "sha256:567b599c4604d8c1e8ee106ce29c9e78040870a37e89b9c831407370bdfc03b0"
+    },
+    {
+      "path": "docs/decisions.md",
+      "version": "sha256:28c5e51f47a62134aabf05b8aa2ce37e9a6e6e6c129681f0106ee90aab7bcd85"
+    },
+    {
+      "path": "docs/requirements.md",
+      "version": "sha256:edd84d6c507c6c4ac5c301f74f446f9223a345197a4f5e312a44b29aa12e5118"
+    },
+    {
+      "path": "src/agent_runtime/core/config.py",
+      "version": "sha256:57b0dd0b69b657d63aa2ef35b0ae4cb117e1b7808ddd06dc05cf3612a456ff3a"
+    },
+    {
+      "path": "src/agent_runtime/persistence/guarded_checkpointer.py",
+      "version": "sha256:134b3cc503e838e1b65a4cd103ba88e6192a3b554d190a033cf4c8e3bf5bd837"
+    },
+    {
+      "path": "src/agent_runtime/runtime/ownership.py",
+      "version": "sha256:fb888dfe3c66465ac31a7076abb9f423fba7d33eee3c0c6afb5e9ec4d1acf3ae"
+    },
+    {
+      "path": "tests/runtime/test_ownership.py",
+      "version": "sha256:2b8bfb535ae5b2a6f05601b4e08d9698a5f3f82cc8ca173658b6155611d4ca26"
+    },
+    {
+      "path": "tests/runtime/test_ownership_postgres.py",
+      "version": "sha256:2b27d3453ae054d66fae3f129e27cf8773707b6412258f9db0c1a5ca8df77721"
+    }
+  ],
+  "note": "状态索引及本清单不自我绑定哈希；暂存时逐文件检查全部实际Git blob与工作区原始字节相同。"
+}

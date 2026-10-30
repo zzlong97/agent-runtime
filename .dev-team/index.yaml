@@ -60,3 +60,14 @@ tasks:
     parent_task: RA-001
     depends_on:
       - RA-INT-01
+  MI-001:
+    title: 多实例部署与稳定运行
+    state_file: .dev-team/tasks/MI-001/state.yaml
+    parent_task: null
+    depends_on:
+      - TEAM-001
+  MI-DEV-01:
+    title: 执行租约与同事务Checkpoint基础探针
+    state_file: .dev-team/tasks/MI-DEV-01/state.yaml
+    parent_task: MI-001
+    depends_on: []

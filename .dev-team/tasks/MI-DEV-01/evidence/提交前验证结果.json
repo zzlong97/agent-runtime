@@ -1,0 +1,33 @@
+{
+  "started_at": "2026-10-30T08:24:36.429810+00:00",
+  "database": "mi_dev01_20261030_6d2f8b90",
+  "module_file": "C:\\Users\\zzlong\\.codex\\worktrees\\ra-closeout\\agent_runtime\\src\\agent_runtime\\__init__.py",
+  "files": {
+    "src/agent_runtime/core/config.py": "57b0dd0b69b657d63aa2ef35b0ae4cb117e1b7808ddd06dc05cf3612a456ff3a",
+    "src/agent_runtime/runtime/ownership.py": "fb888dfe3c66465ac31a7076abb9f423fba7d33eee3c0c6afb5e9ec4d1acf3ae",
+    "src/agent_runtime/persistence/guarded_checkpointer.py": "134b3cc503e838e1b65a4cd103ba88e6192a3b554d190a033cf4c8e3bf5bd837",
+    "tests/runtime/test_ownership.py": "2b8bfb535ae5b2a6f05601b4e08d9698a5f3f82cc8ca173658b6155611d4ca26",
+    "tests/runtime/test_ownership_postgres.py": "2b27d3453ae054d66fae3f129e27cf8773707b6412258f9db0c1a5ca8df77721",
+    "tests/persistence/test_checkpointers.py": "59cc24c05cb17d4fcb67448a0decaf2e77d2042088ac6ec71c34799d1579f532"
+  },
+  "args": [
+    "tests/runtime/test_ownership.py",
+    "tests/runtime/test_ownership_postgres.py",
+    "tests/persistence/test_checkpointers.py",
+    "-q",
+    "--tb=short",
+    "-o",
+    "junit_family=xunit1",
+    "-o",
+    "junit_logging=all",
+    "--junitxml=C:\\Users\\zzlong\\.codex\\worktrees\\ra-closeout\\agent_runtime\\.dev-team\\tasks\\MI-DEV-01\\evidence/提交前定向验证.xml"
+  ],
+  "exit_code": 0,
+  "counts": {
+    "tests": 31,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "finished_at": "2026-10-30T08:25:02.406073+00:00"
+}

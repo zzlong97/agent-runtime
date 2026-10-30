@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.594" timestamp="2026-10-30T16:01:12.883839+08:00" hostname="LAPTOP-4ESSFHSK"><testcase classname="tests.runtime.test_ownership_postgres" name="test_slow_serialization_has_no_run_lock_and_does_not_consume_transaction_budget[blob]" file="tests\runtime\test_ownership_postgres.py" line="493" time="0.962"><properties><property name="database" value="mi_dev01_20261030_6d2f8b90" /><property name="schema" value="mi01_2600610e59c244c8b52bb06712025565" /></properties><failure message="AssertionError: 序列化不得持有Run行锁&#10;assert [False] == [True]&#10;  &#10;  At index 0 diff: False != True&#10;  Use -v to get more diff">tests\runtime\test_ownership_postgres.py:557: in test_slow_serialization_has_no_run_lock_and_does_not_consume_transaction_budget
+    run(scenario())
+tests\runtime\test_ownership_postgres.py:38: in run
+    return runner.run(coro)
+           ^^^^^^^^^^^^^^^^
+D:\miniconda3\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+D:\miniconda3\Lib\asyncio\base_events.py:687: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\runtime\test_ownership_postgres.py:549: in scenario
+    assert lock_free==[True], '序列化不得持有Run行锁'
+E   AssertionError: 序列化不得持有Run行锁
+E   assert [False] == [True]
+E     
+E     At index 0 diff: False != True
+E     Use -v to get more diff</failure></testcase></testsuite></testsuites>

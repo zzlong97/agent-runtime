@@ -1,0 +1,16 @@
+{
+  "issue": "MI01-R01",
+  "operation_key": "sha256:238de6403425ca04f3a46f4fe76374f473c522f76d0a489ac68b2abfa0be158f",
+  "started_at": "2026-10-30T08:06:24.346937+00:00",
+  "module_file": "C:\\Users\\zzlong\\.codex\\worktrees\\ra-closeout\\agent_runtime\\src\\agent_runtime\\__init__.py",
+  "database": "mi_dev01_20261030_6d2f8b90",
+  "files": {
+    "src/agent_runtime/core/config.py": "57b0dd0b69b657d63aa2ef35b0ae4cb117e1b7808ddd06dc05cf3612a456ff3a",
+    "src/agent_runtime/runtime/ownership.py": "fb888dfe3c66465ac31a7076abb9f423fba7d33eee3c0c6afb5e9ec4d1acf3ae",
+    "src/agent_runtime/persistence/guarded_checkpointer.py": "134b3cc503e838e1b65a4cd103ba88e6192a3b554d190a033cf4c8e3bf5bd837",
+    "tests/runtime/test_ownership.py": "2b8bfb535ae5b2a6f05601b4e08d9698a5f3f82cc8ca173658b6155611d4ca26",
+    "tests/runtime/test_ownership_postgres.py": "2b27d3453ae054d66fae3f129e27cf8773707b6412258f9db0c1a5ca8df77721",
+    "tests/persistence/test_checkpointers.py": "59cc24c05cb17d4fcb67448a0decaf2e77d2042088ac6ec71c34799d1579f532",
+    ".dev-team/tasks/MI-DEV-01/evidence/R01-运行验证.py": "977317d8878b21389da5f9d74b5b2bfcc416ec9bf1dd19013784ee7d43f9b1f0"
+  }
+}
