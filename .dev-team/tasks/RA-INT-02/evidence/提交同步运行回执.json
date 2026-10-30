@@ -1,0 +1,110 @@
+{
+  "operation_key": "sha256:5a0446ddfeed2dc82e74b9b6153eba21bcd434fc51fe9868a250851699c1e57c",
+  "status": "产品三组已提交并双远程同步",
+  "base_commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+  "branch": "codex/ra-closeout",
+  "commits": [
+    {
+      "group": "A",
+      "commit": "b28f91e1dda99bc2e03575852d17d82f4ff500c9",
+      "parent": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+      "files": 28
+    },
+    {
+      "group": "B",
+      "commit": "e4865ec8a611ced856c06dd6c84f041b9ee6b878",
+      "parent": "b28f91e1dda99bc2e03575852d17d82f4ff500c9",
+      "files": 38,
+      "strict_format_paths": 7,
+      "strict_format_exit": 0,
+      "all_staged_raw_bytes_match": true
+    },
+    {
+      "group": "C",
+      "commit": "181887fb87b7405cd08d7cf9d23263113edabbc1",
+      "parent": "e4865ec8a611ced856c06dd6c84f041b9ee6b878",
+      "files": 39,
+      "strict_format_paths": 10,
+      "strict_format_exit": 0,
+      "all_staged_raw_bytes_match": true
+    }
+  ],
+  "remote_before": {
+    "github": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+    "origin": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe"
+  },
+  "push_intent": {
+    "phase": "产品交付",
+    "commit": "181887fb87b7405cd08d7cf9d23263113edabbc1",
+    "targets": [
+      "github:refs/heads/master",
+      "origin:refs/heads/master"
+    ],
+    "mode": "fast-forward"
+  },
+  "remote_results": {
+    "github": {
+      "phase": "产品交付",
+      "remote": "github",
+      "ref": "refs/heads/master",
+      "before": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+      "target": "181887fb87b7405cd08d7cf9d23263113edabbc1",
+      "after": "181887fb87b7405cd08d7cf9d23263113edabbc1",
+      "push_attempted": true,
+      "push_exit_code": 0,
+      "confirmed": true,
+      "checked_at": "2026-10-30T02:27:24.368553+00:00"
+    },
+    "origin": {
+      "phase": "产品交付",
+      "remote": "origin",
+      "ref": "refs/heads/master",
+      "before": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+      "target": "181887fb87b7405cd08d7cf9d23263113edabbc1",
+      "after": "181887fb87b7405cd08d7cf9d23263113edabbc1",
+      "push_attempted": true,
+      "push_exit_code": 0,
+      "confirmed": true,
+      "checked_at": "2026-10-30T02:27:42.250247+00:00"
+    }
+  },
+  "verification": {
+    "approved_candidate_files": 101,
+    "approved_hashes_match": true,
+    "strict_format": {
+      "A": {
+        "paths": 15,
+        "exit_code": 0
+      },
+      "B": {
+        "paths": 7,
+        "exit_code": 0
+      },
+      "C": {
+        "paths": 10,
+        "exit_code": 0
+      }
+    },
+    "preserved_archive_format": {
+      "global_staged_check_exit_code": 2,
+      "reason": "原验收两JSON为CRLF、部分历史交接尾空行；保留原字节和SHA，产品/测试/当前记录严格检查另列",
+      "archive_bytes_changed": false
+    },
+    "archival_format_independent_review": "暂存28路径与授权原字节一致；15路径严格格式通过，完整检查退出2仅原CRLF/尾空行，审核允许保留",
+    "pre_push_tests": {
+      "command": "pytest Router准备/正式Manifest/Manifest发现/注释/仓储定向组",
+      "exit_code": 0,
+      "passed": 99,
+      "seconds": 5.48
+    },
+    "committed_scope": {
+      "paths": 103,
+      "all_raw_bytes_match": true,
+      "no_mi": true
+    }
+  },
+  "main_remote_enabled": false,
+  "new_remote_tasks": 0,
+  "product_delivery_complete": true,
+  "bookkeeping_note": "本回执封存三组产品提交及实际远程查询；随后仅提交此回执和当前状态。收尾提交的最终同提交回执另存，避免提交ID自引用。"
+}

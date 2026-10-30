@@ -1,9 +1,9 @@
 schema_version: 1
 task_id: RA-001
-state_version: 45
+state_version: 46
 status: 已验收
 current_role: dev-team-controller
-next_action: 负责人已接受成本缺项并授权三组提交和双同步；按固定范围执行，门禁待真实提交/远程回执满足
+next_action: 当前RA交付已终验、产品代码已提交并双远程同步；仅封存同一真实回执，主环境保持关闭，后续启用或新阶段另列范围
 baselines:
   requirements:
     path: docs/requirements.md
@@ -262,6 +262,10 @@ artifacts:
   version: sha256:d328e78d659f946da41a9b8a2d5ff0bccb784a35fdbc003b7f2ba59d2f7b219c
 - path: .dev-team/tasks/RA-INT-02/evidence/提交同步执行输入.json
   version: sha256:57f81ed16465f795914f3cba8b6c8e005eca53639363f669502f3722e514cbcb
+- path: .dev-team/tasks/RA-INT-02/handoffs/0018-提交与同步回执.md
+  version: sha256:33990184de2312e537bc6ca36be4a53fa72bb84c600a31be8a5794602d147bbc
+- path: .dev-team/tasks/RA-INT-02/evidence/提交同步运行回执.json
+  version: sha256:c661e507e61b07e3057fe0889b2513b84303aced2dd4274c0b672f4a7421a126
 checkpoints:
 - boundary: 候选阶段规划交付
   handoff: .dev-team/tasks/RA-001/handoffs/0001-planning.md
@@ -499,10 +503,10 @@ current_operation:
   name: 已批准RA三组提交与双远程同步
   kind: 外部操作
   operation_key: sha256:5a0446ddfeed2dc82e74b9b6153eba21bcd434fc51fe9868a250851699c1e57c
-  status: 执行中
+  status: 已完成
   inputs_ref: .dev-team/tasks/RA-INT-02/evidence/提交同步执行输入.json
-  result_ref: null
-latest_handoff: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
+  result_ref: .dev-team/tasks/RA-INT-02/evidence/提交同步运行回执.json
+latest_handoff: .dev-team/tasks/RA-INT-02/handoffs/0018-提交与同步回执.md
 resume_from: null
 blocked_reason: null
 project_gates:
@@ -516,10 +520,10 @@ project_gates:
   status: 已满足
   evidence_ref: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
 - name: 任务提交
-  status: 待满足
-  evidence_ref: null
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-INT-02/handoffs/0018-提交与同步回执.md
 - name: 双远程同步
-  status: 待满足
-  evidence_ref: null
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-INT-02/handoffs/0018-提交与同步回执.md
 updated_by: dev-team-controller
-updated_at: '2026-10-30T02:18:38.327259+00:00'
+updated_at: '2026-10-30T02:29:59.355541+00:00'
