@@ -1,0 +1,44 @@
+{
+  "product_commit": "b4937db3f90bd65bcc4359b483fe78749d311875",
+  "base_commit": "f7e6fb917dc7ea3c7adcc874667f62e2f59d7265",
+  "committed_files": 50,
+  "raw_committed_blobs_match": true,
+  "presubmit": {
+    "report": ".dev-team/tasks/MI-DEV-01/evidence/提交前验证结果.json",
+    "exit_code": 0,
+    "tests": 31,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "pushes": [
+    {
+      "remote": "github",
+      "ref": "refs/heads/master",
+      "exit_code": 0,
+      "before": "f7e6fb917dc7ea3c7adcc874667f62e2f59d7265",
+      "after": "b4937db3f90bd65bcc4359b483fe78749d311875",
+      "ls_remote_exit_code": 0,
+      "observed_tip": "b4937db3f90bd65bcc4359b483fe78749d311875"
+    },
+    {
+      "remote": "origin",
+      "service": "Gitee",
+      "ref": "refs/heads/master",
+      "exit_code": 0,
+      "before": "f7e6fb917dc7ea3c7adcc874667f62e2f59d7265",
+      "after": "b4937db3f90bd65bcc4359b483fe78749d311875",
+      "ls_remote_exit_code": 0,
+      "observed_tip": "b4937db3f90bd65bcc4359b483fe78749d311875"
+    }
+  ],
+  "format_check": {
+    "config": "core.whitespace=trailing-space,space-before-tab,cr-at-eol",
+    "current_code_docs_control_exit": 0,
+    "full_archive_exit": 2,
+    "retained_diagnostic": ".dev-team/tasks/MI-DEV-01/evidence/R01-红灯.xml:16: trailing whitespace.",
+    "note": "保留已审核失败测试原始证据；默认检查将CRLF视为尾随空白，明确按Windows CRLF语义检查；没有把全档案检查记为通过。"
+  },
+  "created_at": "2026-10-30T08:31:13.774016+00:00",
+  "scope_note": "本回执只证明实现提交的双同步；后续仅提交回执和门禁索引，最终记录提交同步另保存本地最终同步回执，避免自指哈希。"
+}

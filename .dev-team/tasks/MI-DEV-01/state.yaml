@@ -1,9 +1,9 @@
 schema_version: 1
 task_id: MI-DEV-01
-state_version: 11
+state_version: 12
 status: 已验收
 current_role: dev-team-controller
-next_action: 提交前31项定向测试exit0零失败/跳过，精确提交输入已保存；暂存核对后正常提交及双远程同步
+next_action: MI-DEV-01负责人终验、实现提交和双同步已满足；仅收尾回执及状态记录另作提交并双同步，完成后保存本地最终回执
 baselines:
   requirements:
     path: docs/requirements.md
@@ -106,6 +106,10 @@ artifacts:
   version: sha256:46a37bae4c8e06b89e39e68132eb5117cdb770d75dd7369ed4e5f05f3f5a32a8
 - path: .dev-team/tasks/MI-DEV-01/evidence/提交输入.json
   version: sha256:de4e0a5109febe1bb0bece3744d7321ec51218702596bc7985ffb756f88629b9
+- path: .dev-team/tasks/MI-DEV-01/evidence/提交与双远程同步回执.json
+  version: sha256:b368fdb221ffde6ca9a2a5f010dc0cd3112f8ea6cfcac56cb8f3d95e7eb457f4
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0008-提交与双远程同步回执.md
+  version: sha256:40ce40041dcf55a30b882df35b61b5f3174b1de847488a8abf0c478ec316f147
 checkpoints:
 - boundary: 开发交付
   handoff: .dev-team/tasks/MI-DEV-01/handoffs/0005-R01序列化边界返工交付.md
@@ -235,15 +239,16 @@ current_operation:
   name: MI-DEV-01提交与双远程同步
   kind: 提交推送
   operation_key: sha256:6b67c233ff554a02a413e90905472136492f866be75ebedff6f5bd2b107e50d0
-  status: 执行中
+  status: 已完成
   inputs_ref: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
   targets:
   - github:refs/heads/master
   - origin:refs/heads/master
   expected_base: f7e6fb917dc7ea3c7adcc874667f62e2f59d7265
-  result_ref: null
+  result_ref: .dev-team/tasks/MI-DEV-01/handoffs/0008-提交与双远程同步回执.md
   verification_ref: .dev-team/tasks/MI-DEV-01/evidence/提交前验证结果.json
-latest_handoff: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
+  product_commit: b4937db3f90bd65bcc4359b483fe78749d311875
+latest_handoff: .dev-team/tasks/MI-DEV-01/handoffs/0008-提交与双远程同步回执.md
 resume_from: null
 blocked_reason: null
 project_gates:
@@ -254,10 +259,10 @@ project_gates:
   status: 已满足
   evidence_ref: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
 - name: 任务提交
-  status: 待满足
-  evidence_ref: null
+  status: 已满足
+  evidence_ref: .dev-team/tasks/MI-DEV-01/handoffs/0008-提交与双远程同步回执.md
 - name: 双远程同步
-  status: 待满足
-  evidence_ref: null
+  status: 已满足
+  evidence_ref: .dev-team/tasks/MI-DEV-01/handoffs/0008-提交与双远程同步回执.md
 updated_by: dev-team-controller
-updated_at: '2026-10-30T08:26:31.981066+00:00'
+updated_at: '2026-10-30T08:31:13.804918+00:00'

@@ -1,9 +1,9 @@
 schema_version: 1
 task_id: MI-001
-state_version: 13
+state_version: 14
 status: 开发中
 current_role: dev-team-controller
-next_action: MI-DEV-01负责人终验及提交双同步已授权；正在完成本批提交收尾，门禁满足后方可开展依赖单元
+next_action: MI-DEV-01已验收、提交且双同步一致；本轮仅同步收尾记录，下一候选MI-DEV-02按已批准范围推进，父阶段整体门禁仍待后续完成
 baselines:
   requirements:
     path: docs/requirements.md
@@ -57,6 +57,12 @@ artifacts:
   version: sha256:6c72051df01da7691913d83678360c20fb85d45f04d5590869c4700ed434aefe
 - path: .dev-team/tasks/MI-DEV-01/handoffs/0007-负责人验收与提交同步授权.md
   version: sha256:3c7bd5da10413c3fc54e83a611e8b5e67f0ea3ac878e3cd8a5ac2b4efe9f96a5
+- path: .dev-team/tasks/MI-DEV-01/evidence/提交与双远程同步回执.json
+  version: sha256:b368fdb221ffde6ca9a2a5f010dc0cd3112f8ea6cfcac56cb8f3d95e7eb457f4
+- path: .dev-team/tasks/MI-DEV-01/handoffs/0008-提交与双远程同步回执.md
+  version: sha256:40ce40041dcf55a30b882df35b61b5f3174b1de847488a8abf0c478ec316f147
+- path: .dev-team/tasks/MI-001/handoffs/0007-首批验收提交与双同步.md
+  version: sha256:4f70616e5114ce9fe6fdd9c97a22bb22a986703b497320b582cfba714a4c6fc5
 checkpoints:
 - boundary: 架构交付
   handoff: .dev-team/tasks/MI-001/handoffs/0003-当前实现复核与首批范围.md
@@ -82,7 +88,7 @@ current_operation:
   status: 已完成
   inputs_ref: .dev-team/tasks/MI-001/handoffs/0003-当前实现复核与首批范围.md
   result_ref: .dev-team/tasks/MI-001/handoffs/0004-候选方案独立审核.md
-latest_handoff: .dev-team/tasks/MI-001/handoffs/0006-首批技术验收与待负责人验收.md
+latest_handoff: .dev-team/tasks/MI-001/handoffs/0007-首批验收提交与双同步.md
 resume_from: null
 blocked_reason: null
 project_gates:
@@ -99,4 +105,4 @@ project_gates:
   status: 待满足
   evidence_ref: null
 updated_by: dev-team-controller
-updated_at: '2026-10-30T08:24:20.516052+00:00'
+updated_at: '2026-10-30T08:31:13.868521+00:00'
