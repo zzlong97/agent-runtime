@@ -1,0 +1,34 @@
+{
+  "task_id": "RA-001",
+  "operation": "已批准RA三组提交与双远程同步",
+  "inputs": {
+    "base_commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+    "authorization": {
+      "path": ".dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md",
+      "sha256": "d328e78d659f946da41a9b8a2d5ff0bccb784a35fdbc003b7f2ba59d2f7b219c"
+    },
+    "frozen_scope_sha256": "78677b2298798ebc6089d3e130e056f283b5a76b496056e6613061c0e095023c",
+    "final_metadata_review_sha256": "c1e81a3de004ba411a4ae4b4c761117e9c88135c8b99b8b2e4328a76ee254af5",
+    "targets": [
+      {
+        "remote": "github",
+        "ref": "refs/heads/master",
+        "expected_before": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe"
+      },
+      {
+        "remote": "origin",
+        "ref": "refs/heads/master",
+        "expected_before": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe"
+      }
+    ],
+    "commit_groups": [
+      "DB-002",
+      "RA-INT-01",
+      "RA-INT-02"
+    ],
+    "bookkeeping_allowed": true,
+    "main_remote_enabled": false,
+    "new_remote_tasks": 0
+  },
+  "operation_key": "sha256:5a0446ddfeed2dc82e74b9b6153eba21bcd434fc51fe9868a250851699c1e57c"
+}

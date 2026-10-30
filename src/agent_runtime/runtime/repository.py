@@ -33,6 +33,29 @@ _COMMENT_RUNS_TABLE = """
 COMMENT ON TABLE runs IS '保存每次普通消息或重新生成请求的持久执行生命周期、幂等与恢复投影；是 Run 状态的 PostgreSQL 权威数据源。'
 """
 
+_COMMENT_RUNS_COLUMNS = """
+COMMENT ON COLUMN runs.run_id IS '服务端分配的持久Run UUID；执行、独立SSE、取消和恢复始终引用同一标识。';
+COMMENT ON COLUMN runs.request_id IS '客户端必填且全局唯一的提交幂等UUID；相同内容重试复用原Run，内容冲突返回409。';
+COMMENT ON COLUMN runs.session_id IS '本次执行所属会话UUID；同一会话最多存在一个活动Run。';
+COMMENT ON COLUMN runs.thread_id IS '本次Run使用的Parent检查点线程标识；关联该次执行所在的公共消息分支。';
+COMMENT ON COLUMN runs.parent_run_id IS '重新生成时关联的原Run UUID；普通消息执行为空，不表示新增恢复Run。';
+COMMENT ON COLUMN runs.run_type IS '执行类型：normal普通消息、regenerate重新生成；恢复沿用原类型和原Run。';
+COMMENT ON COLUMN runs.input_message_id IS '本次执行对应的稳定HumanMessage UUID；重新生成复用原用户消息。';
+COMMENT ON COLUMN runs.response_message_id IS '本次执行预分配的稳定AIMessage UUID；用于流式投影及最终公共回答关联。';
+COMMENT ON COLUMN runs.start_checkpoint_id IS '执行起点的Parent检查点标识；用于重新生成分支和恢复定位，未指定时为空。';
+COMMENT ON COLUMN runs.input_payload IS '仅供活动Run恢复的输入载荷；终态清除正文，不对外公开或写入业务日志。';
+COMMENT ON COLUMN runs.request_fingerprint IS '提交内容的规范化指纹；用于识别同一request_id是否被不同请求内容复用。';
+COMMENT ON COLUMN runs.status IS '持久执行状态：queued排队、running执行、recovering恢复、interrupted待输入、cancel_requested待取消、completed完成、failed失败、cancelled已取消。';
+COMMENT ON COLUMN runs.recovery_attempts IS '该Run被持久恢复流程认领的累计次数；不是模型调用重试次数。';
+COMMENT ON COLUMN runs.seq_high_watermark IS 'Run事件序号已分配区间的最高水位；允许预留缺号，已发序号不得重复或倒退。';
+COMMENT ON COLUMN runs.error_code IS '执行失败时的稳定应用错误码；无对应失败信息时为空。';
+COMMENT ON COLUMN runs.error_message IS '执行错误的受控说明；不保存用户正文、模型全文或私有状态，无对应信息时为空。';
+COMMENT ON COLUMN runs.created_at IS 'Run提交并首次持久化的时间。';
+COMMENT ON COLUMN runs.started_at IS 'Run首次激活执行的时间；尚未启动时为空，恢复不另建Run。';
+COMMENT ON COLUMN runs.finished_at IS 'Run进入完成、失败或已取消终态的时间；活动状态时为空。';
+COMMENT ON COLUMN runs.updated_at IS 'Run生命周期投影最近一次更新的时间。';
+"""
+
 _CREATE_RUNS_TABLE = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id UUID PRIMARY KEY,
@@ -297,6 +320,7 @@ class PostgresRunRepository:
                 await connection.execute(_CREATE_RUNS_TABLE)
                 await connection.execute(_CREATE_ACTIVE_RUN_INDEX)
                 await connection.execute(_COMMENT_RUNS_TABLE)
+                await connection.execute(_COMMENT_RUNS_COLUMNS)
                 await connection.commit()
             await PostgresRunInterruptRepository(self._settings).setup()
         except Exception as error:

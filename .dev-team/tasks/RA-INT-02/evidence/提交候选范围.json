@@ -1,0 +1,426 @@
+{
+  "base": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+  "candidate_root": "C:\\Users\\zzlong\\.codex\\worktrees\\ra-closeout\\agent_runtime",
+  "status": "隔离候选，未提交未推送；等待独立审核及必要授权",
+  "groups": {
+    "A": [
+      {
+        "path": "AGENTS.md",
+        "sha256": "5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd"
+      },
+      {
+        "path": "src/agent_runtime/sessions/repository.py",
+        "sha256": "390f116f5cccc306e3a54f9c71ff4a45ea36deac1dff9ab52048973d63b21c57"
+      },
+      {
+        "path": "src/agent_runtime/feedback.py",
+        "sha256": "178f3ca9e8026cf746bc17ffce3f5786c65905674ad85b9e84ba72d2c7648a22"
+      },
+      {
+        "path": "src/agent_runtime/runtime/repository.py",
+        "sha256": "10f546480a2ea0feeeb3ef30e39f326043a48d2fa79910853bf846cac10e6c90"
+      },
+      {
+        "path": "src/agent_runtime/runtime/event_repository.py",
+        "sha256": "e1e6b7fb0176ecdbf0604c9cf8ceb4dd4940c6656eb43bf60544fb33ff3679d6"
+      },
+      {
+        "path": "src/agent_runtime/capabilities/persistence.py",
+        "sha256": "f72ed7cf1f811265f8d7565c664bf4be3d34c1f8bce624d2f1efe8d07ec46539"
+      },
+      {
+        "path": "tests/persistence/table_comments_support.py",
+        "sha256": "2622381f1b6c90131f3e6992cd883fb081de72475081b7b64b9f76ddaccd5ebe"
+      },
+      {
+        "path": "tests/persistence/test_table_comments.py",
+        "sha256": "228e7c1ebb2d76949c0eb0c81a68ee5779ab0bccc4fe3d1fef16d779a7798b8d"
+      },
+      {
+        "path": "tests/persistence/test_table_comments_postgres_integration.py",
+        "sha256": "a6bb642116e773b23ca5da71ad4439de06c36d707b269dc3745eff00a717fe65"
+      },
+      {
+        "path": "tests/sessions/test_repository.py",
+        "sha256": "3b585a3f2e4f2cba418e0f847a429ae086e4714aa9fd8527bfd8e8526e31e126"
+      },
+      {
+        "path": "tests/test_feedback_store.py",
+        "sha256": "4be7233dd8ea1bac1033dcdb0db1a5c52a143cdc86dd042cb8890d38fb10f39e"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0010-数据库注释范围澄清与纠正授权.md",
+        "sha256": "41dacc7f16ec73d29435348f2baa6e84c9b5930c5cd9312fe6af8356c13e1e0f"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/state.yaml",
+        "sha256": "b37902b1df8ea586502319ad74ca0ebc53954b09abc0d1c3cc1a0e28398e5672"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/task.md",
+        "sha256": "74bdc4442dc7ffbdcdc32ff269e410fd4ea77f3f4d764a61e4de5137b16cfc86"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/evidence/既有联调库注释验证.json",
+        "sha256": "a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/evidence/独立审核验证.json",
+        "sha256": "5edd2691164c4fcd907a5fb73adb4076db12c04e6a9cabd30e8b36321e186422"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/evidence/隔离库元数据验证.json",
+        "sha256": "202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/handoffs/0001-真实数据库注释验证意图.md",
+        "sha256": "e2b513ca058c4c3f9497418d0a51d23408f984faa140642d8e17da0869b77f8f"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/handoffs/0002-开发交付.md",
+        "sha256": "0dd47e758171bba87cb55b904d1a447d09dce5c8cc08193844711d1dfc972a7e"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/handoffs/0003-独立审核.md",
+        "sha256": "3d4bb0d578e4009cc10a84ccd952a7ce3194d533858a64d411895251f7be7369"
+      },
+      {
+        "path": ".dev-team/tasks/DB-002/handoffs/0004-负责人验收记录.md",
+        "sha256": "f9aa3562847569b28690bb330cb4adb89a4fe9c847f8c054067b78369e706e4c"
+      }
+    ],
+    "B": [
+      {
+        "path": "tests/e2e/real_remote_runtime.py",
+        "sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584"
+      },
+      {
+        "path": "tests/e2e/real_remote_probe.py",
+        "sha256": "5fa9e5f08bc9aa001ef485ed2f04f7b1d93089cb734c40b618bb069eab4adecf"
+      },
+      {
+        "path": "tests/e2e/verify_real_remote_receipt.py",
+        "sha256": "1ebe6ef4a8b1dd5e43c4d02f56ab1a75e142099255a929b5e448c6978cfc5ff3"
+      },
+      {
+        "path": "frontend/e2e-real-remote/chat.spec.js",
+        "sha256": "27356b484237c4647a909f97d9d9a9b00c2e4a5ca4d55cc05aa7f585dd120fdf"
+      },
+      {
+        "path": "frontend/playwright.real-remote.config.js",
+        "sha256": "ec15619c6e1ce1905504d921224071e4b1987845f25f80716a8439dcf76a1ed9"
+      },
+      {
+        "path": "docs/远程Agent服务端适配开发需求.md",
+        "sha256": "35c2dab6c8ba5702572d5083a537737bd6acf27544ff885e86712c79debaa006"
+      },
+      {
+        "path": ".dev-team/tasks/RA-DEV-03/state.yaml",
+        "sha256": "f55798af2e42ca2802ea0a556ef8f0c7f48ff0ae258cf6895a159d526cbcd428"
+      },
+      {
+        "path": ".dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md",
+        "sha256": "881a55a2bd91dd6316be04d9a4edf03b41cfb0d504e2f000092352f0e3109282"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/state.yaml",
+        "sha256": "206dee68c03acd2da5c9f5a5107d174d47961dbdeab228fbb481e426014b560e"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/task.md",
+        "sha256": "cd1b906c866f4ad9d72b8e4f6091165144842c4c642ae6f6f5aeee395710a41e"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/对方交付说明引用.json",
+        "sha256": "f7b6aa5e294f2662351a01347ea5b121733b6b1329d7978b84454a3874b3da1e"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/接入成本归集.json",
+        "sha256": "911b4d2bd4f99b08b889dc3f4ec5cf4523c51315cb7368b1fa3dc89dbd45df57"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/本地回归验证.md",
+        "sha256": "4bd74d7f48f7c54f31335e3ed04af4b082ec43ac1c9ec760fe36592308a7f179"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/本批验证产物.json",
+        "sha256": "11540988c72cbc0f2e40ef89f86ed45056674737840346a79703867dbdd5c493"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/正式交付包只读复核.json",
+        "sha256": "de6ff1b12d6665056d08a8ff85d3d3d9818c3812e2c25c7391cac1b844a7609e"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/正式交付包引用.json",
+        "sha256": "b70ef1e9edc54082d95254e8ef194e1abc8b9c95936e71455b1bf6e9eb5a0ac2"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/独立审核输入.json",
+        "sha256": "732b0675d5bad128ee04a1c30cdc47603045096e5c7afdd70c00242e8d7712cc"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/独立审核验证.json",
+        "sha256": "753d0bf6be8a996c03da5e4f5d957bb89022f08fcf1174111cd211c31eee49bf"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/真实联调执行输入.json",
+        "sha256": "f36fdf86ebd1866419e1c48672e7a6e3502be2191cc63628eba69695846489e8"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/真实联调运行回执.json",
+        "sha256": "6f9e262f1d565f26ff9f4b5fd8ff73ef6c072eb17e4d631a20c941e8113e7f32"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0001-对方交付联调就绪核对.md",
+        "sha256": "a6f5fd781179be6524ded97456dfcbe2f0f55cd48ad4b664c0488cc6b51b92fd"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0002-对方交付就绪结论与待补材料.md",
+        "sha256": "24db32f2ef7d4e8cc0f0724b99abaf38ab85a64219ed7bdb5da1873749fe01f0"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0003-正式交付包与入口独立复核.md",
+        "sha256": "881f8502da639795a97a969fdc8851411d8b7ce6ef89c55328f59196764a0b1b"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0004-正式交付就绪与隔离执行范围.md",
+        "sha256": "febfcde0f0fc1d2edeca3850734388bfc59132ad445e9760e3f5836b0569ea34"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0005-隔离联调执行授权.md",
+        "sha256": "b9fd5f7ed79d80304ff4854442ff15d4e2d9311aa37bbf845b1ab1992f4f90b8"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0006-真实联调开发交付.md",
+        "sha256": "75a50ea44fed2d72e338bb72bc8dea884b58e27f46409d435f2ced0eb1b183e3"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0007-接入成本归集.md",
+        "sha256": "794e92fb4b2eef8e610ab24657bab49dcc6c47c5c38c020c0328abc6c0495d6f"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0008-真实联调独立审核.md",
+        "sha256": "a3efafa79225163d37da85ac0d82ca218ef0b30d84cfce270c3e4ff2233d23cb"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0009-联调结果与注释整改待决策.md",
+        "sha256": "de49ae579469ce4028a437b5cb23c7e63c10acf255240a484195138e31d47b53"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/handoffs/0011-注释范围纠正与联调复核.md",
+        "sha256": "6490bd7281762a250124614bad703e7338a25d68c10629bf4e25feab75ee28cb"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/browser/.last-run.json",
+        "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-01/evidence/联调候选/manifest.yaml",
+        "sha256": "d16129882b8f9df4687f5d4822fadbe5b08c1b8289f1be62d308b4839cc469a9"
+      },
+      {
+        "path": ".dev-team/tasks/RA-001/handoffs/0015-真实联调启动核对与待补材料.md",
+        "sha256": "ed0bc9f5a55da297ce87c6bc6beb0c496fb39f8fb759a4381bb6ac8ab96e2868"
+      },
+      {
+        "path": ".dev-team/tasks/RA-001/handoffs/0016-外部适配需求交付授权.md",
+        "sha256": "a0877d4f8e28426074523406a9b653a981080b0e13b60df98bc5a861c190b4e2"
+      },
+      {
+        "path": ".dev-team/tasks/RA-001/handoffs/0017-外部适配任务书交付.md",
+        "sha256": "a66a5a81c29cf0251d839a6ecb7d5bff9e3abc6f4f634a39c23ba556460677c0"
+      },
+      {
+        "path": ".dev-team/tasks/RA-001/handoffs/0018-外部适配任务书独立核对.md",
+        "sha256": "50953c7d499f7d5bd9c2f25679c45402b3192403a1000cc7d092cb362eb5f23a"
+      },
+      {
+        "path": ".dev-team/tasks/RA-001/handoffs/0019-外部适配任务书交付与联调等待.md",
+        "sha256": "7adcd899c37a9d6ce9c0e95082135287e931d585e7b3410b74bed35e793b323d"
+      }
+    ],
+    "C": [
+      {
+        "path": "src/agent_runtime/capabilities/semantic_pattern_mining/manifest.yaml",
+        "sha256": "0e51213ae04a76dc9075dc3d6ac7666ea81ff77d549333f5622953be189709de"
+      },
+      {
+        "path": "docs/capability_development_guide.md",
+        "sha256": "c34a0d9aa8922e6739d1a2851f1133b5dab0312f5249e1e39b88feb03fb0e532"
+      },
+      {
+        "path": "tests/capabilities/test_manifest_source.py",
+        "sha256": "ac2d47be86202eaaa272afda96fc2bab929cac151c931a24f11d4d11a916d548"
+      },
+      {
+        "path": "tests/capabilities/test_semantic_manifest.py",
+        "sha256": "92b29edbd4c3ea0182ddb159bffb8e2b7350bed7fa21275ed4350c9f41443ef9"
+      },
+      {
+        "path": "tests/e2e/real_router_runtime.py",
+        "sha256": "7026f60e5e8d93c72e7a1468cff086be6451788379785632d1f30e555a7f5605"
+      },
+      {
+        "path": "tests/e2e/real_router_probe.py",
+        "sha256": "947bb0dd61c9904bca63d564e58121ee3bfee42156db1f50e03360bd49dddc9c"
+      },
+      {
+        "path": "tests/e2e/test_real_router_preparation.py",
+        "sha256": "f8c5ee59440cef73f33ed87ecfe014c6aae5591f170e047a9368a62766c7fedd"
+      },
+      {
+        "path": ".dev-team/tasks/RA-001/state.yaml",
+        "sha256": "f4c737862d1cc493c216d9854ad19b97ed1144a88006357ed40a8e14780fb348"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/state.yaml",
+        "sha256": "e3d9c3475a887b27ebf4761af3680e5e653e6e48480ae0b4c570ceda309ecb0e"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/task.md",
+        "sha256": "cdbaff62b2d353aa65846e741fedb7ce4aedf118d00d42a41e2d3b9eb090ed60"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/专用库准备回执.json",
+        "sha256": "9d547cc8b93319c5d60ac1e7e8ba04e30a16b3ff3c49640e9a7cf5a92d548dac"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/中断恢复核对.json",
+        "sha256": "a97ef5a40fd7c52e89a87d18853ee915ff7127bcca4b00d418148c840d1c5f11"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/受控复测执行前核对.json",
+        "sha256": "00a6e720e2a2af7a95af856f1dfe0501e05c26a97d6b06f765fe8778440c6c88"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/受控复测执行输入.json",
+        "sha256": "9ae94661810a71f0b9bbd0b890562455a605c3acda5be8901625fdc93291d3ee"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/受控复测真实结果.json",
+        "sha256": "14738154dcf0e54d6004ac2c1434a0efc1974c35f9ef4a239afa50759cf1bd7d"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/复测前只读健康核对.json",
+        "sha256": "c383642e9efea96e95904d620b3890e8fae369044b747dfe1c3d7e31b483f686"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/外部入口复检.json",
+        "sha256": "1f78591c2da378a58d00a51e5aa2df7af4767545b7a7c3b4528dd5c962da03f9"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/外部入口预检.json",
+        "sha256": "37f9352024ad55a0da24fef431426e918ccc9ba50e03040364903968c4fcd548"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/恢复后执行预检.json",
+        "sha256": "0450e6da60b1c17f23ffbf39a8b2c26b683a5506d007d898bb3c80f09faeb513"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/普通Router受控复测回执.json",
+        "sha256": "7a6efe5803db3a24e92e25bce0eb10390c68d0a3defa678f8682aff62676aa63"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/普通Router运行回执.json",
+        "sha256": "6293fd8a1789e54311eaf01486cb7718ff9ff2df3b7e278908e85951c5ca9c9d"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/真实Router失败诊断.json",
+        "sha256": "ba47576f5e4da3bbeef7a6c891081e4915276bbcd3f83b34dbbbc2380b6bfdaa"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/真实Router联调候选输入.json",
+        "sha256": "0a90fdba9c3b152c21809f2118943b55453ddacec98076253dc102c19b0a1423"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/真实Router联调执行输入.json",
+        "sha256": "134a90f7f935948f70d87e04aa9a99ca4c93356526e042173b9934e99cf37e0b"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/evidence/联调入口修正前源码.py",
+        "sha256": "1c9af04cbbfaa61e9522029e4770b2aac8f072bb9ebba8761659b871e0204df2"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0001-日常接入准备开发交付.md",
+        "sha256": "a1db4c2ffe3058bb04107731796d2b3fe47917ebc09bfcc5a01c7e77b08a34ad"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0002-日常接入准备独立审核.md",
+        "sha256": "4a86ab82ea0c52cdad40032fb4ed2e288816f27ceb84d41e4edb12623934236f"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0003-接入准备结论与真实联调待执行范围.md",
+        "sha256": "44ea29e5e088f58fbb3665314cf5c008b7518993eb75a1e8d6641fe8ce593c1a"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0004-真实Router联调授权与执行意图.md",
+        "sha256": "3cdc27c20de60ec1211057a9337ca8edf5042e27c000951f5716785528f17038"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0005-真实Router失败诊断与日志纠正交付.md",
+        "sha256": "0469e60ca425f652e3f8c522053cadf31f0d0a7c7a7c6dc17e893b5cbc7b8c77"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0006-失败后续行与受控复测准备范围.md",
+        "sha256": "c5e26b4a9638861e79520b7723d7d1d34e4643808162b4606394808ead14d724"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0007-受控复测与安全观测准备交付.md",
+        "sha256": "8b1f193de7431b6999fc8ae3d387d046d2f1c3a4a25f4d6b8d941270544b98b1"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0008-受控复测准备独立复核.md",
+        "sha256": "32ac1cddf0e5102459980bfe64fde9ef6101e29c4e051f3df90bfd7278076edc"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0009-受控复测执行意图.md",
+        "sha256": "c3427cf187a14302089dfcf47634504edc3cabb72c2c8f7a652ef3cdc5d8539f"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0010-真实Router受控复测开发交付.md",
+        "sha256": "e20009bcdab6372c7975b4f091a168f78eed6e43138a0d8594d1589f31bcfe78"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0011-真实Router联调独立验收.md",
+        "sha256": "77501ad6238194d396abc4fb997c10fa95ae978ddc328a7674d16831559b2fbd"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0012-负责人终验与交付收尾范围.md",
+        "sha256": "fd95784df88365feb8866b2ab58fa80caf223f3cbb9a774c6f9111b0b29ce8de"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0013-提交范围独立核对.md",
+        "sha256": "292b9b75c84a5d06a3315550542f2dc2ae1bd6e203fc08a62e5cd57113ba8142"
+      },
+      {
+        "path": ".dev-team/tasks/RA-INT-02/handoffs/0014-提交候选基线范围等价核对.md",
+        "sha256": "0d207106f1e5411c878b13ece80c3828c66d90f281ccbd0b367a8f1548da5fec"
+      }
+    ]
+  },
+  "shared": [
+    {
+      "path": ".dev-team/index.yaml",
+      "sha256": "35796571f2fae2a38bddf9347739c091bff2d1bed458316f30bf10abe75291f3"
+    }
+  ],
+  "excluded": [
+    ".dev-team/tasks/MI-001/",
+    "docs/requirements.md 的MI附加段",
+    "docs/architecture.md 的MI附加段",
+    "docs/decisions.md 的MI附加段",
+    "其他历史任务及TEAM未提交元数据"
+  ],
+  "fresh_verification": {
+    "baseline_manifest_source": "12 passed in 2.55s",
+    "router_preparation": "21 passed in 6.05s",
+    "comment_repositories": "66 passed in 1.86s",
+    "old_receipt_offline": "退出0，6例4完成2取消，每窗口恢复5次；不是新远程调用",
+    "diff_check": "退出0；修正候选index的CRLF和parent state多余尾空行后复核"
+  },
+  "known_historical_review_markers": [
+    "RA-001 候选规划架构951693 checkpoint",
+    "RA-001 RA-DEV-01架构951693 checkpoint"
+  ],
+  "no_live_operation": true
+}

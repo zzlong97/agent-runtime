@@ -14,7 +14,7 @@ from tests.persistence.table_comments_support import EXPECTED_COMMENTS, REPOSITO
 
 
 @pytest.mark.parametrize("module,factory,table", REPOSITORIES)
-@pytest.mark.parametrize("failure", [None, "comment", "commit"])
+@pytest.mark.parametrize("failure", [None, "comment", "column", "commit"])
 def test_setup_comments_commit_and_failures(module, factory, table, failure, monkeypatch, caplog):
     calls = []
     sensitive = "不得进入业务日志的数据库连接凭据"
@@ -23,6 +23,8 @@ def test_setup_comments_commit_and_failures(module, factory, table, failure, mon
         async def execute(self, statement):
             calls.append(statement.strip())
             if failure == "comment" and statement.strip().startswith("COMMENT ON TABLE"):
+                raise RuntimeError(sensitive)
+            if failure == "column" and statement.strip().startswith("COMMENT ON COLUMN"):
                 raise RuntimeError(sensitive)
 
         async def commit(self):
@@ -54,7 +56,7 @@ def test_setup_comments_commit_and_failures(module, factory, table, failure, mon
     comment = f"COMMENT ON TABLE {table} IS '{EXPECTED_COMMENTS[table]}'"
     assert comment in calls
     assert calls.index(comment) > 0
-    if failure == "comment":
+    if failure in {"comment", "column"}:
         assert "COMMIT" not in calls
     else:
         assert calls.index(comment) < calls.index("COMMIT")

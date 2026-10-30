@@ -41,7 +41,7 @@ def test_session_repository_setup_creates_minimal_table_and_commits(
     asyncio.run(session_repository.setup())
 
     assert connection.committed is True
-    assert len(statements) == 3
+    assert len(statements) == 4
     assert "CREATE TABLE IF NOT EXISTS sessions" in statements[0]
     for column in (
         "session_id UUID PRIMARY KEY",
@@ -55,6 +55,9 @@ def test_session_repository_setup_creates_minimal_table_and_commits(
         "CREATE INDEX IF NOT EXISTS sessions_user_updated_id_idx "
         "ON sessions (user_id, updated_at DESC, session_id DESC)"
     )
+    assert statements[2].startswith("COMMENT ON TABLE sessions IS ")
+    for column in ("session_id", "user_id", "title", "created_at", "updated_at"):
+        assert f"COMMENT ON COLUMN sessions.{column} IS " in statements[3]
 
 
 def test_session_repository_add_persists_all_session_fields(

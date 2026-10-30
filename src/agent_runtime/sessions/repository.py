@@ -17,6 +17,14 @@ _COMMENT_SESSIONS_TABLE = """
 COMMENT ON TABLE sessions IS '保存 Session 业务元数据；每条记录标识一个固定用户的会话，并作为该会话业务数据与删除流程的根记录。'
 """
 
+_COMMENT_SESSIONS_COLUMNS = """
+COMMENT ON COLUMN sessions.session_id IS '服务端分配的稳定会话UUID；是会话查询、运行归属与删除清理的根标识。';
+COMMENT ON COLUMN sessions.user_id IS '会话所属的配置固定用户标识；用于产品查询隔离，不接受客户端任意指定。';
+COMMENT ON COLUMN sessions.title IS '会话展示标题；初始取第一条用户消息的截断文本，可由用户改名。';
+COMMENT ON COLUMN sessions.created_at IS '会话元数据首次创建时间。';
+COMMENT ON COLUMN sessions.updated_at IS '会话最近业务更新时间；与会话UUID共同用于列表游标排序。';
+"""
+
 _CREATE_SESSIONS_TABLE = """
 CREATE TABLE IF NOT EXISTS sessions (
     session_id UUID PRIMARY KEY,
@@ -97,7 +105,7 @@ class PostgresSessionRepository:
         self._settings = settings or get_settings()
 
     async def setup(self) -> None:
-        """幂等创建 Session 表和索引，并补充或修正表注释。"""
+        """幂等创建Session表和索引，在同一事务补齐自有表及字段注释。"""
 
         started_at = perf_counter()
         log_business_event(logger, "Session持久化初始化开始")
@@ -106,6 +114,7 @@ class PostgresSessionRepository:
                 await connection.execute(_CREATE_SESSIONS_TABLE)
                 await connection.execute(_CREATE_SESSION_LIST_INDEX)
                 await connection.execute(_COMMENT_SESSIONS_TABLE)
+                await connection.execute(_COMMENT_SESSIONS_COLUMNS)
                 await connection.commit()
         except Exception as error:
             log_business_event(

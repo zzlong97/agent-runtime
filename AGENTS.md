@@ -286,6 +286,13 @@ control_signal
 
 使用 PostgreSQL。
 
+数据库中文注释只约束本项目自行设计的表及字段，并且必须实际写入 PostgreSQL
+元数据；初始化和存量升级测试检查真实表注释与字段注释。LangChain / LangGraph
+生态自行管理的表及其字段不要求补充注释，不因其缺少注释阻塞验收，也不修改或清除
+已有框架注释。当前排除 `checkpoints`、`checkpoint_blobs`、`checkpoint_writes`、
+`checkpoint_migrations`；项目自有表即使承载框架相关的运行数据，也仍在注释范围内。
+该边界依据负责人 2026-10-29 的明确说明。
+
 本地外部依赖统一通过 Windows Docker Desktop 和项目根目录 `compose.yaml`
 部署，不使用本机安装或便携版服务。PostgreSQL 使用名为
 `agent-runtime-postgres` 的 Docker 命名卷持久化；除非负责人明确要求重置，

@@ -1,4 +1,4 @@
-"""DB-001 专用隔离数据库的真实注释、不变性和回滚验证。"""
+"""项目自有表注释在专用隔离数据库中的真实元数据、不变性和回滚验证。"""
 
 import asyncio
 import json
@@ -16,7 +16,7 @@ from agent_runtime.core.config import Settings
 from agent_runtime.core.event_loop import psycopg_compatible_loop_factory
 from agent_runtime.persistence.database import open_database_connection
 from tests.persistence.table_comments_support import (
-    EXPECTED_COMMENTS, assert_comments, assert_unchanged, setup_all, snapshot,
+    EXPECTED_COLUMNS, EXPECTED_COMMENTS, assert_comments, assert_unchanged, setup_all, snapshot,
 )
 
 pytestmark = [
@@ -26,7 +26,7 @@ pytestmark = [
 
 
 async def seed_existing(settings):
-    """仅在隔离库准备九表非空 fixture 与已有注释。"""
+    """仅在隔离库准备九表非空fixture、旧业务注释及须保留的框架注释。"""
 
     async with open_database_connection(settings) as connection:
         await connection.execute("""
@@ -67,10 +67,19 @@ async def seed_existing(settings):
                  'db001-test', repeat('a', 64), 'pending', now(), now());
             INSERT INTO user_capability_permissions VALUES
                 ('db001', 'general_chat', true, now(), now());
-            COMMENT ON COLUMN sessions.title IS '必须保留的隔离测试列注释';
             COMMENT ON INDEX sessions_user_updated_id_idx IS '必须保留的隔离测试索引注释';
             COMMENT ON CONSTRAINT sessions_pkey ON sessions IS '必须保留的隔离测试约束注释';
+            COMMENT ON TABLE checkpoint_blobs IS '必须保留的框架表注释';
+            COMMENT ON COLUMN checkpoint_blobs.blob IS '必须保留的框架字段注释';
         """)
+        # 模拟本次补齐前的存量库；Interrupt既有十列注释不回退。
+        for table, columns in EXPECTED_COLUMNS.items():
+            if table != "run_interrupts":
+                for column in columns:
+                    await connection.execute(sql.SQL("COMMENT ON COLUMN {}.{} IS NULL").format(
+                        sql.Identifier(table), sql.Identifier(column),
+                    ))
+        await connection.execute("COMMENT ON COLUMN sessions.title IS '待纠正的旧字段注释'")
         old = {
             "sessions": "保存会话本身的元数据，是整个会话数据的业务根节点",
             "message_feedback": "保存用户对 AI 回答的点赞/点踩结果",
@@ -107,7 +116,7 @@ async def validate_isolated(settings, monkeypatch):
             class FaultConnection:
                 async def execute(self, statement):
                     result = await connection.execute(statement)
-                    if statement.strip().startswith("COMMENT ON TABLE"):
+                    if statement.strip().startswith("COMMENT ON COLUMN"):
                         await connection.execute("SELECT 1 / 0")
                     return result
 
@@ -126,6 +135,11 @@ async def validate_isolated(settings, monkeypatch):
     after = await snapshot(settings)
     assert_comments(after)
     assert_unchanged(before, after)
+    assert next(row["comment"] for row in after["column_comments"]
+                if row["table_name"] == "sessions" and row["column_name"] == "title") != "待纠正的旧字段注释"
+    assert [row for row in before["column_comments"] if row["table_name"] == "run_interrupts"] == [
+        row for row in after["column_comments"] if row["table_name"] == "run_interrupts"
+    ]
     await setup_all(settings)
     repeated = await snapshot(settings)
     assert_comments(repeated)
@@ -153,7 +167,8 @@ def test_new_existing_repeated_and_rollback(monkeypatch):
         with asyncio.Runner(loop_factory=psycopg_compatible_loop_factory) as runner:
             results = runner.run(validate_isolated(settings, monkeypatch))
         print("DB001_ISOLATED_PASSED", database,
-              {"tables": len(EXPECTED_COMMENTS), "rollback": True, "data_rows_each": 1,
+              {"tables": len(EXPECTED_COMMENTS), "columns": sum(map(len, EXPECTED_COLUMNS.values())),
+               "rollback": True, "data_rows_each": 1,
                "excluded_comments": len(results["after"]["excluded_comments"])})
         report_path = os.getenv("DB001_SNAPSHOT_PATH")
         if report_path:

@@ -24,6 +24,14 @@ _COMMENT_FEEDBACK_TABLE = """
 COMMENT ON TABLE message_feedback IS '保存用户对已完成 AI 回答的最终点赞或点踩值；session_id 用于会话删除时清理。'
 """
 
+_COMMENT_FEEDBACK_COLUMNS = """
+COMMENT ON COLUMN message_feedback.user_id IS '提交反馈的配置固定用户标识；与消息UUID共同确定一条最终反馈。';
+COMMENT ON COLUMN message_feedback.session_id IS '反馈所属的会话UUID；用于会话删除时清理反馈。';
+COMMENT ON COLUMN message_feedback.message_id IS '被反馈的已完成AI公共消息UUID；产品操作校验其位于当前活动分支。';
+COMMENT ON COLUMN message_feedback.value IS '该用户对消息的最终反馈值：like点赞、dislike点踩；取消反馈时删除记录。';
+COMMENT ON COLUMN message_feedback.updated_at IS '该消息最终反馈最近一次写入或替换的时间。';
+"""
+
 _CREATE_FEEDBACK_TABLE = """
 CREATE TABLE IF NOT EXISTS message_feedback (
     user_id TEXT NOT NULL,
@@ -130,6 +138,7 @@ class PostgresFeedbackStore:
                 await connection.execute(_CREATE_FEEDBACK_TABLE)
                 await connection.execute(_CREATE_FEEDBACK_SESSION_INDEX)
                 await connection.execute(_COMMENT_FEEDBACK_TABLE)
+                await connection.execute(_COMMENT_FEEDBACK_COLUMNS)
                 await connection.commit()
         except Exception as error:
             log_business_event(

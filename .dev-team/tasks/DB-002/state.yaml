@@ -1,0 +1,174 @@
+schema_version: 1
+task_id: DB-002
+state_version: 13
+status: 已验收
+current_role: dev-team-controller
+next_action: 负责人已接受成本缺项并授权三组提交和双同步；按固定范围执行，门禁待真实提交/远程回执满足
+baselines:
+  requirements: null
+  architecture: null
+artifacts:
+- path: AGENTS.md
+  version: sha256:5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd
+- path: .dev-team/tasks/DB-002/task.md
+  version: sha256:74bdc4442dc7ffbdcdc32ff269e410fd4ea77f3f4d764a61e4de5137b16cfc86
+- path: .dev-team/tasks/RA-INT-01/handoffs/0010-数据库注释范围澄清与纠正授权.md
+  version: sha256:41dacc7f16ec73d29435348f2baa6e84c9b5930c5cd9312fe6af8356c13e1e0f
+- path: src/agent_runtime/sessions/repository.py
+  version: sha256:390f116f5cccc306e3a54f9c71ff4a45ea36deac1dff9ab52048973d63b21c57
+- path: src/agent_runtime/feedback.py
+  version: sha256:178f3ca9e8026cf746bc17ffce3f5786c65905674ad85b9e84ba72d2c7648a22
+- path: src/agent_runtime/runtime/repository.py
+  version: sha256:10f546480a2ea0feeeb3ef30e39f326043a48d2fa79910853bf846cac10e6c90
+- path: src/agent_runtime/runtime/event_repository.py
+  version: sha256:e1e6b7fb0176ecdbf0604c9cf8ceb4dd4940c6656eb43bf60544fb33ff3679d6
+- path: src/agent_runtime/capabilities/persistence.py
+  version: sha256:f72ed7cf1f811265f8d7565c664bf4be3d34c1f8bce624d2f1efe8d07ec46539
+- path: tests/persistence/table_comments_support.py
+  version: sha256:2622381f1b6c90131f3e6992cd883fb081de72475081b7b64b9f76ddaccd5ebe
+- path: tests/persistence/test_table_comments.py
+  version: sha256:228e7c1ebb2d76949c0eb0c81a68ee5779ab0bccc4fe3d1fef16d779a7798b8d
+- path: tests/persistence/test_table_comments_postgres_integration.py
+  version: sha256:a6bb642116e773b23ca5da71ad4439de06c36d707b269dc3745eff00a717fe65
+- path: tests/sessions/test_repository.py
+  version: sha256:3b585a3f2e4f2cba418e0f847a429ae086e4714aa9fd8527bfd8e8526e31e126
+- path: tests/test_feedback_store.py
+  version: sha256:4be7233dd8ea1bac1033dcdb0db1a5c52a143cdc86dd042cb8890d38fb10f39e
+- path: .dev-team/tasks/DB-002/evidence/隔离库元数据验证.json
+  version: sha256:202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c
+- path: .dev-team/tasks/DB-002/evidence/既有联调库注释验证.json
+  version: sha256:a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3
+- path: .dev-team/tasks/DB-002/handoffs/0001-真实数据库注释验证意图.md
+  version: sha256:e2b513ca058c4c3f9497418d0a51d23408f984faa140642d8e17da0869b77f8f
+- path: .dev-team/tasks/DB-002/handoffs/0002-开发交付.md
+  version: sha256:0dd47e758171bba87cb55b904d1a447d09dce5c8cc08193844711d1dfc972a7e
+- path: .dev-team/tasks/DB-002/evidence/独立审核验证.json
+  version: sha256:5edd2691164c4fcd907a5fb73adb4076db12c04e6a9cabd30e8b36321e186422
+- path: .dev-team/tasks/DB-002/handoffs/0003-独立审核.md
+  version: sha256:3d4bb0d578e4009cc10a84ccd952a7ce3194d533858a64d411895251f7be7369
+- path: .dev-team/tasks/DB-002/handoffs/0004-负责人验收记录.md
+  version: sha256:f9aa3562847569b28690bb330cb4adb89a4fe9c847f8c054067b78369e706e4c
+- path: .dev-team/tasks/RA-INT-02/handoffs/0014-提交候选基线范围等价核对.md
+  version: sha256:0d207106f1e5411c878b13ece80c3828c66d90f281ccbd0b367a8f1548da5fec
+- path: .dev-team/tasks/RA-INT-02/handoffs/0015-提交候选独立复核.md
+  version: sha256:80314bdd9ba789a9b2fb5f0b8d3e05b4259dc029cf6ea36de064e4f01e8fa729
+- path: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
+  version: sha256:d328e78d659f946da41a9b8a2d5ff0bccb784a35fdbc003b7f2ba59d2f7b219c
+checkpoints:
+- boundary: 开发交付
+  handoff: .dev-team/tasks/DB-002/handoffs/0002-开发交付.md
+  operation_key: sha256:46af886391745105d31dc62f32abd153e16631a6646b3346ce7f849c5d4470f6
+  baseline_versions: {}
+  artifact_versions:
+  - path: src/agent_runtime/sessions/repository.py
+    version: sha256:390f116f5cccc306e3a54f9c71ff4a45ea36deac1dff9ab52048973d63b21c57
+  - path: src/agent_runtime/feedback.py
+    version: sha256:178f3ca9e8026cf746bc17ffce3f5786c65905674ad85b9e84ba72d2c7648a22
+  - path: src/agent_runtime/runtime/repository.py
+    version: sha256:10f546480a2ea0feeeb3ef30e39f326043a48d2fa79910853bf846cac10e6c90
+  - path: src/agent_runtime/runtime/event_repository.py
+    version: sha256:e1e6b7fb0176ecdbf0604c9cf8ceb4dd4940c6656eb43bf60544fb33ff3679d6
+  - path: src/agent_runtime/capabilities/persistence.py
+    version: sha256:f72ed7cf1f811265f8d7565c664bf4be3d34c1f8bce624d2f1efe8d07ec46539
+  - path: tests/persistence/table_comments_support.py
+    version: sha256:2622381f1b6c90131f3e6992cd883fb081de72475081b7b64b9f76ddaccd5ebe
+  - path: tests/persistence/test_table_comments.py
+    version: sha256:228e7c1ebb2d76949c0eb0c81a68ee5779ab0bccc4fe3d1fef16d779a7798b8d
+  - path: tests/persistence/test_table_comments_postgres_integration.py
+    version: sha256:a6bb642116e773b23ca5da71ad4439de06c36d707b269dc3745eff00a717fe65
+  - path: tests/sessions/test_repository.py
+    version: sha256:3b585a3f2e4f2cba418e0f847a429ae086e4714aa9fd8527bfd8e8526e31e126
+  - path: tests/test_feedback_store.py
+    version: sha256:4be7233dd8ea1bac1033dcdb0db1a5c52a143cdc86dd042cb8890d38fb10f39e
+  - path: .dev-team/tasks/DB-002/evidence/隔离库元数据验证.json
+    version: sha256:202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c
+  - path: .dev-team/tasks/DB-002/evidence/既有联调库注释验证.json
+    version: sha256:a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3
+  - path: .dev-team/tasks/DB-002/handoffs/0001-真实数据库注释验证意图.md
+    version: sha256:e2b513ca058c4c3f9497418d0a51d23408f984faa140642d8e17da0869b77f8f
+  - path: .dev-team/tasks/DB-002/handoffs/0002-开发交付.md
+    version: sha256:0dd47e758171bba87cb55b904d1a447d09dce5c8cc08193844711d1dfc972a7e
+  evidence_refs:
+  - path: .dev-team/tasks/DB-002/evidence/隔离库元数据验证.json
+    version: sha256:202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c
+  - path: .dev-team/tasks/DB-002/evidence/既有联调库注释验证.json
+    version: sha256:a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3
+  validation_status: 已确认有效
+- boundary: 开发验收
+  handoff: .dev-team/tasks/DB-002/handoffs/0003-独立审核.md
+  operation_key: sha256:90f626f3ae90020075627459c54a8acf9cbe669fc167c9290f90657281349778
+  baseline_versions: {}
+  artifact_versions:
+  - path: AGENTS.md
+    version: sha256:5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd
+  - path: .dev-team/tasks/DB-002/task.md
+    version: sha256:74bdc4442dc7ffbdcdc32ff269e410fd4ea77f3f4d764a61e4de5137b16cfc86
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0010-数据库注释范围澄清与纠正授权.md
+    version: sha256:41dacc7f16ec73d29435348f2baa6e84c9b5930c5cd9312fe6af8356c13e1e0f
+  - path: src/agent_runtime/sessions/repository.py
+    version: sha256:390f116f5cccc306e3a54f9c71ff4a45ea36deac1dff9ab52048973d63b21c57
+  - path: src/agent_runtime/feedback.py
+    version: sha256:178f3ca9e8026cf746bc17ffce3f5786c65905674ad85b9e84ba72d2c7648a22
+  - path: src/agent_runtime/runtime/repository.py
+    version: sha256:10f546480a2ea0feeeb3ef30e39f326043a48d2fa79910853bf846cac10e6c90
+  - path: src/agent_runtime/runtime/event_repository.py
+    version: sha256:e1e6b7fb0176ecdbf0604c9cf8ceb4dd4940c6656eb43bf60544fb33ff3679d6
+  - path: src/agent_runtime/capabilities/persistence.py
+    version: sha256:f72ed7cf1f811265f8d7565c664bf4be3d34c1f8bce624d2f1efe8d07ec46539
+  - path: tests/persistence/table_comments_support.py
+    version: sha256:2622381f1b6c90131f3e6992cd883fb081de72475081b7b64b9f76ddaccd5ebe
+  - path: tests/persistence/test_table_comments.py
+    version: sha256:228e7c1ebb2d76949c0eb0c81a68ee5779ab0bccc4fe3d1fef16d779a7798b8d
+  - path: tests/persistence/test_table_comments_postgres_integration.py
+    version: sha256:a6bb642116e773b23ca5da71ad4439de06c36d707b269dc3745eff00a717fe65
+  - path: tests/sessions/test_repository.py
+    version: sha256:3b585a3f2e4f2cba418e0f847a429ae086e4714aa9fd8527bfd8e8526e31e126
+  - path: tests/test_feedback_store.py
+    version: sha256:4be7233dd8ea1bac1033dcdb0db1a5c52a143cdc86dd042cb8890d38fb10f39e
+  - path: .dev-team/tasks/DB-002/evidence/隔离库元数据验证.json
+    version: sha256:202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c
+  - path: .dev-team/tasks/DB-002/evidence/既有联调库注释验证.json
+    version: sha256:a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3
+  - path: .dev-team/tasks/DB-002/handoffs/0001-真实数据库注释验证意图.md
+    version: sha256:e2b513ca058c4c3f9497418d0a51d23408f984faa140642d8e17da0869b77f8f
+  - path: .dev-team/tasks/DB-002/handoffs/0002-开发交付.md
+    version: sha256:0dd47e758171bba87cb55b904d1a447d09dce5c8cc08193844711d1dfc972a7e
+  - path: .dev-team/tasks/DB-002/evidence/独立审核验证.json
+    version: sha256:5edd2691164c4fcd907a5fb73adb4076db12c04e6a9cabd30e8b36321e186422
+  - path: .dev-team/tasks/DB-002/handoffs/0003-独立审核.md
+    version: sha256:3d4bb0d578e4009cc10a84ccd952a7ce3194d533858a64d411895251f7be7369
+  evidence_refs:
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0010-数据库注释范围澄清与纠正授权.md
+    version: sha256:41dacc7f16ec73d29435348f2baa6e84c9b5930c5cd9312fe6af8356c13e1e0f
+  - path: .dev-team/tasks/DB-002/evidence/隔离库元数据验证.json
+    version: sha256:202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c
+  - path: .dev-team/tasks/DB-002/evidence/既有联调库注释验证.json
+    version: sha256:a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3
+  - path: .dev-team/tasks/DB-002/evidence/独立审核验证.json
+    version: sha256:5edd2691164c4fcd907a5fb73adb4076db12c04e6a9cabd30e8b36321e186422
+  - path: .dev-team/tasks/DB-002/handoffs/0003-独立审核.md
+    version: sha256:3d4bb0d578e4009cc10a84ccd952a7ce3194d533858a64d411895251f7be7369
+  validation_status: 已确认有效
+  conclusion: 通过：项目自有9表79列中文注释真实有效，框架4表23列按负责人排除，R07已关闭；负责人终验及提交/同步门禁保留
+current_operation:
+  name: 真实数据库注释验证与存量补齐
+  kind: 数据库操作
+  operation_key: sha256:46af886391745105d31dc62f32abd153e16631a6646b3346ce7f849c5d4470f6
+  status: 已完成
+  inputs_ref: .dev-team/tasks/DB-002/handoffs/0001-真实数据库注释验证意图.md
+  result_ref: .dev-team/tasks/DB-002/handoffs/0002-开发交付.md
+latest_handoff: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
+resume_from: null
+blocked_reason: null
+project_gates:
+- name: 负责人终验
+  status: 已满足
+  evidence_ref: .dev-team/tasks/DB-002/handoffs/0004-负责人验收记录.md
+- name: 任务提交
+  status: 待满足
+  evidence_ref: null
+- name: 双远程同步
+  status: 待满足
+  evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-30T02:18:37.945193+00:00'

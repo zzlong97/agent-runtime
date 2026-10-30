@@ -55,6 +55,47 @@ _COMMENT_PERMISSIONS_TABLE = """
 COMMENT ON TABLE user_capability_permissions IS '保存固定用户对 Capability 的显式允许或拒绝记录；无记录按拒绝处理，记录不随 Session 删除。'
 """
 
+_COMMENT_TASKS_COLUMNS = """
+COMMENT ON COLUMN capability_tasks.task_id IS 'Runtime分配的稳定Capability Task UUID；关联独立能力状态和生命周期，不等于远程A2A taskId。';
+COMMENT ON COLUMN capability_tasks.session_id IS '该能力任务所属的Session UUID；任务上下文与会话删除均按此归属处理。';
+COMMENT ON COLUMN capability_tasks.capability_id IS '任务所属的静态注册Capability标识；符合Manifest能力ID规则。';
+COMMENT ON COLUMN capability_tasks.state_schema_version IS '任务创建时绑定的能力状态Schema版本；不兼容版本不得继续且不自动迁移。';
+COMMENT ON COLUMN capability_tasks.status IS '任务生命周期状态：active活动、completed完成、failed失败、cancelled取消；Run终止不自动结束Task。';
+COMMENT ON COLUMN capability_tasks.last_run_id IS '最近关联该任务的持久Run UUID；尚未关联时为空。';
+COMMENT ON COLUMN capability_tasks.last_invocation_id IS '最近关联该任务的稳定Capability Invocation UUID；尚未关联时为空。';
+COMMENT ON COLUMN capability_tasks.created_at IS 'Capability Task首次持久创建的时间。';
+COMMENT ON COLUMN capability_tasks.updated_at IS '任务生命周期或最近Run/Invocation关联投影的更新时间。';
+COMMENT ON COLUMN capability_tasks.ended_at IS '任务进入completed、failed或cancelled终态的时间；active任务为空。';
+"""
+
+_COMMENT_CONTEXTS_COLUMNS = """
+COMMENT ON COLUMN capability_task_contexts.session_id IS '当前Task指针所属的Session UUID；与Capability标识共同确定一个上下文。';
+COMMENT ON COLUMN capability_task_contexts.capability_id IS '当前Task指针对应的Capability标识；不能跨能力读取其他任务状态。';
+COMMENT ON COLUMN capability_task_contexts.current_task_id IS '该会话与能力当前选中的active Task UUID；没有当前任务时不保留指针行。';
+COMMENT ON COLUMN capability_task_contexts.updated_at IS '当前Task指针最近一次创建或切换的时间。';
+"""
+
+_COMMENT_OPERATIONS_COLUMNS = """
+COMMENT ON COLUMN capability_operations.operation_id IS 'Runtime外部副作用操作账本记录的稳定UUID。';
+COMMENT ON COLUMN capability_operations.run_id IS '操作归属的持久Run UUID；恢复时沿用原Run。';
+COMMENT ON COLUMN capability_operations.invocation_id IS '操作归属的稳定Capability Invocation UUID；与operation_key共同定位本次调用中的操作。';
+COMMENT ON COLUMN capability_operations.task_id IS '操作关联的本地Capability Task UUID；用于任务归属校验和会话删除清理。';
+COMMENT ON COLUMN capability_operations.capability_id IS '执行该副作用操作的Capability标识；按能力边界记录账本。';
+COMMENT ON COLUMN capability_operations.operation_key IS 'Capability为业务副作用确定的稳定非空操作键；未知结果恢复时不得换键重做。';
+COMMENT ON COLUMN capability_operations.idempotency_key IS 'Runtime生成并持久化的64位十六进制幂等键；重试相同操作时复用，依赖外部系统配合保障幂等。';
+COMMENT ON COLUMN capability_operations.status IS '操作账本状态：pending结果待确认、succeeded已成功、failed确定失败；未知结果保留pending。';
+COMMENT ON COLUMN capability_operations.created_at IS '该副作用操作首次登记账本意图的时间。';
+COMMENT ON COLUMN capability_operations.updated_at IS '操作账本状态最近一次确认或更新的时间。';
+"""
+
+_COMMENT_PERMISSIONS_COLUMNS = """
+COMMENT ON COLUMN user_capability_permissions.user_id IS '显式能力权限所属的配置固定用户标识；不是组织、角色或租户标识。';
+COMMENT ON COLUMN user_capability_permissions.capability_id IS '被允许或拒绝的静态Capability标识；与用户标识共同确定唯一权限记录。';
+COMMENT ON COLUMN user_capability_permissions.allowed IS '该用户对能力的显式权限：true允许、false拒绝；没有记录同样按拒绝处理。';
+COMMENT ON COLUMN user_capability_permissions.created_at IS '该用户能力权限记录首次创建的时间。';
+COMMENT ON COLUMN user_capability_permissions.updated_at IS '显式允许或拒绝权限最近一次写入的时间。';
+"""
+
 _CREATE_TASKS_TABLE = """
 CREATE TABLE IF NOT EXISTS capability_tasks (
     task_id UUID PRIMARY KEY,
@@ -558,6 +599,7 @@ class CapabilityTaskRepository:
                 _CREATE_TASKS_LOOKUP_INDEX,
                 _CREATE_TASKS_LAST_RUN_INDEX,
                 _COMMENT_TASKS_TABLE,
+                _COMMENT_TASKS_COLUMNS,
             ),
             business_name="Capability Task持久化",
         )
@@ -1332,7 +1374,7 @@ class CapabilityTaskContextRepository:
 
         await _setup_schema(
             settings=self._settings,
-            statements=(_CREATE_CONTEXTS_TABLE, _COMMENT_CONTEXTS_TABLE),
+            statements=(_CREATE_CONTEXTS_TABLE, _COMMENT_CONTEXTS_TABLE, _COMMENT_CONTEXTS_COLUMNS),
             business_name="Capability Task Context持久化",
         )
 
@@ -1456,6 +1498,7 @@ class CapabilityOperationRepository:
                 _CREATE_OPERATIONS_TASK_INDEX,
                 _CREATE_OPERATIONS_INVOCATION_INDEX,
                 _COMMENT_OPERATIONS_TABLE,
+                _COMMENT_OPERATIONS_COLUMNS,
             ),
             business_name="Capability Operation持久化",
         )
@@ -1807,6 +1850,7 @@ class UserCapabilityPermissionRepository:
                 _CREATE_PERMISSIONS_TABLE,
                 _CREATE_PERMISSIONS_LOOKUP_INDEX,
                 _COMMENT_PERMISSIONS_TABLE,
+                _COMMENT_PERMISSIONS_COLUMNS,
             ),
             business_name="Capability权限持久化",
         )

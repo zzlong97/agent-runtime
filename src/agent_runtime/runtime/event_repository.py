@@ -102,6 +102,19 @@ _COMMENT_RUNTIME_EVENTS_TABLE = """
 COMMENT ON TABLE runtime_events IS '保存 Run 的持久公开事件和内部事件，按 Run 序号记录执行、Interrupt、Capability Invocation 与 Task 生命周期投影；不保存瞬时消息增量或完整 AI 消息正文。'
 """
 
+_COMMENT_RUNTIME_EVENTS_COLUMNS = """
+COMMENT ON COLUMN runtime_events.event_id IS '本条持久RuntimeEvent的稳定UUID。';
+COMMENT ON COLUMN runtime_events.run_id IS '事件所属的持久Run UUID；会话删除清理Run时级联清理关联事件。';
+COMMENT ON COLUMN runtime_events.seq IS 'Run内单调递增且唯一的事件序号；由Runtime统一分配，允许缺号。';
+COMMENT ON COLUMN runtime_events.event_type IS '固定Schema所约束的业务事件类型；区分公开执行事件和内部生命周期投影。';
+COMMENT ON COLUMN runtime_events.source IS '事件产生方的受控来源标识；用于区分Runtime与Capability生命周期事件。';
+COMMENT ON COLUMN runtime_events.visibility IS '事件可见范围：public可按公开Schema重放，internal仅供Runtime内部恢复和投影。';
+COMMENT ON COLUMN runtime_events.payload IS '按事件类型固定Schema验证的对象载荷；不保存瞬时token或完整AI消息正文，不直接公开内部载荷。';
+COMMENT ON COLUMN runtime_events.schema_version IS '事件载荷Schema版本；当前契约只允许版本1。';
+COMMENT ON COLUMN runtime_events.durability IS '事件持久性标识；本表只接受durable，transient消息增量不写入本表。';
+COMMENT ON COLUMN runtime_events.created_at IS '本条持久事件产生并关联生命周期投影的时间。';
+"""
+
 _CREATE_RUNTIME_EVENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS runtime_events (
     event_id UUID PRIMARY KEY,
@@ -387,6 +400,7 @@ class PostgresRuntimeEventRepository:
                 await connection.execute(_CREATE_PUBLIC_REPLAY_INDEX)
                 await connection.execute(_CREATE_TERMINAL_EVENT_INDEX)
                 await connection.execute(_COMMENT_RUNTIME_EVENTS_TABLE)
+                await connection.execute(_COMMENT_RUNTIME_EVENTS_COLUMNS)
                 await connection.commit()
         except Exception as error:
             log_business_event(

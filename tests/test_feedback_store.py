@@ -41,7 +41,7 @@ def test_feedback_store_setup_creates_constrained_table_and_cleanup_index(
     asyncio.run(store.setup())
 
     assert connection.committed is True
-    assert len(statements) == 3
+    assert len(statements) == 4
     assert "CREATE TABLE IF NOT EXISTS message_feedback" in statements[0]
     for definition in (
         "user_id TEXT NOT NULL",
@@ -56,6 +56,9 @@ def test_feedback_store_setup_creates_constrained_table_and_cleanup_index(
         "CREATE INDEX IF NOT EXISTS message_feedback_session_id_idx "
         "ON message_feedback (session_id)"
     )
+    assert statements[2].startswith("COMMENT ON TABLE message_feedback IS ")
+    for column in ("user_id", "session_id", "message_id", "value", "updated_at"):
+        assert f"COMMENT ON COLUMN message_feedback.{column} IS " in statements[3]
 
 
 def test_feedback_store_upserts_one_final_value(monkeypatch) -> None:

@@ -1,4 +1,6 @@
-"""DB-001 的批准预期和真实数据库核验工具，不读取实现中的注释常量。"""
+"""项目自有表注释的独立预期和真实数据库核验工具，不读取实现常量。"""
+
+import re
 
 from psycopg import sql
 
@@ -19,6 +21,35 @@ EXPECTED_COMMENTS = {
     "capability_task_contexts": "保存每个 Session 与 Capability 当前选中的 active Capability Task 指针；没有当前 Task 时不保留记录。",
     "capability_operations": "保存 Capability 外部副作用操作的幂等账本状态，关联 Run、Invocation 和 Task；不保存业务响应载荷。",
     "user_capability_permissions": "保存固定用户对 Capability 的显式允许或拒绝记录；无记录按拒绝处理，记录不随 Session 删除。",
+}
+
+# 字段名来自批准的现有结构；框架表不在项目注释契约内。
+EXPECTED_COLUMNS = {
+    "sessions": "session_id user_id title created_at updated_at".split(),
+    "message_feedback": "user_id session_id message_id value updated_at".split(),
+    "runs": (
+        "run_id request_id session_id thread_id parent_run_id run_type input_message_id "
+        "response_message_id start_checkpoint_id input_payload request_fingerprint status "
+        "recovery_attempts seq_high_watermark error_code error_message created_at started_at "
+        "finished_at updated_at"
+    ).split(),
+    "runtime_events": (
+        "event_id run_id seq event_type source visibility payload schema_version durability created_at"
+    ).split(),
+    "run_interrupts": (
+        "run_id interrupt_id status interrupt_payload resume_payload resume_request_id "
+        "resume_request_fingerprint created_at resumed_at cancelled_at"
+    ).split(),
+    "capability_tasks": (
+        "task_id session_id capability_id state_schema_version status last_run_id "
+        "last_invocation_id created_at updated_at ended_at"
+    ).split(),
+    "capability_task_contexts": "session_id capability_id current_task_id updated_at".split(),
+    "capability_operations": (
+        "operation_id run_id invocation_id task_id capability_id operation_key "
+        "idempotency_key status created_at updated_at"
+    ).split(),
+    "user_capability_permissions": "user_id capability_id allowed created_at updated_at".split(),
 }
 
 REPOSITORIES = (
@@ -94,6 +125,15 @@ async def snapshot(settings):
                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
                 ORDER BY c.relname
             """,
+            "column_comments": """
+                SELECT c.relname AS table_name, a.attname AS column_name,
+                       col_description(c.oid, a.attnum) AS comment
+                FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_attribute a ON a.attrelid = c.oid
+                WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+                  AND a.attnum > 0 AND NOT a.attisdropped
+                ORDER BY c.relname, a.attnum
+            """,
             "excluded_comments": """
                 SELECT pg_describe_object(d.classoid, d.objoid, d.objsubid) AS object,
                        d.description
@@ -101,7 +141,7 @@ async def snapshot(settings):
                 CROSS JOIN LATERAL pg_identify_object(d.classoid, d.objoid, d.objsubid) obj
                 WHERE (obj.schema IS NULL OR obj.schema NOT IN
                     ('pg_catalog', 'information_schema', 'pg_toast'))
-                  AND NOT (d.classoid = 'pg_class'::regclass AND d.objsubid = 0
+                  AND NOT (d.classoid = 'pg_class'::regclass
                     AND d.objoid IN (SELECT c.oid FROM pg_class c
                         JOIN pg_namespace n ON n.oid = c.relnamespace
                         WHERE n.nspname = 'public' AND c.relname = ANY(%s)))
@@ -125,14 +165,24 @@ async def snapshot(settings):
 
 
 def assert_comments(value):
-    """逐字核对批准的九条注释。"""
+    """逐字核对九条表注释，并核对79个自有字段的真实中文注释。"""
 
     comments = {row["table_name"]: row["comment"] for row in value["comments"]}
     assert {table: comments.get(table) for table in EXPECTED_COMMENTS} == EXPECTED_COMMENTS
+    actual = {
+        (row["table_name"], row["column_name"]): row["comment"]
+        for row in value["column_comments"] if row["table_name"] in EXPECTED_COLUMNS
+    }
+    assert set(actual) == {
+        (table, column) for table, columns in EXPECTED_COLUMNS.items() for column in columns
+    }
+    missing = [f"{table}.{column}" for (table, column), comment in actual.items()
+               if not comment or not re.search(r"[\u4e00-\u9fff]", comment)]
+    assert not missing, missing
 
 
 def assert_unchanged(before, after):
-    """表注释以外的结构、数据摘要和排除注释必须完全一致。"""
+    """自有表/字段注释以外的结构、数据摘要和排除注释必须完全一致。"""
 
     for key in ("tables", "columns", "constraints", "indexes", "data", "excluded_comments"):
         assert before[key] == after[key], key
@@ -143,3 +193,7 @@ def assert_unchanged(before, after):
         row["table_name"]: row["comment"] for row in after["comments"]
         if row["table_name"] not in EXPECTED_COMMENTS
     }
+    assert [row for row in before["column_comments"]
+            if row["table_name"] not in EXPECTED_COLUMNS] == [
+        row for row in after["column_comments"] if row["table_name"] not in EXPECTED_COLUMNS
+    ]
