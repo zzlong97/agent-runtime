@@ -1,9 +1,9 @@
 schema_version: 1
 task_id: RA-DEV-03
-state_version: 6
+state_version: 7
 status: 已验收
 current_role: dev-team-controller
-next_action: 负责人已终验并授权提交，同一提交同步GitHub/Gitee后保存实际回执闭环
+next_action: 本批已终验并提交29aa34d，GitHub/Gitee同提交同步已核实；闭环，后续共享文件变化另按影响验证
 baselines:
   requirements:
     path: docs/requirements.md
@@ -203,6 +203,8 @@ artifacts:
   version: sha256:f2ad85d8fb7467db703161772b31e7138e77a2e26b4c4a95e513d2f9e0d8881e
 - path: .dev-team/tasks/RA-DEV-03/evidence/提交输入.json
   version: sha256:bc04d604b4679180cd96b70f368436dd5836ad576ff62c78b117d08070a9bc03
+- path: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
+  version: sha256:881a55a2bd91dd6316be04d9a4edf03b41cfb0d504e2f000092352f0e3109282
 checkpoints:
 - boundary: 开发交付
   handoff: .dev-team/tasks/RA-DEV-03/handoffs/0001-开发交付.md
@@ -330,10 +332,10 @@ current_operation:
   name: RA-DEV-03提交及双远程同步
   kind: 外部操作
   operation_key: sha256:0a03bac43133e0e545cbf630b819a55c98c3101da94d7bcc0a94d745d4ced852
-  status: 执行中
+  status: 已完成
   inputs_ref: .dev-team/tasks/RA-DEV-03/evidence/提交输入.json
   result_ref: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
-latest_handoff: .dev-team/tasks/RA-DEV-03/handoffs/0003-负责人终验与提交授权.md
+latest_handoff: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
 resume_from: null
 blocked_reason: null
 project_gates:
@@ -344,10 +346,10 @@ project_gates:
   status: 已满足
   evidence_ref: .dev-team/tasks/RA-DEV-03/handoffs/0003-负责人终验与提交授权.md
 - name: 任务提交
-  status: 待满足
-  evidence_ref: null
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
 - name: 双远程同步
-  status: 待满足
-  evidence_ref: null
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
 updated_by: dev-team-controller
-updated_at: '2026-10-28T02:51:14Z'
+updated_at: '2026-10-28T02:56:04Z'

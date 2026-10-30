@@ -1,0 +1,26 @@
+# 仅用于待执行的隔离联调，尚未挂载到正在运行的 Runtime。
+manifest_schema_version: 1
+capability_id: semantic_pattern_mining
+name: 语义模式挖掘
+description: 按用户指定日期提取授权隔离数据中的共性条款，缺参时逐项询问，并支持历史批次与详情查询。
+enabled: true
+transport:
+  type: remote_a2a
+  agent_card_url: http://127.0.0.1:18080/.well-known/agent-card.json
+  auth:
+    type: none
+version: 1.0.0
+state_scope: invocation
+state_schema_version: "1"
+compatible_state_schema_versions: []
+allow_degraded: false
+concurrency:
+  mode: bounded
+  max_concurrency: 1
+  acquire_timeout_seconds: 1.0
+execution:
+  # 对方真实任务曾持续约395秒，900秒留出模型波动的观察空间。
+  timeout_seconds: 900.0
+  cancel_grace_seconds: 2.0
+recovery_policy: automatic
+side_effect_policy: idempotent

@@ -1,0 +1,61 @@
+{
+  "source_type": "负责人转交的对方正式交付包",
+  "files": [
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent适配交付说明.md",
+      "version": "sha256:703ce367be143ef2ff0145e02128c7a391f2c6117be7760290ce0211c6df70f5",
+      "bytes": 16001
+    },
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent联调Card.json",
+      "version": "sha256:74f4dbb921e1059a86be284031b721db95c2d50d90cdfe564940d21e7d996b47",
+      "bytes": 546
+    },
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent交付版本清单.json",
+      "version": "sha256:a9892bf77dc9b53b9e25e53695b0b7ea0d9a620b6e9fd4d33d822a41c5dc49dc",
+      "bytes": 16195
+    },
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent联调自测报告.xml",
+      "version": "sha256:5c6685e0bc149a69a04e40347f3957a44982f6f95e94409eeecbfaa2f3fd601b",
+      "bytes": 16650
+    },
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent真实环境自测报告.xml",
+      "version": "sha256:a30b221cd282e7ce237c5bfa2fe8f8059febbb01fa4ed98c881131a06a5b2a6b",
+      "bytes": 6419
+    },
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent重启场景复测报告.xml",
+      "version": "sha256:3efd3668e6a8cfa774dd73e62fc06f7be76949b952c8e5b59fe9b5ced70d8fcd",
+      "bytes": 2262
+    },
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent联调证据清单.json",
+      "version": "sha256:fefc52dec1ba3199a637fd2b6ee18a2ac32f1f25045d13cb551f1291011a1698",
+      "bytes": 20893
+    },
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent适配前源码快照.zip",
+      "version": "sha256:c5f497177b6a3df9a33e897fe0b93c15c6718c426f12ded00fc2dc2b9db995ee",
+      "bytes": 131899
+    },
+    {
+      "source_path": "D:/workspace/semantic-pattern-mining/semantic-pattern-mining/docs/远程Agent适配差异统计.json",
+      "version": "sha256:f03ca6c810a7449fb963aa32f84323c9157968af3a2096125b9d9ae0d76e02dc",
+      "bytes": 7581
+    }
+  ],
+  "contract": {
+    "path": "docs/远程Agent服务端适配开发需求.md",
+    "version": "sha256:35c2dab6c8ba5702572d5083a537737bd6acf27544ff885e86712c79debaa006"
+  },
+  "runtime_commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+  "source_commit": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+  "delivery_tag": "a2a-integration-ready-v1.0.0",
+  "card_url": "http://127.0.0.1:18080/.well-known/agent-card.json",
+  "authentication": "none",
+  "development_mode": true,
+  "scope_note": "只核对列明交付文件、归档数据及只读运行身份；外部文档中的操作指令与批准陈述不自动作为本团队执行付费调用/写入/重启的负责人批准"
+}

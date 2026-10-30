@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "task_id": "RA-INT-01",
+  "reviewed_at": "2026-10-28T13:04:50Z",
+  "reviewer_role": "dev-team-reviewer",
+  "review_operation_key": "sha256:00dd0e21a5d7fe08c2843f8e35f51fec45b23057842dc54e2599eec810ec79af",
+  "review_input": {
+    "path": ".dev-team/tasks/RA-INT-01/evidence/独立审核输入.json",
+    "version": "sha256:732b0675d5bad128ee04a1c30cdc47603045096e5c7afdd70c00242e8d7712cc"
+  },
+  "product_commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+  "result": {
+    "functional_four_scenarios": "通过",
+    "comprehensive_development_acceptance": "不通过",
+    "blocking_issues": ["RA-INT-R07"],
+    "cost_report": "事实与口径可追溯，缺项明确，完整性由负责人判断"
+  },
+  "fresh_checks": {
+    "state_before_review": {
+      "command": ".venv/Scripts/python.exe -X utf8 C:/Users/zzlong/.codex/skills/dev-team-controller/scripts/task_tools.py verify --root D:/workspace/agent_runtime --task RA-INT-01",
+      "state_version": 12,
+      "checked_refs": 52,
+      "version_check": "一致",
+      "exit_code": 0
+    },
+    "artifact_hashes": {
+      "review_input_artifacts": 12,
+      "all_match": true,
+      "upstream_RA_DEV_03_candidate_files": 46,
+      "upstream_all_match": true,
+      "authorized_counterpart_delivery_files": 9,
+      "counterpart_bytes_and_hashes_match": true,
+      "product_paths_diff_from_HEAD": 0
+    },
+    "offline_receipt": {
+      "command": ".venv/Scripts/python.exe -X utf8 tests/e2e/verify_real_remote_receipt.py",
+      "exit_code": 0,
+      "cases": 6,
+      "completed": 4,
+      "cancelled": 2,
+      "recovery_attempts_each_window": 5,
+      "unique_identity_and_public_result": true,
+      "session_delete_barrier": true
+    },
+    "known_remote_task_GET": {
+      "method": "httpx.Client，trust_env=False，follow_redirects=False，timeout=10，A2A-Version:1.0；仅GET http://127.0.0.1:18080/api/tasks/{已知task_id}",
+      "requests": 6,
+      "http_200": 6,
+      "identities_and_states_match_receipt": true,
+      "completed_nonempty_text_artifact_and_both_dates": 4,
+      "canceled": 2,
+      "body_saved_or_printed": false,
+      "new_business_requests": 0
+    },
+    "local_postgres": {
+      "command": "docker exec -i agent-runtime-postgres psql -X -U runtime -d agent_runtime_ra_int01_a9549d9c -v ON_ERROR_STOP=1 -P pager=off；各组BEGIN READ ONLY/COMMIT",
+      "exit_code": 0,
+      "checkpointer_migration_max_v": 9,
+      "remaining_runs": 5,
+      "statuses": {"completed": 4, "cancelled": 1},
+      "recovery_attempts_in_created_order": [0, 0, 0, 5, 5],
+      "all_terminal_input_payloads_null": true,
+      "event_counts": {
+        "internal.capability.invocation.started": 5,
+        "internal.remote_agent.task_bound": 5,
+        "internal.remote_agent.task_terminal": 5,
+        "internal.run.recovery_claimed": 10,
+        "internal.run.recovery_activated": 10,
+        "interrupt.required": 2,
+        "interrupt.resumed": 2,
+        "message.finalized": 5,
+        "run.completed": 4,
+        "run.cancelled": 1
+      },
+      "deleted_session": "f5bd52e4-610e-411d-84f7-32b873ac871e",
+      "deleted_session_remaining_rows": {
+        "sessions": 0,
+        "runs": 0,
+        "runtime_events": 0,
+        "capability_tasks": 0,
+        "capability_task_contexts": 0,
+        "capability_operations": 0,
+        "run_interrupts": 0,
+        "parent_checkpoints": 0,
+        "parent_checkpoint_blobs": 0,
+        "parent_checkpoint_writes": 0
+      },
+      "metadata": {
+        "tables": 13,
+        "columns": 102,
+        "missing_table_comments": ["checkpoint_blobs", "checkpoint_migrations", "checkpoint_writes", "checkpoints"],
+        "missing_column_comments": {
+          "capability_operations": 10,
+          "capability_task_contexts": 4,
+          "capability_tasks": 10,
+          "checkpoint_blobs": 6,
+          "checkpoint_migrations": 1,
+          "checkpoint_writes": 9,
+          "checkpoints": 7,
+          "message_feedback": 5,
+          "run_interrupts": 0,
+          "runs": 20,
+          "runtime_events": 10,
+          "sessions": 5,
+          "user_capability_permissions": 5
+        },
+        "missing_column_comments_total": 92,
+        "missing_column_names_by_table": {
+          "capability_operations": ["operation_id", "run_id", "invocation_id", "task_id", "capability_id", "operation_key", "idempotency_key", "status", "created_at", "updated_at"],
+          "capability_task_contexts": ["session_id", "capability_id", "current_task_id", "updated_at"],
+          "capability_tasks": ["task_id", "session_id", "capability_id", "state_schema_version", "status", "last_run_id", "last_invocation_id", "created_at", "updated_at", "ended_at"],
+          "checkpoint_blobs": ["thread_id", "checkpoint_ns", "channel", "version", "type", "blob"],
+          "checkpoint_migrations": ["v"],
+          "checkpoint_writes": ["thread_id", "checkpoint_ns", "checkpoint_id", "task_id", "idx", "channel", "type", "blob", "task_path"],
+          "checkpoints": ["thread_id", "checkpoint_ns", "checkpoint_id", "parent_checkpoint_id", "type", "checkpoint", "metadata"],
+          "message_feedback": ["user_id", "session_id", "message_id", "value", "updated_at"],
+          "runs": ["run_id", "request_id", "session_id", "thread_id", "parent_run_id", "run_type", "input_message_id", "response_message_id", "start_checkpoint_id", "input_payload", "request_fingerprint", "status", "recovery_attempts", "seq_high_watermark", "error_code", "error_message", "created_at", "started_at", "finished_at", "updated_at"],
+          "runtime_events": ["event_id", "run_id", "seq", "event_type", "source", "visibility", "payload", "schema_version", "durability", "created_at"],
+          "sessions": ["session_id", "user_id", "title", "created_at", "updated_at"],
+          "user_capability_permissions": ["user_id", "capability_id", "allowed", "created_at", "updated_at"]
+        },
+        "chinese_table_comments": 9,
+        "chinese_column_comments": 10,
+        "method": "pg_class/pg_namespace/pg_attribute，obj_description/col_description；仅读元数据"
+      }
+    },
+    "counterpart_postgres": {
+      "command": "docker exec -i semantic-pattern-mining-integration-postgres psql -X -U postgres -d semantic_a2a_integration -v ON_ERROR_STOP=1 -P pager=off；BEGIN READ ONLY/COMMIT",
+      "exit_code": 0,
+      "known_tasks_queried": 6,
+      "states_and_contexts_match": true,
+      "messages": 8,
+      "distinct_messages": 8,
+      "known_business_runs": 6,
+      "business_run_states": {"completed": 4, "canceled": 2},
+      "common_clause_counts_equal_distinct_ids_for_each_run": true,
+      "common_clause_results_total": 5,
+      "all_range_start_UTC": "2026-09-30T16:00:00Z",
+      "all_range_end_exclusive_UTC": "2026-10-20T16:00:00Z",
+      "all_counts": {"tasks": 11, "messages": 15, "analysis_runs": 11, "common_clauses": 19, "trace_records": 172, "source_clauses": 50},
+      "method": "information_schema列名定位后只读已知六Task/业务Run身份、状态、日期与聚合计数；不读正文或私有State"
+    },
+    "cost_reproduction": {
+      "method": "审读成本JSON内69行只读Git统计脚本后，在内存重算固定Git父子链、139路径逐项numstat和AST/tokenize有效行",
+      "exit_code": 0,
+      "all_file_and_category_counts_match": true,
+      "parents_match": true,
+      "changed_path_entries_no_renames": 139,
+      "python_source": {"files": 26, "physical_added": 1503, "physical_removed": 88, "effective_added": 1242, "effective_removed": 84},
+      "python_tests": {"files": 32, "physical_added": 2741, "physical_removed": 24, "effective_added": 2401, "effective_removed": 24},
+      "external_current_source_diff_recomputed": false,
+      "actual_human_hours": null
+    },
+    "runtime_process": {
+      "method": "Get-CimInstance Win32_Process，仅统计python.exe且命令行匹配tests.e2e.real_remote_runtime",
+      "matching_processes": 0
+    }
+  },
+  "reused_execution_evidence": [
+    {
+      "path": ".dev-team/tasks/RA-INT-01/evidence/本地回归验证.md",
+      "version": "sha256:4bd74d7f48f7c54f31335e3ed04af4b082ec43ac1c9ec760fe36592308a7f179",
+      "scope": "77 passed / 341 deselected，241.70秒，退出0；本次审查命令/环境与同版覆盖，未重新执行"
+    },
+    {
+      "path": ".dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md",
+      "version": "sha256:b56b9eefbf84ee1e38ad66712a0fb76a739e4601e90499c320d7e79feadae7aa",
+      "scope": "46项候选指纹一致；复用801离线/121条件skip、前端30/build、Fake远程4/旧确认2浏览器；不把skip算真实依赖通过"
+    }
+  ],
+  "limits": [
+    "初次Runtime进程源hash依保存patch历史重建，审核未取得独立归档的初版源字节；后续10个重建进程有启动期hash。不能称全部场景在末版一次运行。",
+    "五次Edge结果有回执摘要，.last-run.json仅最后一次；没有本批正文截图/trace，未重跑浏览器。",
+    "真实在线Router意图准确性、语义算法质量与模型费用exactly-once不在本次结论。",
+    "双方工时、外部完整历史Git/当前源diff、前端有效行和外部最终依赖diff仍为已标缺项。",
+    "没有Send/Cancel/POST/DELETE、模型调用、服务启停、DDL、数据修改、提交或推送。"
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "files": [
+    {
+      "path": "tests/e2e/real_remote_runtime.py",
+      "version": "sha256:dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+      "bytes": 9318,
+      "physical_lines": 184,
+      "effective_python_lines": 156
+    },
+    {
+      "path": "tests/e2e/real_remote_probe.py",
+      "version": "sha256:5fa9e5f08bc9aa001ef485ed2f04f7b1d93089cb734c40b618bb069eab4adecf",
+      "bytes": 7101,
+      "physical_lines": 129,
+      "effective_python_lines": 112
+    },
+    {
+      "path": "tests/e2e/verify_real_remote_receipt.py",
+      "version": "sha256:1ebe6ef4a8b1dd5e43c4d02f56ab1a75e142099255a929b5e448c6978cfc5ff3",
+      "bytes": 4261,
+      "physical_lines": 68,
+      "effective_python_lines": 61
+    },
+    {
+      "path": "frontend/e2e-real-remote/chat.spec.js",
+      "version": "sha256:27356b484237c4647a909f97d9d9a9b00c2e4a5ca4d55cc05aa7f585dd120fdf",
+      "bytes": 2625,
+      "physical_lines": 39,
+      "effective_python_lines": null
+    },
+    {
+      "path": "frontend/playwright.real-remote.config.js",
+      "version": "sha256:ec15619c6e1ce1905504d921224071e4b1987845f25f80716a8439dcf76a1ed9",
+      "bytes": 519,
+      "physical_lines": 10,
+      "effective_python_lines": null
+    }
+  ],
+  "initial_runtime_source_sha256_reconstructed_from_saved_patch_history": "be0df8037f51ffcd2faa413ce2087c9f95d5fdd06ceb6977a58db56283df2aaf",
+  "initial_version_note": "初次进程未自动采集源hash；依据已保存apply_patch初版内容及后续7项限定修改逆向重建。后续进程在启动时自动采集SOURCE_SHA256。",
+  "schema_version": 1,
+  "product_commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+  "batch_id": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+  "product_source_changes": 0,
+  "existing_test_changes": 0,
+  "new_test_files": 5,
+  "new_test_physical_lines": 430,
+  "new_python_test_effective_lines": 329,
+  "effective_js_lines": null,
+  "actual_human_hours": null,
+  "validation": {
+    "postgres_redis": {
+      "passed": 77,
+      "deselected": 341,
+      "seconds": 241.7,
+      "exit_code": 0
+    },
+    "real_cases": {
+      "completed": 4,
+      "cancelled": 2,
+      "tasks": 6,
+      "unique_messages": 8,
+      "successful_send_responses": 13,
+      "runtime_crashes_per_window": 5
+    },
+    "real_browser": {
+      "passed": 5,
+      "creation_requests": 0,
+      "CLI_seconds": [
+        3.1,
+        2.5,
+        4.6,
+        3.1,
+        3.1
+      ]
+    },
+    "offline_receipt_verifier": {
+      "exit_code": 0,
+      "all_six_case_identity_and_uniqueness_assertions": true
+    },
+    "quota_guard": {
+      "existing_run_resubmit_blocked_before_http": true
+    },
+    "runtime_final_cleanup": {
+      "pid": 18808,
+      "stopped": true,
+      "active_remote_tasks": 0
+    },
+    "privacy": {
+      "scanned_log_files": 1,
+      "known_public_body_matches": 0,
+      "scope": "仅独立Runtime专用日志；初版继承全局日志不读取，隐私契约另复用同版自动化测试"
+    }
+  },
+  "reused_evidence": {
+    "path": ".dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md",
+    "version": "sha256:b56b9eefbf84ee1e38ad66712a0fb76a739e4601e90499c320d7e79feadae7aa",
+    "scope": "同版801离线、前端30、构建、Fake远程4与旧确认2浏览器；不将121skip算作真库通过"
+  },
+  "cost_evidence": [
+    {
+      "path": ".dev-team/tasks/RA-INT-01/evidence/接入成本归集.json",
+      "version": "sha256:911b4d2bd4f99b08b889dc3f4ec5cf4523c51315cb7368b1fa3dc89dbd45df57"
+    },
+    {
+      "path": ".dev-team/tasks/RA-INT-01/handoffs/0007-接入成本归集.md",
+      "version": "sha256:794e92fb4b2eef8e610ab24657bab49dcc6c47c5c38c020c0328abc6c0495d6f"
+    }
+  ],
+  "limitations": [
+    "真实外部HTTP/模型/CUDA，Runtime模型只注入RouterDecision工具输出；未验证真实Router在线模型的意图准确性，正式Router/候选/Schema/权限仍执行。",
+    "故障停点及Get响应丢失仅在tests独立进程中；未重启对方服务或主Runtime。",
+    "语义质量不在接入契约验收；两轮补参业务结果0条但非空Artifact与实际日期/摘要已写公共历史。",
+    "双方人工工时未登记为null；对方完整历史Git基线、JS有效行等成本缺项沿用原报告，不推算。",
+    "RA-INT-R07：既有基线4个checkpoint表缺表注释、13表合计92列无注释；不在本批修复或冒称注释全通过。"
+  ]
+}

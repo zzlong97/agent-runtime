@@ -1,0 +1,356 @@
+schema_version: 1
+task_id: RA-INT-01
+state_version: 24
+status: 已验收
+current_role: dev-team-controller
+next_action: 负责人已接受成本缺项并授权三组提交和双同步；按固定范围执行，门禁待真实提交/远程回执满足
+baselines:
+  requirements:
+    path: docs/requirements.md
+    version: sha256:0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad
+    section: 第9.6至9.8，真实四场景与接入成本；MI不在范围
+    approval:
+      status: 已批准（仅RA引用范围）
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/RA-INT-02/handoffs/0014-提交候选基线范围等价核对.md
+      source_text: 同意当前任务规划，规划完成后先不要开展工作，我需要另外规划一个能力，再看优先实现哪一个。
+      approved_at: '2026-10-26T17:30:20+08:00'
+  architecture:
+    path: docs/architecture.md
+    version: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+    section: 第17.3至17.11，复用已批准接入契约/风险门禁；MI不在范围
+    approval:
+      status: 已批准（仅RA引用范围）
+      approved_by: 项目负责人
+      source_ref: .dev-team/tasks/RA-INT-02/handoffs/0014-提交候选基线范围等价核对.md
+      source_text: 同意当前任务规划，规划完成后先不要开展工作，我需要另外规划一个能力，再看优先实现哪一个。
+      approved_at: '2026-10-26T17:30:20+08:00'
+artifacts:
+- path: .dev-team/tasks/RA-INT-01/task.md
+  version: sha256:cd1b906c866f4ad9d72b8e4f6091165144842c4c642ae6f6f5aeee395710a41e
+- path: .dev-team/tasks/RA-001/handoffs/0015-真实联调启动核对与待补材料.md
+  version: sha256:ed0bc9f5a55da297ce87c6bc6beb0c496fb39f8fb759a4381bb6ac8ab96e2868
+- path: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
+  version: sha256:881a55a2bd91dd6316be04d9a4edf03b41cfb0d504e2f000092352f0e3109282
+- path: .dev-team/tasks/RA-DEV-03/evidence/候选文件指纹.json
+  version: sha256:bdcf146c0690847add0071f60f67c8b49eb3914788cd221591d903a7a92d6a31
+- path: .dev-team/tasks/RA-001/handoffs/0016-外部适配需求交付授权.md
+  version: sha256:a0877d4f8e28426074523406a9b653a981080b0e13b60df98bc5a861c190b4e2
+- path: docs/远程Agent服务端适配开发需求.md
+  version: sha256:35c2dab6c8ba5702572d5083a537737bd6acf27544ff885e86712c79debaa006
+- path: .dev-team/tasks/RA-001/handoffs/0017-外部适配任务书交付.md
+  version: sha256:a66a5a81c29cf0251d839a6ecb7d5bff9e3abc6f4f634a39c23ba556460677c0
+- path: .dev-team/tasks/RA-001/handoffs/0018-外部适配任务书独立核对.md
+  version: sha256:50953c7d499f7d5bd9c2f25679c45402b3192403a1000cc7d092cb362eb5f23a
+- path: .dev-team/tasks/RA-001/handoffs/0019-外部适配任务书交付与联调等待.md
+  version: sha256:7adcd899c37a9d6ce9c0e95082135287e931d585e7b3410b74bed35e793b323d
+- path: .dev-team/tasks/RA-INT-01/evidence/对方交付说明引用.json
+  version: sha256:f7b6aa5e294f2662351a01347ea5b121733b6b1329d7978b84454a3874b3da1e
+- path: .dev-team/tasks/RA-INT-01/handoffs/0001-对方交付联调就绪核对.md
+  version: sha256:a6f5fd781179be6524ded97456dfcbe2f0f55cd48ad4b664c0488cc6b51b92fd
+- path: .dev-team/tasks/RA-INT-01/handoffs/0002-对方交付就绪结论与待补材料.md
+  version: sha256:24db32f2ef7d4e8cc0f0724b99abaf38ab85a64219ed7bdb5da1873749fe01f0
+- path: .dev-team/tasks/RA-INT-01/evidence/正式交付包引用.json
+  version: sha256:b70ef1e9edc54082d95254e8ef194e1abc8b9c95936e71455b1bf6e9eb5a0ac2
+- path: .dev-team/tasks/RA-INT-01/evidence/正式交付包只读复核.json
+  version: sha256:de6ff1b12d6665056d08a8ff85d3d3d9818c3812e2c25c7391cac1b844a7609e
+- path: .dev-team/tasks/RA-INT-01/handoffs/0003-正式交付包与入口独立复核.md
+  version: sha256:881f8502da639795a97a969fdc8851411d8b7ce6ef89c55328f59196764a0b1b
+- path: .dev-team/tasks/RA-INT-01/evidence/联调候选/manifest.yaml
+  version: sha256:d16129882b8f9df4687f5d4822fadbe5b08c1b8289f1be62d308b4839cc469a9
+- path: .dev-team/tasks/RA-INT-01/handoffs/0004-正式交付就绪与隔离执行范围.md
+  version: sha256:febfcde0f0fc1d2edeca3850734388bfc59132ad445e9760e3f5836b0569ea34
+- path: .dev-team/tasks/RA-INT-01/handoffs/0005-隔离联调执行授权.md
+  version: sha256:b9fd5f7ed79d80304ff4854442ff15d4e2d9311aa37bbf845b1ab1992f4f90b8
+- path: .dev-team/tasks/RA-INT-01/evidence/真实联调执行输入.json
+  version: sha256:f36fdf86ebd1866419e1c48672e7a6e3502be2191cc63628eba69695846489e8
+- &id001
+  path: tests/e2e/real_remote_runtime.py
+  version: sha256:dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584
+- &id002
+  path: tests/e2e/real_remote_probe.py
+  version: sha256:5fa9e5f08bc9aa001ef485ed2f04f7b1d93089cb734c40b618bb069eab4adecf
+- &id003
+  path: tests/e2e/verify_real_remote_receipt.py
+  version: sha256:1ebe6ef4a8b1dd5e43c4d02f56ab1a75e142099255a929b5e448c6978cfc5ff3
+- &id004
+  path: frontend/e2e-real-remote/chat.spec.js
+  version: sha256:27356b484237c4647a909f97d9d9a9b00c2e4a5ca4d55cc05aa7f585dd120fdf
+- &id005
+  path: frontend/playwright.real-remote.config.js
+  version: sha256:ec15619c6e1ce1905504d921224071e4b1987845f25f80716a8439dcf76a1ed9
+- &id006
+  path: .dev-team/tasks/RA-INT-01/evidence/真实联调运行回执.json
+  version: sha256:6f9e262f1d565f26ff9f4b5fd8ff73ef6c072eb17e4d631a20c941e8113e7f32
+- &id007
+  path: .dev-team/tasks/RA-INT-01/evidence/本批验证产物.json
+  version: sha256:11540988c72cbc0f2e40ef89f86ed45056674737840346a79703867dbdd5c493
+- &id008
+  path: .dev-team/tasks/RA-INT-01/evidence/本地回归验证.md
+  version: sha256:4bd74d7f48f7c54f31335e3ed04af4b082ec43ac1c9ec760fe36592308a7f179
+- &id009
+  path: .dev-team/tasks/RA-INT-01/evidence/接入成本归集.json
+  version: sha256:911b4d2bd4f99b08b889dc3f4ec5cf4523c51315cb7368b1fa3dc89dbd45df57
+- &id010
+  path: .dev-team/tasks/RA-INT-01/handoffs/0007-接入成本归集.md
+  version: sha256:794e92fb4b2eef8e610ab24657bab49dcc6c47c5c38c020c0328abc6c0495d6f
+- &id011
+  path: .dev-team/tasks/RA-INT-01/handoffs/0006-真实联调开发交付.md
+  version: sha256:75a50ea44fed2d72e338bb72bc8dea884b58e27f46409d435f2ced0eb1b183e3
+- &id012
+  path: .dev-team/tasks/RA-INT-01/evidence/browser/.last-run.json
+  version: sha256:91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903
+- path: .dev-team/tasks/RA-INT-01/evidence/独立审核输入.json
+  version: sha256:732b0675d5bad128ee04a1c30cdc47603045096e5c7afdd70c00242e8d7712cc
+- path: .dev-team/tasks/RA-INT-01/handoffs/0008-真实联调独立审核.md
+  version: sha256:a3efafa79225163d37da85ac0d82ca218ef0b30d84cfce270c3e4ff2233d23cb
+- path: .dev-team/tasks/RA-INT-01/evidence/独立审核验证.json
+  version: sha256:753d0bf6be8a996c03da5e4f5d957bb89022f08fcf1174111cd211c31eee49bf
+- path: .dev-team/tasks/RA-INT-01/handoffs/0009-联调结果与注释整改待决策.md
+  version: sha256:de49ae579469ce4028a437b5cb23c7e63c10acf255240a484195138e31d47b53
+- path: AGENTS.md
+  version: sha256:5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd
+- path: docs/architecture.md
+  version: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+- path: .dev-team/tasks/RA-INT-01/handoffs/0010-数据库注释范围澄清与纠正授权.md
+  version: sha256:41dacc7f16ec73d29435348f2baa6e84c9b5930c5cd9312fe6af8356c13e1e0f
+- path: .dev-team/tasks/DB-002/task.md
+  version: sha256:74bdc4442dc7ffbdcdc32ff269e410fd4ea77f3f4d764a61e4de5137b16cfc86
+- path: .dev-team/tasks/DB-002/handoffs/0002-开发交付.md
+  version: sha256:0dd47e758171bba87cb55b904d1a447d09dce5c8cc08193844711d1dfc972a7e
+- path: src/agent_runtime/sessions/repository.py
+  version: sha256:390f116f5cccc306e3a54f9c71ff4a45ea36deac1dff9ab52048973d63b21c57
+- path: src/agent_runtime/feedback.py
+  version: sha256:178f3ca9e8026cf746bc17ffce3f5786c65905674ad85b9e84ba72d2c7648a22
+- path: src/agent_runtime/runtime/repository.py
+  version: sha256:10f546480a2ea0feeeb3ef30e39f326043a48d2fa79910853bf846cac10e6c90
+- path: src/agent_runtime/runtime/event_repository.py
+  version: sha256:e1e6b7fb0176ecdbf0604c9cf8ceb4dd4940c6656eb43bf60544fb33ff3679d6
+- path: src/agent_runtime/capabilities/persistence.py
+  version: sha256:f72ed7cf1f811265f8d7565c664bf4be3d34c1f8bce624d2f1efe8d07ec46539
+- path: tests/persistence/table_comments_support.py
+  version: sha256:2622381f1b6c90131f3e6992cd883fb081de72475081b7b64b9f76ddaccd5ebe
+- path: tests/persistence/test_table_comments.py
+  version: sha256:228e7c1ebb2d76949c0eb0c81a68ee5779ab0bccc4fe3d1fef16d779a7798b8d
+- path: tests/persistence/test_table_comments_postgres_integration.py
+  version: sha256:a6bb642116e773b23ca5da71ad4439de06c36d707b269dc3745eff00a717fe65
+- path: tests/sessions/test_repository.py
+  version: sha256:3b585a3f2e4f2cba418e0f847a429ae086e4714aa9fd8527bfd8e8526e31e126
+- path: tests/test_feedback_store.py
+  version: sha256:4be7233dd8ea1bac1033dcdb0db1a5c52a143cdc86dd042cb8890d38fb10f39e
+- path: .dev-team/tasks/DB-002/evidence/隔离库元数据验证.json
+  version: sha256:202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c
+- path: .dev-team/tasks/DB-002/evidence/既有联调库注释验证.json
+  version: sha256:a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3
+- path: .dev-team/tasks/DB-002/handoffs/0001-真实数据库注释验证意图.md
+  version: sha256:e2b513ca058c4c3f9497418d0a51d23408f984faa140642d8e17da0869b77f8f
+- path: .dev-team/tasks/DB-002/evidence/独立审核验证.json
+  version: sha256:5edd2691164c4fcd907a5fb73adb4076db12c04e6a9cabd30e8b36321e186422
+- path: .dev-team/tasks/DB-002/handoffs/0003-独立审核.md
+  version: sha256:3d4bb0d578e4009cc10a84ccd952a7ce3194d533858a64d411895251f7be7369
+- path: .dev-team/tasks/RA-INT-01/handoffs/0011-注释范围纠正与联调复核.md
+  version: sha256:6490bd7281762a250124614bad703e7338a25d68c10629bf4e25feab75ee28cb
+- path: .dev-team/tasks/RA-INT-02/handoffs/0014-提交候选基线范围等价核对.md
+  version: sha256:0d207106f1e5411c878b13ece80c3828c66d90f281ccbd0b367a8f1548da5fec
+- path: .dev-team/tasks/RA-INT-02/handoffs/0015-提交候选独立复核.md
+  version: sha256:80314bdd9ba789a9b2fb5f0b8d3e05b4259dc029cf6ea36de064e4f01e8fa729
+- path: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
+  version: sha256:d328e78d659f946da41a9b8a2d5ff0bccb784a35fdbc003b7f2ba59d2f7b219c
+checkpoints:
+- boundary: 开发交付
+  handoff: .dev-team/tasks/RA-INT-01/handoffs/0006-真实联调开发交付.md
+  operation_key: sha256:3f16fa7a689e8bffa27bae8d1e269de5064605133e815cc1ebd5032e043331a2
+  baseline_versions:
+    requirements: sha256:0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad
+    architecture: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+  artifact_versions:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - *id009
+  - *id010
+  - *id011
+  - *id012
+  evidence_refs:
+  - *id006
+  - *id007
+  - *id008
+  - *id009
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0010-数据库注释范围澄清与纠正授权.md
+    version: sha256:41dacc7f16ec73d29435348f2baa6e84c9b5930c5cd9312fe6af8356c13e1e0f
+  - path: .dev-team/tasks/DB-002/handoffs/0003-独立审核.md
+    version: sha256:3d4bb0d578e4009cc10a84ccd952a7ce3194d533858a64d411895251f7be7369
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0011-注释范围纠正与联调复核.md
+    version: sha256:6490bd7281762a250124614bad703e7338a25d68c10629bf4e25feab75ee28cb
+  validation_status: 已确认有效
+- boundary: 开发验收
+  handoff: .dev-team/tasks/RA-INT-01/handoffs/0011-注释范围纠正与联调复核.md
+  operation_key: sha256:d4a764cb8dffe4a1f1d40bea75388cdab2e1e9efa0391b4aee5bc454a773b8ce
+  baseline_versions:
+    requirements: sha256:0e1c1e74c03dec719143149e0cdd7456312ca75e3991732e7a6ff844ccbd0fad
+    architecture: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+  artifact_versions:
+  - path: .dev-team/tasks/RA-INT-01/task.md
+    version: sha256:cd1b906c866f4ad9d72b8e4f6091165144842c4c642ae6f6f5aeee395710a41e
+  - path: .dev-team/tasks/RA-001/handoffs/0015-真实联调启动核对与待补材料.md
+    version: sha256:ed0bc9f5a55da297ce87c6bc6beb0c496fb39f8fb759a4381bb6ac8ab96e2868
+  - path: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
+    version: sha256:881a55a2bd91dd6316be04d9a4edf03b41cfb0d504e2f000092352f0e3109282
+  - path: .dev-team/tasks/RA-DEV-03/evidence/候选文件指纹.json
+    version: sha256:bdcf146c0690847add0071f60f67c8b49eb3914788cd221591d903a7a92d6a31
+  - path: .dev-team/tasks/RA-001/handoffs/0016-外部适配需求交付授权.md
+    version: sha256:a0877d4f8e28426074523406a9b653a981080b0e13b60df98bc5a861c190b4e2
+  - path: docs/远程Agent服务端适配开发需求.md
+    version: sha256:35c2dab6c8ba5702572d5083a537737bd6acf27544ff885e86712c79debaa006
+  - path: .dev-team/tasks/RA-001/handoffs/0017-外部适配任务书交付.md
+    version: sha256:a66a5a81c29cf0251d839a6ecb7d5bff9e3abc6f4f634a39c23ba556460677c0
+  - path: .dev-team/tasks/RA-001/handoffs/0018-外部适配任务书独立核对.md
+    version: sha256:50953c7d499f7d5bd9c2f25679c45402b3192403a1000cc7d092cb362eb5f23a
+  - path: .dev-team/tasks/RA-001/handoffs/0019-外部适配任务书交付与联调等待.md
+    version: sha256:7adcd899c37a9d6ce9c0e95082135287e931d585e7b3410b74bed35e793b323d
+  - path: .dev-team/tasks/RA-INT-01/evidence/对方交付说明引用.json
+    version: sha256:f7b6aa5e294f2662351a01347ea5b121733b6b1329d7978b84454a3874b3da1e
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0001-对方交付联调就绪核对.md
+    version: sha256:a6f5fd781179be6524ded97456dfcbe2f0f55cd48ad4b664c0488cc6b51b92fd
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0002-对方交付就绪结论与待补材料.md
+    version: sha256:24db32f2ef7d4e8cc0f0724b99abaf38ab85a64219ed7bdb5da1873749fe01f0
+  - path: .dev-team/tasks/RA-INT-01/evidence/正式交付包引用.json
+    version: sha256:b70ef1e9edc54082d95254e8ef194e1abc8b9c95936e71455b1bf6e9eb5a0ac2
+  - path: .dev-team/tasks/RA-INT-01/evidence/正式交付包只读复核.json
+    version: sha256:de6ff1b12d6665056d08a8ff85d3d3d9818c3812e2c25c7391cac1b844a7609e
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0003-正式交付包与入口独立复核.md
+    version: sha256:881f8502da639795a97a969fdc8851411d8b7ce6ef89c55328f59196764a0b1b
+  - path: .dev-team/tasks/RA-INT-01/evidence/联调候选/manifest.yaml
+    version: sha256:d16129882b8f9df4687f5d4822fadbe5b08c1b8289f1be62d308b4839cc469a9
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0004-正式交付就绪与隔离执行范围.md
+    version: sha256:febfcde0f0fc1d2edeca3850734388bfc59132ad445e9760e3f5836b0569ea34
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0005-隔离联调执行授权.md
+    version: sha256:b9fd5f7ed79d80304ff4854442ff15d4e2d9311aa37bbf845b1ab1992f4f90b8
+  - path: .dev-team/tasks/RA-INT-01/evidence/真实联调执行输入.json
+    version: sha256:f36fdf86ebd1866419e1c48672e7a6e3502be2191cc63628eba69695846489e8
+  - path: tests/e2e/real_remote_runtime.py
+    version: sha256:dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584
+  - path: tests/e2e/real_remote_probe.py
+    version: sha256:5fa9e5f08bc9aa001ef485ed2f04f7b1d93089cb734c40b618bb069eab4adecf
+  - path: tests/e2e/verify_real_remote_receipt.py
+    version: sha256:1ebe6ef4a8b1dd5e43c4d02f56ab1a75e142099255a929b5e448c6978cfc5ff3
+  - path: frontend/e2e-real-remote/chat.spec.js
+    version: sha256:27356b484237c4647a909f97d9d9a9b00c2e4a5ca4d55cc05aa7f585dd120fdf
+  - path: frontend/playwright.real-remote.config.js
+    version: sha256:ec15619c6e1ce1905504d921224071e4b1987845f25f80716a8439dcf76a1ed9
+  - path: .dev-team/tasks/RA-INT-01/evidence/真实联调运行回执.json
+    version: sha256:6f9e262f1d565f26ff9f4b5fd8ff73ef6c072eb17e4d631a20c941e8113e7f32
+  - path: .dev-team/tasks/RA-INT-01/evidence/本批验证产物.json
+    version: sha256:11540988c72cbc0f2e40ef89f86ed45056674737840346a79703867dbdd5c493
+  - path: .dev-team/tasks/RA-INT-01/evidence/本地回归验证.md
+    version: sha256:4bd74d7f48f7c54f31335e3ed04af4b082ec43ac1c9ec760fe36592308a7f179
+  - path: .dev-team/tasks/RA-INT-01/evidence/接入成本归集.json
+    version: sha256:911b4d2bd4f99b08b889dc3f4ec5cf4523c51315cb7368b1fa3dc89dbd45df57
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0007-接入成本归集.md
+    version: sha256:794e92fb4b2eef8e610ab24657bab49dcc6c47c5c38c020c0328abc6c0495d6f
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0006-真实联调开发交付.md
+    version: sha256:75a50ea44fed2d72e338bb72bc8dea884b58e27f46409d435f2ced0eb1b183e3
+  - path: .dev-team/tasks/RA-INT-01/evidence/browser/.last-run.json
+    version: sha256:91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903
+  - path: .dev-team/tasks/RA-INT-01/evidence/独立审核输入.json
+    version: sha256:732b0675d5bad128ee04a1c30cdc47603045096e5c7afdd70c00242e8d7712cc
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0008-真实联调独立审核.md
+    version: sha256:a3efafa79225163d37da85ac0d82ca218ef0b30d84cfce270c3e4ff2233d23cb
+  - path: .dev-team/tasks/RA-INT-01/evidence/独立审核验证.json
+    version: sha256:753d0bf6be8a996c03da5e4f5d957bb89022f08fcf1174111cd211c31eee49bf
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0009-联调结果与注释整改待决策.md
+    version: sha256:de49ae579469ce4028a437b5cb23c7e63c10acf255240a484195138e31d47b53
+  - path: AGENTS.md
+    version: sha256:5828ca7394702020ed2ca14a5eb1a0d1e4ee1a641887d78343382b71c92b34cd
+  - path: docs/architecture.md
+    version: sha256:435165e68f54e1335f4b51d45a80f846f869e9fb2c5aad4f130f6d573f2b6652
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0010-数据库注释范围澄清与纠正授权.md
+    version: sha256:41dacc7f16ec73d29435348f2baa6e84c9b5930c5cd9312fe6af8356c13e1e0f
+  - path: .dev-team/tasks/DB-002/task.md
+    version: sha256:74bdc4442dc7ffbdcdc32ff269e410fd4ea77f3f4d764a61e4de5137b16cfc86
+  - path: .dev-team/tasks/DB-002/handoffs/0002-开发交付.md
+    version: sha256:0dd47e758171bba87cb55b904d1a447d09dce5c8cc08193844711d1dfc972a7e
+  - path: src/agent_runtime/sessions/repository.py
+    version: sha256:390f116f5cccc306e3a54f9c71ff4a45ea36deac1dff9ab52048973d63b21c57
+  - path: src/agent_runtime/feedback.py
+    version: sha256:178f3ca9e8026cf746bc17ffce3f5786c65905674ad85b9e84ba72d2c7648a22
+  - path: src/agent_runtime/runtime/repository.py
+    version: sha256:10f546480a2ea0feeeb3ef30e39f326043a48d2fa79910853bf846cac10e6c90
+  - path: src/agent_runtime/runtime/event_repository.py
+    version: sha256:e1e6b7fb0176ecdbf0604c9cf8ceb4dd4940c6656eb43bf60544fb33ff3679d6
+  - path: src/agent_runtime/capabilities/persistence.py
+    version: sha256:f72ed7cf1f811265f8d7565c664bf4be3d34c1f8bce624d2f1efe8d07ec46539
+  - path: tests/persistence/table_comments_support.py
+    version: sha256:2622381f1b6c90131f3e6992cd883fb081de72475081b7b64b9f76ddaccd5ebe
+  - path: tests/persistence/test_table_comments.py
+    version: sha256:228e7c1ebb2d76949c0eb0c81a68ee5779ab0bccc4fe3d1fef16d779a7798b8d
+  - path: tests/persistence/test_table_comments_postgres_integration.py
+    version: sha256:a6bb642116e773b23ca5da71ad4439de06c36d707b269dc3745eff00a717fe65
+  - path: tests/sessions/test_repository.py
+    version: sha256:3b585a3f2e4f2cba418e0f847a429ae086e4714aa9fd8527bfd8e8526e31e126
+  - path: tests/test_feedback_store.py
+    version: sha256:4be7233dd8ea1bac1033dcdb0db1a5c52a143cdc86dd042cb8890d38fb10f39e
+  - path: .dev-team/tasks/DB-002/evidence/隔离库元数据验证.json
+    version: sha256:202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c
+  - path: .dev-team/tasks/DB-002/evidence/既有联调库注释验证.json
+    version: sha256:a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3
+  - path: .dev-team/tasks/DB-002/handoffs/0001-真实数据库注释验证意图.md
+    version: sha256:e2b513ca058c4c3f9497418d0a51d23408f984faa140642d8e17da0869b77f8f
+  - path: .dev-team/tasks/DB-002/evidence/独立审核验证.json
+    version: sha256:5edd2691164c4fcd907a5fb73adb4076db12c04e6a9cabd30e8b36321e186422
+  - path: .dev-team/tasks/DB-002/handoffs/0003-独立审核.md
+    version: sha256:3d4bb0d578e4009cc10a84ccd952a7ce3194d533858a64d411895251f7be7369
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0011-注释范围纠正与联调复核.md
+    version: sha256:6490bd7281762a250124614bad703e7338a25d68c10629bf4e25feab75ee28cb
+  evidence_refs:
+  - path: .dev-team/tasks/RA-INT-01/handoffs/0010-数据库注释范围澄清与纠正授权.md
+    version: sha256:41dacc7f16ec73d29435348f2baa6e84c9b5930c5cd9312fe6af8356c13e1e0f
+  - path: .dev-team/tasks/DB-002/evidence/隔离库元数据验证.json
+    version: sha256:202662218f1aa23b7c87fa372ab30ae83258fc633d76fab9c1b81c894104e94c
+  - path: .dev-team/tasks/DB-002/evidence/既有联调库注释验证.json
+    version: sha256:a8506235df8dc9c324fcf3231f51b7e818794baeb2f775c183041f10e4dc2fa3
+  - path: .dev-team/tasks/DB-002/evidence/独立审核验证.json
+    version: sha256:5edd2691164c4fcd907a5fb73adb4076db12c04e6a9cabd30e8b36321e186422
+  - path: .dev-team/tasks/DB-002/handoffs/0003-独立审核.md
+    version: sha256:3d4bb0d578e4009cc10a84ccd952a7ce3194d533858a64d411895251f7be7369
+  validation_status: 已确认有效
+  conclusion: 通过：项目自有9表79列中文注释真实有效，框架4表23列按负责人排除，R07已关闭；负责人终验及提交/同步门禁保留
+current_operation:
+  name: 真实Agent四场景联调
+  kind: 外部操作
+  operation_key: sha256:3f16fa7a689e8bffa27bae8d1e269de5064605133e815cc1ebd5032e043331a2
+  status: 已完成
+  inputs_ref: .dev-team/tasks/RA-INT-01/evidence/真实联调执行输入.json
+  result_ref: .dev-team/tasks/RA-INT-01/handoffs/0006-真实联调开发交付.md
+latest_handoff: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
+resume_from: null
+blocked_reason: null
+project_gates:
+- name: 开始联调授权
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-001/handoffs/0015-真实联调启动核对与待补材料.md
+- name: 前置RA-DEV-03完整交付
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-DEV-03/handoffs/0004-提交与同步回执.md
+- name: 对方RA-EXT交付材料
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-INT-01/handoffs/0003-正式交付包与入口独立复核.md
+- name: 受信联调环境与副作用范围
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-INT-01/handoffs/0005-隔离联调执行授权.md
+- name: 负责人终验
+  status: 已满足
+  evidence_ref: .dev-team/tasks/RA-INT-02/handoffs/0017-负责人终验与提交同步授权.md
+- name: 任务提交
+  status: 待满足
+  evidence_ref: null
+- name: 双远程同步
+  status: 待满足
+  evidence_ref: null
+updated_by: dev-team-controller
+updated_at: '2026-10-30T02:18:38.075061+00:00'

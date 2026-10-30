@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "task_id": "RA-INT-01",
+  "operation": "真实联调交付独立审核",
+  "execution_operation_key": "sha256:3f16fa7a689e8bffa27bae8d1e269de5064605133e815cc1ebd5032e043331a2",
+  "baseline_versions": {
+    "requirements": "sha256:8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a",
+    "architecture": "sha256:92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b"
+  },
+  "artifact_versions": [
+    {
+      "path": "tests/e2e/real_remote_runtime.py",
+      "version": "sha256:dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584"
+    },
+    {
+      "path": "tests/e2e/real_remote_probe.py",
+      "version": "sha256:5fa9e5f08bc9aa001ef485ed2f04f7b1d93089cb734c40b618bb069eab4adecf"
+    },
+    {
+      "path": "tests/e2e/verify_real_remote_receipt.py",
+      "version": "sha256:1ebe6ef4a8b1dd5e43c4d02f56ab1a75e142099255a929b5e448c6978cfc5ff3"
+    },
+    {
+      "path": "frontend/e2e-real-remote/chat.spec.js",
+      "version": "sha256:27356b484237c4647a909f97d9d9a9b00c2e4a5ca4d55cc05aa7f585dd120fdf"
+    },
+    {
+      "path": "frontend/playwright.real-remote.config.js",
+      "version": "sha256:ec15619c6e1ce1905504d921224071e4b1987845f25f80716a8439dcf76a1ed9"
+    },
+    {
+      "path": ".dev-team/tasks/RA-INT-01/evidence/真实联调运行回执.json",
+      "version": "sha256:6f9e262f1d565f26ff9f4b5fd8ff73ef6c072eb17e4d631a20c941e8113e7f32"
+    },
+    {
+      "path": ".dev-team/tasks/RA-INT-01/evidence/本批验证产物.json",
+      "version": "sha256:11540988c72cbc0f2e40ef89f86ed45056674737840346a79703867dbdd5c493"
+    },
+    {
+      "path": ".dev-team/tasks/RA-INT-01/evidence/本地回归验证.md",
+      "version": "sha256:4bd74d7f48f7c54f31335e3ed04af4b082ec43ac1c9ec760fe36592308a7f179"
+    },
+    {
+      "path": ".dev-team/tasks/RA-INT-01/evidence/接入成本归集.json",
+      "version": "sha256:911b4d2bd4f99b08b889dc3f4ec5cf4523c51315cb7368b1fa3dc89dbd45df57"
+    },
+    {
+      "path": ".dev-team/tasks/RA-INT-01/handoffs/0007-接入成本归集.md",
+      "version": "sha256:794e92fb4b2eef8e610ab24657bab49dcc6c47c5c38c020c0328abc6c0495d6f"
+    },
+    {
+      "path": ".dev-team/tasks/RA-INT-01/handoffs/0006-真实联调开发交付.md",
+      "version": "sha256:75a50ea44fed2d72e338bb72bc8dea884b58e27f46409d435f2ced0eb1b183e3"
+    },
+    {
+      "path": ".dev-team/tasks/RA-INT-01/evidence/browser/.last-run.json",
+      "version": "sha256:91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    }
+  ],
+  "review_limits": {
+    "max_new_remote_tasks": 0,
+    "allow_model_calls": false,
+    "allow_send_or_cancel": false,
+    "allow_readonly_known_task_query": true,
+    "allow_readonly_isolated_metadata": true,
+    "allow_runtime_or_counterpart_restart": false
+  },
+  "known_issues": [
+    "R04双方工时及对方历史Git基线等缺项保留",
+    "R05对方差异JSON两处乱码不影响唯一ZIP关联",
+    "R07新隔离库4框架表/92字段中文注释缺失，旧基线缺口，不在本批写DDL掩盖"
+  ],
+  "state_structure_correction": "v11的开发交付checkpoint.baseline_versions序列转换为requirements/architecture映射，evidence_refs路径字符串转换为带同一实际版本的对象；只修复可校验结构，不改变产物、批准或既有测试结论。"
+}

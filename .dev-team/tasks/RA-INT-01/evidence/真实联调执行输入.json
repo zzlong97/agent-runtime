@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "batch_id": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+  "authorization_ref": ".dev-team/tasks/RA-INT-01/handoffs/0005-隔离联调执行授权.md",
+  "scope_ref": {
+    "path": ".dev-team/tasks/RA-INT-01/handoffs/0004-正式交付就绪与隔离执行范围.md",
+    "version": "sha256:febfcde0f0fc1d2edeca3850734388bfc59132ad445e9760e3f5836b0569ea34"
+  },
+  "runtime_commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+  "counterpart": {
+    "card_url": "http://127.0.0.1:18080/.well-known/agent-card.json",
+    "interface_url": "http://127.0.0.1:18080/api",
+    "auth": "none",
+    "development_mode": true,
+    "source_commit": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+    "image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+    "delivery_tag": "a2a-integration-ready-v1.0.0"
+  },
+  "approved_scope": {
+    "source_rows": 50,
+    "source_categories": 5,
+    "date_start": "2026-10-01",
+    "date_end_inclusive": "2026-10-20",
+    "timezone": "Asia/Shanghai",
+    "paid_remote_llm": true,
+    "local_cuda_embedding": true,
+    "remote_database": "semantic_a2a_integration",
+    "remote_writable_schemas": [
+      "business",
+      "a2a",
+      "langgraph"
+    ],
+    "remote_artifact_volume": "semantic-pattern-mining-integration-artifact-data",
+    "max_new_remote_tasks": 6,
+    "allow_cancel_own_tasks": true,
+    "allow_restart_isolated_runtime": true,
+    "allow_restart_counterpart_services": false,
+    "allow_restart_main_runtime": false,
+    "allow_delete_volumes_or_deduplication": false
+  },
+  "manifest_ref": {
+    "path": ".dev-team/tasks/RA-INT-01/evidence/联调候选/manifest.yaml",
+    "version": "sha256:d16129882b8f9df4687f5d4822fadbe5b08c1b8289f1be62d308b4839cc469a9"
+  },
+  "cases": [
+    {
+      "case": "full_parameters",
+      "request_id": "651e95bf-c2c2-43dd-85a1-8cb9dbd86362"
+    },
+    {
+      "case": "two_round_input",
+      "request_id": "c3961333-3023-4b3f-8b31-6af848d6bddd"
+    },
+    {
+      "case": "cancel_running",
+      "request_id": "d15315f5-7638-4396-8c86-51f895b34bf0"
+    },
+    {
+      "case": "recover_before_binding",
+      "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88"
+    },
+    {
+      "case": "recover_after_binding",
+      "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35"
+    },
+    {
+      "case": "session_delete_barrier",
+      "request_id": "6ba0c2fe-006e-4e72-9959-5a4a7d7d2d39"
+    }
+  ],
+  "recovery_rule": "复用本文件case request_id；每次请求前保存意图，未知结果先核对原Run/Task，不换ID新建或盲重试；实际远程Task绑定和计数追加到独立回执。"
+}

@@ -1,0 +1,3767 @@
+{
+  "schema_version": 1,
+  "batch_id": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+  "operation_key": "sha256:3f16fa7a689e8bffa27bae8d1e269de5064605133e815cc1ebd5032e043331a2",
+  "status": "六个真实远程Task均已确认终态；开发验证完成，待独立审核",
+  "runtime_commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+  "isolated_runtime": {
+    "host": "127.0.0.1",
+    "port": 18781,
+    "database": "agent_runtime_ra_int01_a9549d9c",
+    "redis_database": 15,
+    "pids": [
+      14152,
+      15880,
+      36364,
+      37656,
+      15164,
+      23160,
+      35348,
+      36880,
+      26684,
+      18844,
+      18808
+    ],
+    "exec_session": 77646,
+    "final_stop_intent": {
+      "pid": 18808,
+      "reason": "本批六Task全部终态后清理独立测试Runtime；不计入10次故障重建",
+      "no_active_run": true
+    },
+    "final_stopped": true,
+    "final_stop_method": "核对PID18808的ExecutablePath/完整模块命令行后Stop-Process -Force；WMI查询本批模块进程数为0",
+    "fault_crashes": 10
+  },
+  "counterpart_verified": {
+    "database": "semantic_a2a_integration",
+    "container": "semantic-pattern-mining-integration-postgres",
+    "image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+    "revision": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2"
+  },
+  "initial_remote_counts": {
+    "tasks": 5,
+    "messages": 7,
+    "analysis_runs": 5,
+    "common_clauses": 14,
+    "trace_records": 132,
+    "source_clauses": 50,
+    "source_categories": 5
+  },
+  "new_remote_tasks": 6,
+  "maximum_new_remote_tasks": 6,
+  "launch_note": "一次Start-Process Hidden组合启动命令被自动策略拒绝，原始回执只有blocked by policy，无具体理由；未执行该命令。改用工具托管的同一已授权独立测试Runtime长进程，没有提权或启停既有服务。",
+  "cases": [
+    {
+      "case": "full_parameters",
+      "request_id": "651e95bf-c2c2-43dd-85a1-8cb9dbd86362",
+      "intent": "提取2026-10-01至2026-10-20的共性条款；真实付费模型和CUDA；同原request_id幂等查询",
+      "run_id": "f0f839ef-5c2f-484e-8f33-366f08c05b62",
+      "session_id": "86197bb8-7d80-44e2-ab27-14f3625fa22d",
+      "response_message_id": "ca7c87cb-b7f9-4d01-8958-a5c2684b681f",
+      "http_status": 202,
+      "status": "completed",
+      "invocation_id": "481cec2d-67ca-469c-9996-133f0ddfe3bf",
+      "local_task_id": "6106879f-f153-473d-a2de-fa9dea3ce810",
+      "remote_task_id": "ee9b55b2-611e-44e4-8dea-803b836f25ed",
+      "remote_context_id": "75958446-513e-48f8-84b4-5ebeda9ac3a1",
+      "initial_message_id": "6f09388f-21ae-59df-ae82-ca201294a65f",
+      "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+      "send_accepted_at": "2026-10-28T12:14:44.761053+00:00",
+      "facts": {
+        "run": {
+          "run_id": "f0f839ef-5c2f-484e-8f33-366f08c05b62",
+          "session_id": "86197bb8-7d80-44e2-ab27-14f3625fa22d",
+          "request_id": "651e95bf-c2c2-43dd-85a1-8cb9dbd86362",
+          "response_message_id": "ca7c87cb-b7f9-4d01-8958-a5c2684b681f",
+          "status": "completed",
+          "recovery_attempts": 0
+        },
+        "tasks": [
+          {
+            "task_id": "6106879f-f153-473d-a2de-fa9dea3ce810",
+            "capability_id": "semantic_pattern_mining",
+            "status": "active",
+            "last_run_id": "f0f839ef-5c2f-484e-8f33-366f08c05b62",
+            "last_invocation_id": "481cec2d-67ca-469c-9996-133f0ddfe3bf"
+          }
+        ],
+        "operations": [
+          {
+            "operation_key": "remote_send:6f09388f-21ae-59df-ae82-ca201294a65f",
+            "status": "succeeded",
+            "invocation_id": "481cec2d-67ca-469c-9996-133f0ddfe3bf",
+            "task_id": "6106879f-f153-473d-a2de-fa9dea3ce810"
+          }
+        ],
+        "history": [
+          {
+            "message_id": "55f6a64b-2de3-4d3d-8dc0-1bdda3d3b69c",
+            "role": "user",
+            "runtime_status": null,
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 33,
+            "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+            "contains_start": true,
+            "contains_end": true
+          },
+          {
+            "message_id": "ca7c87cb-b7f9-4d01-8958-a5c2684b681f",
+            "role": "assistant",
+            "runtime_status": "completed",
+            "capability_id": "semantic_pattern_mining",
+            "nonempty": true,
+            "chars": 330,
+            "sha256": "5eab977acd45887bbd7d994418b01ef7e86bf6da5b27c66bbf33a92ed5a1705b",
+            "contains_start": true,
+            "contains_end": true
+          }
+        ],
+        "control": {
+          "fault": "none",
+          "held": false
+        },
+        "observations": [
+          {
+            "at": "2026-10-28T12:14:44.761053+00:00",
+            "operation": "send",
+            "task_id": "ee9b55b2-611e-44e4-8dea-803b836f25ed",
+            "context_id": "75958446-513e-48f8-84b4-5ebeda9ac3a1",
+            "state": 1,
+            "message_id": "6f09388f-21ae-59df-ae82-ca201294a65f"
+          },
+          {
+            "at": "2026-10-28T12:14:45.851898+00:00",
+            "operation": "get",
+            "task_id": "ee9b55b2-611e-44e4-8dea-803b836f25ed",
+            "context_id": "75958446-513e-48f8-84b4-5ebeda9ac3a1",
+            "state": 2
+          },
+          {
+            "at": "2026-10-28T12:18:01.032092+00:00",
+            "operation": "get",
+            "task_id": "ee9b55b2-611e-44e4-8dea-803b836f25ed",
+            "context_id": "75958446-513e-48f8-84b4-5ebeda9ac3a1",
+            "state": 3
+          }
+        ],
+        "event_counts": {
+          "run.started": 1,
+          "message.started": 1,
+          "internal.capability.invocation.started": 1,
+          "internal.capability.task.created": 1,
+          "internal.capability.task.current_changed": 1,
+          "internal.remote_agent.task_bound": 1,
+          "internal.remote_agent.task_terminal": 1,
+          "internal.capability.invocation.completed": 1,
+          "message.finalized": 1,
+          "run.completed": 1
+        },
+        "identity_events": [
+          {
+            "seq": 3,
+            "event_type": "internal.capability.invocation.started",
+            "visibility": "internal",
+            "invocation_id": "481cec2d-67ca-469c-9996-133f0ddfe3bf",
+            "capability_id": "semantic_pattern_mining",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 4,
+            "event_type": "internal.capability.task.created",
+            "visibility": "internal",
+            "task_id": "6106879f-f153-473d-a2de-fa9dea3ce810",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 5,
+            "event_type": "internal.capability.task.current_changed",
+            "visibility": "internal",
+            "task_id": "6106879f-f153-473d-a2de-fa9dea3ce810",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 6,
+            "event_type": "internal.remote_agent.task_bound",
+            "visibility": "internal",
+            "invocation_id": "481cec2d-67ca-469c-9996-133f0ddfe3bf",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "ee9b55b2-611e-44e4-8dea-803b836f25ed",
+            "remote_context_id": "75958446-513e-48f8-84b4-5ebeda9ac3a1",
+            "initial_message_id": "6f09388f-21ae-59df-ae82-ca201294a65f",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 7,
+            "event_type": "internal.remote_agent.task_terminal",
+            "visibility": "internal",
+            "invocation_id": "481cec2d-67ca-469c-9996-133f0ddfe3bf",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "ee9b55b2-611e-44e4-8dea-803b836f25ed",
+            "remote_status": "completed"
+          },
+          {
+            "seq": 9,
+            "event_type": "internal.capability.invocation.completed",
+            "visibility": "internal",
+            "invocation_id": "481cec2d-67ca-469c-9996-133f0ddfe3bf",
+            "task_id": "6106879f-f153-473d-a2de-fa9dea3ce810",
+            "capability_id": "semantic_pattern_mining"
+          }
+        ],
+        "seq_unique_increasing": true
+      },
+      "sse": {
+        "events": [
+          {
+            "type": "run.started",
+            "seq": 1
+          },
+          {
+            "type": "message.started",
+            "seq": 2
+          },
+          {
+            "type": "message.delta",
+            "seq": 8
+          },
+          {
+            "type": "message.finalized",
+            "seq": 10
+          },
+          {
+            "type": "run.completed",
+            "seq": 11
+          }
+        ],
+        "unique_terminal": true,
+        "unique_finalized": true,
+        "privacy_whitelist": true,
+        "reconnect_after_terminal_empty": true,
+        "fixed_public_schema_validated": true
+      },
+      "initial_submit_idempotence": true,
+      "changed_body_conflict_409": true,
+      "browser": {
+        "passed": 1,
+        "seconds": 3.1,
+        "status": "completed"
+      },
+      "remote_database": {
+        "task_id": "ee9b55b2-611e-44e4-8dea-803b836f25ed",
+        "context_id": "75958446-513e-48f8-84b4-5ebeda9ac3a1",
+        "state": "TASK_STATE_COMPLETED",
+        "cancel_requested": false,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "4c5e4ff5-efda-4e2d-b928-aec671d0c563",
+            "status": "completed",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 1,
+            "unique_common_clause_ids": 1,
+            "trace_records": 10,
+            "distinct_source_clauses": 10
+          }
+        ]
+      },
+      "initial_submit_response": {
+        "http_status": 202,
+        "run_id": "f0f839ef-5c2f-484e-8f33-366f08c05b62",
+        "session_id": "86197bb8-7d80-44e2-ab27-14f3625fa22d",
+        "response_message_id": "ca7c87cb-b7f9-4d01-8958-a5c2684b681f",
+        "status": "queued",
+        "recovery_attempts": 0
+      },
+      "final_recovery_attempts": 0,
+      "final_status": "completed"
+    },
+    {
+      "case": "two_round_input",
+      "request_id": "c3961333-3023-4b3f-8b31-6af848d6bddd",
+      "intent": "请提取共性条款；两轮补参2026-10-01、2026-10-20，使用原Run和固定Resume request_id",
+      "status": "completed",
+      "run_id": "a56394b0-e78a-4303-8516-799a1fad9e46",
+      "session_id": "e3cc3d8e-e9bb-4f58-ba43-565cb029d14c",
+      "response_message_id": "5afa94b8-2dba-417b-b3ea-c8e136395cee",
+      "http_status": 202,
+      "seq": 6,
+      "event_type": "internal.remote_agent.task_bound",
+      "visibility": "internal",
+      "invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376",
+      "capability_id": "semantic_pattern_mining",
+      "remote_task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+      "remote_context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+      "initial_message_id": "00c6b7a1-acdc-5ce0-a6ab-9322d33b1313",
+      "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+      "local_task_id": "26b15f77-aeef-421c-935b-934f49d4d0b3",
+      "facts": {
+        "run": {
+          "run_id": "a56394b0-e78a-4303-8516-799a1fad9e46",
+          "session_id": "e3cc3d8e-e9bb-4f58-ba43-565cb029d14c",
+          "request_id": "c3961333-3023-4b3f-8b31-6af848d6bddd",
+          "response_message_id": "5afa94b8-2dba-417b-b3ea-c8e136395cee",
+          "status": "completed",
+          "recovery_attempts": 0
+        },
+        "tasks": [
+          {
+            "task_id": "26b15f77-aeef-421c-935b-934f49d4d0b3",
+            "capability_id": "semantic_pattern_mining",
+            "status": "active",
+            "last_run_id": "a56394b0-e78a-4303-8516-799a1fad9e46",
+            "last_invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376"
+          }
+        ],
+        "operations": [
+          {
+            "operation_key": "remote_send:00c6b7a1-acdc-5ce0-a6ab-9322d33b1313",
+            "status": "succeeded",
+            "invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376",
+            "task_id": "26b15f77-aeef-421c-935b-934f49d4d0b3"
+          },
+          {
+            "operation_key": "remote_send:c1cb42d0-1b31-5c4a-9fc0-671201228781",
+            "status": "succeeded",
+            "invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376",
+            "task_id": "26b15f77-aeef-421c-935b-934f49d4d0b3"
+          },
+          {
+            "operation_key": "remote_send:ea75ead4-668a-55ba-bf8f-b044213e4098",
+            "status": "succeeded",
+            "invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376",
+            "task_id": "26b15f77-aeef-421c-935b-934f49d4d0b3"
+          }
+        ],
+        "history": [
+          {
+            "message_id": "6598feb5-b154-4304-96c4-6be5395e607c",
+            "role": "user",
+            "runtime_status": null,
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 7,
+            "sha256": "cea4bb93606428ab45a86f6ed604a54dcc3d955344f9951439801342caab3e75",
+            "contains_start": false,
+            "contains_end": false
+          },
+          {
+            "message_id": "5afa94b8-2dba-417b-b3ea-c8e136395cee",
+            "role": "assistant",
+            "runtime_status": "completed",
+            "capability_id": "semantic_pattern_mining",
+            "nonempty": true,
+            "chars": 330,
+            "sha256": "4012a85ad9bfec10fd8c760b2f2be937273330ce8bb62fb6a9eadb63a58b78f6",
+            "contains_start": true,
+            "contains_end": true
+          }
+        ],
+        "control": {
+          "fault": "none",
+          "held": false
+        },
+        "observations": [
+          {
+            "at": "2026-10-28T12:18:37.549200+00:00",
+            "operation": "send",
+            "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+            "state": 1,
+            "message_id": "00c6b7a1-acdc-5ce0-a6ab-9322d33b1313"
+          },
+          {
+            "at": "2026-10-28T12:18:37.636624+00:00",
+            "operation": "get",
+            "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+            "state": 2
+          },
+          {
+            "at": "2026-10-28T12:18:40.643978+00:00",
+            "operation": "get",
+            "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+            "state": 6
+          },
+          {
+            "at": "2026-10-28T12:19:19.944001+00:00",
+            "operation": "send",
+            "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+            "state": 2,
+            "message_id": "c1cb42d0-1b31-5c4a-9fc0-671201228781"
+          },
+          {
+            "at": "2026-10-28T12:19:21.010870+00:00",
+            "operation": "get",
+            "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+            "state": 6
+          },
+          {
+            "at": "2026-10-28T12:20:05.152512+00:00",
+            "operation": "send",
+            "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+            "state": 2,
+            "message_id": "ea75ead4-668a-55ba-bf8f-b044213e4098"
+          },
+          {
+            "at": "2026-10-28T12:23:30.361466+00:00",
+            "operation": "get",
+            "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+            "state": 3
+          }
+        ],
+        "event_counts": {
+          "run.started": 1,
+          "message.started": 3,
+          "internal.capability.invocation.started": 1,
+          "internal.capability.task.created": 1,
+          "internal.capability.task.current_changed": 1,
+          "internal.remote_agent.task_bound": 1,
+          "interrupt.required": 2,
+          "interrupt.resumed": 2,
+          "internal.remote_agent.task_terminal": 1,
+          "internal.capability.invocation.completed": 1,
+          "message.finalized": 1,
+          "run.completed": 1
+        },
+        "identity_events": [
+          {
+            "seq": 3,
+            "event_type": "internal.capability.invocation.started",
+            "visibility": "internal",
+            "invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376",
+            "capability_id": "semantic_pattern_mining",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 4,
+            "event_type": "internal.capability.task.created",
+            "visibility": "internal",
+            "task_id": "26b15f77-aeef-421c-935b-934f49d4d0b3",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 5,
+            "event_type": "internal.capability.task.current_changed",
+            "visibility": "internal",
+            "task_id": "26b15f77-aeef-421c-935b-934f49d4d0b3",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 6,
+            "event_type": "internal.remote_agent.task_bound",
+            "visibility": "internal",
+            "invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "remote_context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+            "initial_message_id": "00c6b7a1-acdc-5ce0-a6ab-9322d33b1313",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 30,
+            "event_type": "internal.remote_agent.task_terminal",
+            "visibility": "internal",
+            "invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+            "remote_status": "completed"
+          },
+          {
+            "seq": 32,
+            "event_type": "internal.capability.invocation.completed",
+            "visibility": "internal",
+            "invocation_id": "95a32962-ef82-4cfc-9a93-e3a851d8b376",
+            "task_id": "26b15f77-aeef-421c-935b-934f49d4d0b3",
+            "capability_id": "semantic_pattern_mining"
+          }
+        ],
+        "seq_unique_increasing": true
+      },
+      "resumes": [
+        {
+          "http_status": 202,
+          "run_id": "a56394b0-e78a-4303-8516-799a1fad9e46",
+          "session_id": "e3cc3d8e-e9bb-4f58-ba43-565cb029d14c",
+          "response_message_id": "5afa94b8-2dba-417b-b3ea-c8e136395cee",
+          "status": "running",
+          "recovery_attempts": 0,
+          "interrupt_id": "49451be1-3c57-5f01-af03-df3100bf3bf9",
+          "resume_request_id": "596cff19-9350-596b-87ef-90df09f17f90"
+        },
+        {
+          "http_status": 202,
+          "run_id": "a56394b0-e78a-4303-8516-799a1fad9e46",
+          "session_id": "e3cc3d8e-e9bb-4f58-ba43-565cb029d14c",
+          "response_message_id": "5afa94b8-2dba-417b-b3ea-c8e136395cee",
+          "status": "running",
+          "recovery_attempts": 0,
+          "interrupt_id": "c48ac83a-cdb0-51f4-b711-07855656b3c5",
+          "resume_request_id": "18de14be-5fb6-58cc-ae4b-7db56801df2d"
+        }
+      ],
+      "browser_pending": {
+        "passed": 1,
+        "seconds": 2.5
+      },
+      "resume_round1_duplicate_same_run": true,
+      "resume_round1_changed_body_409": true,
+      "sse": {
+        "events": [
+          {
+            "type": "run.started",
+            "seq": 1
+          },
+          {
+            "type": "message.started",
+            "seq": 2
+          },
+          {
+            "type": "interrupt.required",
+            "seq": 7
+          },
+          {
+            "type": "interrupt.resumed",
+            "seq": 8
+          },
+          {
+            "type": "message.started",
+            "seq": 9
+          },
+          {
+            "type": "interrupt.required",
+            "seq": 16
+          },
+          {
+            "type": "interrupt.resumed",
+            "seq": 19
+          },
+          {
+            "type": "message.started",
+            "seq": 20
+          },
+          {
+            "type": "message.delta",
+            "seq": 31
+          },
+          {
+            "type": "message.finalized",
+            "seq": 33
+          },
+          {
+            "type": "run.completed",
+            "seq": 34
+          }
+        ],
+        "unique_terminal": true,
+        "unique_finalized": true,
+        "privacy_whitelist": true,
+        "reconnect_after_terminal_empty": true,
+        "fixed_public_schema_validated": true
+      },
+      "browser_completed": {
+        "passed": 1,
+        "seconds": 4.6
+      },
+      "resume_round2_duplicate_same_run": true,
+      "resume_round2_changed_body_409": true,
+      "remote_database": {
+        "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+        "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+        "state": "TASK_STATE_COMPLETED",
+        "cancel_requested": false,
+        "distinct_messages": 3,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "a9014df0-d4d1-4804-af9e-16b028908e28",
+            "status": "completed",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 0,
+            "unique_common_clause_ids": 0,
+            "trace_records": 0,
+            "distinct_source_clauses": 0
+          }
+        ]
+      },
+      "initial_submit_response": {
+        "http_status": 202,
+        "run_id": "a56394b0-e78a-4303-8516-799a1fad9e46",
+        "session_id": "e3cc3d8e-e9bb-4f58-ba43-565cb029d14c",
+        "response_message_id": "5afa94b8-2dba-417b-b3ea-c8e136395cee",
+        "status": "queued",
+        "recovery_attempts": 0
+      },
+      "final_recovery_attempts": 0,
+      "final_status": "completed"
+    },
+    {
+      "case": "cancel_running",
+      "request_id": "d15315f5-7638-4396-8c86-51f895b34bf0",
+      "intent": "固定日期完整参数；已确认working且analysis_runs存在后取消本批Task",
+      "status": "cancelled",
+      "http_status": 202,
+      "run_id": "6b38b4e8-6431-4765-ba0a-b9a55810d1f3",
+      "session_id": "32fd0d12-2c59-4f02-bee7-c1c90c953397",
+      "response_message_id": "bdaf81dd-e2d6-4c49-86ec-554238913cc6",
+      "seq": 6,
+      "event_type": "internal.remote_agent.task_bound",
+      "visibility": "internal",
+      "invocation_id": "ae014e76-34ac-48e7-a407-6af14e3353f8",
+      "capability_id": "semantic_pattern_mining",
+      "remote_task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+      "remote_context_id": "cc63edb0-e897-4309-90ad-e027ca09fcc7",
+      "initial_message_id": "296e878a-44c8-5bbe-ab74-402e1f4b45b0",
+      "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+      "facts": {
+        "run": {
+          "run_id": "6b38b4e8-6431-4765-ba0a-b9a55810d1f3",
+          "session_id": "32fd0d12-2c59-4f02-bee7-c1c90c953397",
+          "request_id": "d15315f5-7638-4396-8c86-51f895b34bf0",
+          "response_message_id": "bdaf81dd-e2d6-4c49-86ec-554238913cc6",
+          "status": "cancelled",
+          "recovery_attempts": 0
+        },
+        "tasks": [
+          {
+            "task_id": "890cf8e9-9dfd-4143-8425-2999283260f8",
+            "capability_id": "semantic_pattern_mining",
+            "status": "active",
+            "last_run_id": "6b38b4e8-6431-4765-ba0a-b9a55810d1f3",
+            "last_invocation_id": "ae014e76-34ac-48e7-a407-6af14e3353f8"
+          }
+        ],
+        "operations": [
+          {
+            "operation_key": "remote_send:296e878a-44c8-5bbe-ab74-402e1f4b45b0",
+            "status": "succeeded",
+            "invocation_id": "ae014e76-34ac-48e7-a407-6af14e3353f8",
+            "task_id": "890cf8e9-9dfd-4143-8425-2999283260f8"
+          },
+          {
+            "operation_key": "remote_cancel:af51606e-a174-4cac-8381-4a7e22356e39",
+            "status": "succeeded",
+            "invocation_id": "ae014e76-34ac-48e7-a407-6af14e3353f8",
+            "task_id": "890cf8e9-9dfd-4143-8425-2999283260f8"
+          }
+        ],
+        "history": [
+          {
+            "message_id": "e3e1aa73-2853-4d99-a7d0-316a412fe6e9",
+            "role": "user",
+            "runtime_status": null,
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 33,
+            "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+            "contains_start": true,
+            "contains_end": true
+          },
+          {
+            "message_id": "bdaf81dd-e2d6-4c49-86ec-554238913cc6",
+            "role": "assistant",
+            "runtime_status": "stopped",
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 8,
+            "sha256": "bcaa0a842b7d027994809a847826bd84e9a1f0a3e3ee83abc7023e1e579e3b40",
+            "contains_start": false,
+            "contains_end": false
+          }
+        ],
+        "control": {
+          "fault": "none",
+          "held": false
+        },
+        "observations": [
+          {
+            "at": "2026-10-28T12:24:29.248481+00:00",
+            "operation": "send",
+            "task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+            "context_id": "cc63edb0-e897-4309-90ad-e027ca09fcc7",
+            "state": 1,
+            "message_id": "296e878a-44c8-5bbe-ab74-402e1f4b45b0"
+          },
+          {
+            "at": "2026-10-28T12:24:30.359702+00:00",
+            "operation": "get",
+            "task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+            "context_id": "cc63edb0-e897-4309-90ad-e027ca09fcc7",
+            "state": 2
+          },
+          {
+            "at": "2026-10-28T12:24:53.068860+00:00",
+            "operation": "cancel",
+            "task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+            "context_id": "cc63edb0-e897-4309-90ad-e027ca09fcc7",
+            "state": 2
+          },
+          {
+            "at": "2026-10-28T12:26:22.821464+00:00",
+            "operation": "get",
+            "task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+            "context_id": "cc63edb0-e897-4309-90ad-e027ca09fcc7",
+            "state": 5
+          }
+        ],
+        "event_counts": {
+          "run.started": 1,
+          "message.started": 1,
+          "internal.capability.invocation.started": 1,
+          "internal.capability.task.created": 1,
+          "internal.capability.task.current_changed": 1,
+          "internal.remote_agent.task_bound": 1,
+          "internal.run.cancel_requested": 1,
+          "internal.remote_agent.task_terminal": 1,
+          "internal.capability.invocation.cancelled": 1,
+          "message.finalized": 1,
+          "run.cancelled": 1
+        },
+        "identity_events": [
+          {
+            "seq": 3,
+            "event_type": "internal.capability.invocation.started",
+            "visibility": "internal",
+            "invocation_id": "ae014e76-34ac-48e7-a407-6af14e3353f8",
+            "capability_id": "semantic_pattern_mining",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 4,
+            "event_type": "internal.capability.task.created",
+            "visibility": "internal",
+            "task_id": "890cf8e9-9dfd-4143-8425-2999283260f8",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 5,
+            "event_type": "internal.capability.task.current_changed",
+            "visibility": "internal",
+            "task_id": "890cf8e9-9dfd-4143-8425-2999283260f8",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 6,
+            "event_type": "internal.remote_agent.task_bound",
+            "visibility": "internal",
+            "invocation_id": "ae014e76-34ac-48e7-a407-6af14e3353f8",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+            "remote_context_id": "cc63edb0-e897-4309-90ad-e027ca09fcc7",
+            "initial_message_id": "296e878a-44c8-5bbe-ab74-402e1f4b45b0",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 7,
+            "event_type": "internal.run.cancel_requested",
+            "visibility": "internal"
+          },
+          {
+            "seq": 8,
+            "event_type": "internal.remote_agent.task_terminal",
+            "visibility": "internal",
+            "invocation_id": "ae014e76-34ac-48e7-a407-6af14e3353f8",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+            "remote_status": "canceled"
+          },
+          {
+            "seq": 10,
+            "event_type": "internal.capability.invocation.cancelled",
+            "visibility": "internal",
+            "invocation_id": "ae014e76-34ac-48e7-a407-6af14e3353f8",
+            "task_id": "890cf8e9-9dfd-4143-8425-2999283260f8",
+            "capability_id": "semantic_pattern_mining"
+          }
+        ],
+        "seq_unique_increasing": true
+      },
+      "local_task_id": "890cf8e9-9dfd-4143-8425-2999283260f8",
+      "cancel": {
+        "http_status": 202,
+        "status": "cancel_requested",
+        "verified_remote_working": true,
+        "remote_analysis_run_id": "98ee4b6a-0fca-4009-84da-268a9e93a8b1"
+      },
+      "sse": {
+        "events": [
+          {
+            "type": "run.started",
+            "seq": 1
+          },
+          {
+            "type": "message.started",
+            "seq": 2
+          },
+          {
+            "type": "message.finalized",
+            "seq": 11
+          },
+          {
+            "type": "run.cancelled",
+            "seq": 12
+          }
+        ],
+        "unique_terminal": true,
+        "unique_finalized": true,
+        "privacy_whitelist": true,
+        "reconnect_after_terminal_empty": true,
+        "fixed_public_schema_validated": true
+      },
+      "remote_database": {
+        "task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+        "context_id": "cc63edb0-e897-4309-90ad-e027ca09fcc7",
+        "state": "TASK_STATE_CANCELED",
+        "cancel_requested": true,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "98ee4b6a-0fca-4009-84da-268a9e93a8b1",
+            "status": "canceled",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 0,
+            "unique_common_clause_ids": 0,
+            "trace_records": 0,
+            "distinct_source_clauses": 0
+          }
+        ]
+      },
+      "initial_submit_response": {
+        "http_status": 202,
+        "run_id": "6b38b4e8-6431-4765-ba0a-b9a55810d1f3",
+        "session_id": "32fd0d12-2c59-4f02-bee7-c1c90c953397",
+        "response_message_id": "bdaf81dd-e2d6-4c49-86ec-554238913cc6",
+        "status": "queued",
+        "recovery_attempts": 0
+      },
+      "initial_recovery_attempts": 0,
+      "final_recovery_attempts": 0,
+      "final_status": "cancelled"
+    },
+    {
+      "case": "recover_before_binding",
+      "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88",
+      "intent": "固定日期完整参数；真实Send已返回但task_bound提交前暂停并强制结束独立Runtime，连续恢复超过3次复用messageId",
+      "status": "completed",
+      "restarts": [
+        {
+          "attempt": 0,
+          "pid": 14152,
+          "window": "remote accepted before local binding",
+          "facts": {
+            "run": {
+              "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+              "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+              "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88",
+              "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+              "status": "running",
+              "recovery_attempts": 0
+            },
+            "tasks": [
+              {
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+                "last_invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:09d868da-0c09-593a-a5bd-fd3247defa13",
+                "status": "pending",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "0fa76de0-5e72-4fbb-8d9d-0d6b82c6a8e0",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 1,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "仅强制结束本批独立Runtime，保留原Run/Invocation/Operation和远程Task"
+        },
+        {
+          "attempt": 1,
+          "pid": 15880,
+          "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 15880,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:27:35.903741+00:00",
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:27:37.683994+00:00",
+                "operation": "send",
+                "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "state": 2,
+                "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+              "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+              "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88",
+              "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+              "status": "running",
+              "recovery_attempts": 1
+            },
+            "tasks": [
+              {
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+                "last_invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:09d868da-0c09-593a-a5bd-fd3247defa13",
+                "status": "pending",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "0fa76de0-5e72-4fbb-8d9d-0d6b82c6a8e0",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 2,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.run.recovery_claimed": 1,
+              "internal.run.recovery_activated": 1
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "连续恢复原任务，第2次强制结束独立Runtime"
+        },
+        {
+          "attempt": 2,
+          "pid": 36364,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 36364,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:28:09.305076+00:00",
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:28:13.083909+00:00",
+                "operation": "send",
+                "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "state": 2,
+                "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+              "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+              "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88",
+              "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+              "status": "running",
+              "recovery_attempts": 2
+            },
+            "tasks": [
+              {
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+                "last_invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:09d868da-0c09-593a-a5bd-fd3247defa13",
+                "status": "pending",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "0fa76de0-5e72-4fbb-8d9d-0d6b82c6a8e0",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 3,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.run.recovery_claimed": 2,
+              "internal.run.recovery_activated": 2
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 65,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 66,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "连续恢复原任务，第3次强制结束独立Runtime"
+        },
+        {
+          "attempt": 3,
+          "pid": 37656,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 37656,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:28:34.568201+00:00",
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:28:40.338844+00:00",
+                "operation": "send",
+                "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "state": 2,
+                "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+              "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+              "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88",
+              "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+              "status": "running",
+              "recovery_attempts": 3
+            },
+            "tasks": [
+              {
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+                "last_invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:09d868da-0c09-593a-a5bd-fd3247defa13",
+                "status": "pending",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "0fa76de0-5e72-4fbb-8d9d-0d6b82c6a8e0",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 4,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.run.recovery_claimed": 3,
+              "internal.run.recovery_activated": 3
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 65,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 66,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 97,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 98,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "连续恢复原任务，第4次强制结束独立Runtime"
+        },
+        {
+          "attempt": 4,
+          "pid": 15164,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 15164,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:28:58.503761+00:00",
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:29:05.162763+00:00",
+                "operation": "send",
+                "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "state": 2,
+                "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+              "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+              "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88",
+              "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+              "status": "running",
+              "recovery_attempts": 4
+            },
+            "tasks": [
+              {
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+                "last_invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:09d868da-0c09-593a-a5bd-fd3247defa13",
+                "status": "pending",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "0fa76de0-5e72-4fbb-8d9d-0d6b82c6a8e0",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "before_binding",
+              "held": true
+            },
+            "observations": [],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 5,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.run.recovery_claimed": 4,
+              "internal.run.recovery_activated": 4
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 65,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 66,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 97,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 98,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 129,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 130,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "超过3次后仍保留原任务；第5次强制结束，下一进程取消停点并正常收敛"
+        },
+        {
+          "attempt": 5,
+          "pid": 23160,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 23160,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:29:26.418529+00:00",
+            "control": {
+              "fault": "none",
+              "held": false
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:29:33.256296+00:00",
+                "operation": "send",
+                "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "state": 2,
+                "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+              "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+              "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88",
+              "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+              "status": "running",
+              "recovery_attempts": 5
+            },
+            "tasks": [
+              {
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+                "last_invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:09d868da-0c09-593a-a5bd-fd3247defa13",
+                "status": "succeeded",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "0fa76de0-5e72-4fbb-8d9d-0d6b82c6a8e0",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "none",
+              "held": false
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:29:33.256296+00:00",
+                "operation": "send",
+                "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "state": 2,
+                "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+              }
+            ],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 6,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.run.recovery_claimed": 5,
+              "internal.run.recovery_activated": 5,
+              "internal.remote_agent.task_bound": 1
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 65,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 66,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 97,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 98,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 129,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 130,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 161,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 162,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 167,
+                "event_type": "internal.remote_agent.task_bound",
+                "visibility": "internal",
+                "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+                "capability_id": "semantic_pattern_mining",
+                "remote_task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "remote_context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "initial_message_id": "09d868da-0c09-593a-a5bd-fd3247defa13",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              }
+            ],
+            "seq_unique_increasing": true
+          }
+        }
+      ],
+      "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+      "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+      "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+      "http_status": 202,
+      "remote_task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+      "remote_context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+      "initial_message_id": "09d868da-0c09-593a-a5bd-fd3247defa13",
+      "accepted_observation": {
+        "at": "2026-10-28T12:27:03.384293+00:00",
+        "operation": "send",
+        "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+        "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+        "state": 1,
+        "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+      },
+      "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+      "local_task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+      "facts": {
+        "run": {
+          "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+          "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+          "request_id": "4b1d9dff-01e9-465c-843a-4e292bda5a88",
+          "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+          "status": "completed",
+          "recovery_attempts": 5
+        },
+        "tasks": [
+          {
+            "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+            "capability_id": "semantic_pattern_mining",
+            "status": "active",
+            "last_run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+            "last_invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9"
+          }
+        ],
+        "operations": [
+          {
+            "operation_key": "remote_send:09d868da-0c09-593a-a5bd-fd3247defa13",
+            "status": "succeeded",
+            "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+            "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d"
+          }
+        ],
+        "history": [
+          {
+            "message_id": "0fa76de0-5e72-4fbb-8d9d-0d6b82c6a8e0",
+            "role": "user",
+            "runtime_status": null,
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 33,
+            "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+            "contains_start": true,
+            "contains_end": true
+          },
+          {
+            "message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+            "role": "assistant",
+            "runtime_status": "completed",
+            "capability_id": "semantic_pattern_mining",
+            "nonempty": true,
+            "chars": 330,
+            "sha256": "cd563120e9405345d7c5cc70362bc5dab36972cca837e7cad30eaf87dc25386b",
+            "contains_start": true,
+            "contains_end": true
+          }
+        ],
+        "control": {
+          "fault": "none",
+          "held": false
+        },
+        "observations": [
+          {
+            "at": "2026-10-28T12:29:33.256296+00:00",
+            "operation": "send",
+            "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+            "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+            "state": 2,
+            "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+          },
+          {
+            "at": "2026-10-28T12:31:21.394846+00:00",
+            "operation": "get",
+            "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+            "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+            "state": 3
+          }
+        ],
+        "event_counts": {
+          "run.started": 1,
+          "message.started": 6,
+          "internal.capability.invocation.started": 1,
+          "internal.capability.task.created": 1,
+          "internal.capability.task.current_changed": 1,
+          "internal.run.recovery_claimed": 5,
+          "internal.run.recovery_activated": 5,
+          "internal.remote_agent.task_bound": 1,
+          "internal.remote_agent.task_terminal": 1,
+          "internal.capability.invocation.completed": 1,
+          "message.finalized": 1,
+          "run.completed": 1
+        },
+        "identity_events": [
+          {
+            "seq": 3,
+            "event_type": "internal.capability.invocation.started",
+            "visibility": "internal",
+            "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+            "capability_id": "semantic_pattern_mining",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 4,
+            "event_type": "internal.capability.task.created",
+            "visibility": "internal",
+            "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 5,
+            "event_type": "internal.capability.task.current_changed",
+            "visibility": "internal",
+            "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 33,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 34,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 65,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 66,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 97,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 98,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 129,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 130,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 161,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 162,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 167,
+            "event_type": "internal.remote_agent.task_bound",
+            "visibility": "internal",
+            "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+            "remote_context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+            "initial_message_id": "09d868da-0c09-593a-a5bd-fd3247defa13",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 168,
+            "event_type": "internal.remote_agent.task_terminal",
+            "visibility": "internal",
+            "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+            "remote_status": "completed"
+          },
+          {
+            "seq": 170,
+            "event_type": "internal.capability.invocation.completed",
+            "visibility": "internal",
+            "invocation_id": "2839c299-d9e8-4050-9b5b-062d9f311fb9",
+            "task_id": "eba1a6f6-bab6-4193-9d98-5f25442e676d",
+            "capability_id": "semantic_pattern_mining"
+          }
+        ],
+        "seq_unique_increasing": true
+      },
+      "sse": {
+        "events": [
+          {
+            "type": "run.started",
+            "seq": 1
+          },
+          {
+            "type": "message.started",
+            "seq": 2
+          },
+          {
+            "type": "message.started",
+            "seq": 35
+          },
+          {
+            "type": "message.started",
+            "seq": 67
+          },
+          {
+            "type": "message.started",
+            "seq": 99
+          },
+          {
+            "type": "message.started",
+            "seq": 131
+          },
+          {
+            "type": "message.started",
+            "seq": 163
+          },
+          {
+            "type": "message.delta",
+            "seq": 169
+          },
+          {
+            "type": "message.finalized",
+            "seq": 171
+          },
+          {
+            "type": "run.completed",
+            "seq": 172
+          }
+        ],
+        "unique_terminal": true,
+        "unique_finalized": true,
+        "privacy_whitelist": true,
+        "reconnect_after_terminal_empty": true
+      },
+      "browser_running": {
+        "passed": 1,
+        "seconds": 3.1
+      },
+      "remote_business": {
+        "run_id": "5e05b6d1-6cfe-47cc-ac89-2661169e143f",
+        "business_run_count": 1,
+        "deduplicated_message_count": 1,
+        "common_clauses": 3
+      },
+      "remote_database": {
+        "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+        "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+        "state": "TASK_STATE_COMPLETED",
+        "cancel_requested": false,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "5e05b6d1-6cfe-47cc-ac89-2661169e143f",
+            "status": "completed",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 3,
+            "unique_common_clause_ids": 3,
+            "trace_records": 30,
+            "distinct_source_clauses": 20
+          }
+        ]
+      },
+      "initial_submit_response": {
+        "http_status": 202,
+        "run_id": "615d5170-33cd-4d40-ba3e-c5f2e420bf24",
+        "session_id": "dfbdb32d-e39a-4377-9f3e-4aa1c4ebf58a",
+        "response_message_id": "e8f86cb9-b7b9-48e8-b89d-285bf0394851",
+        "status": "queued",
+        "recovery_attempts": 0
+      },
+      "final_recovery_attempts": 5,
+      "final_status": "completed"
+    },
+    {
+      "case": "recover_after_binding",
+      "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35",
+      "intent": "固定日期完整参数；唯一task_bound已持久化、终态未持久化时暂停并强制结束独立Runtime，连续恢复超过3次仅查询同一Task",
+      "status": "completed",
+      "restarts": [
+        {
+          "attempt": 0,
+          "pid": 23160,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 23160,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:29:26.418529+00:00",
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:29:33.256296+00:00",
+                "operation": "send",
+                "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "state": 2,
+                "message_id": "09d868da-0c09-593a-a5bd-fd3247defa13"
+              },
+              {
+                "at": "2026-10-28T12:31:21.394846+00:00",
+                "operation": "get",
+                "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+                "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+                "state": 3
+              },
+              {
+                "at": "2026-10-28T12:32:58.763945+00:00",
+                "operation": "send",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 1,
+                "message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5"
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+              "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+              "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35",
+              "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+              "status": "running",
+              "recovery_attempts": 0
+            },
+            "tasks": [
+              {
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+                "last_invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "status": "succeeded",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "bfa9d326-b835-4d13-80eb-c6d2a4a56339",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:32:58.763945+00:00",
+                "operation": "send",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 1,
+                "message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5"
+              }
+            ],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 1,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.remote_agent.task_bound": 1
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 6,
+                "event_type": "internal.remote_agent.task_bound",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "remote_context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "initial_message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "同一本批Task绑定后、终态前强制结束独立Runtime"
+        },
+        {
+          "attempt": 1,
+          "pid": 35348,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 35348,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:33:32.236960+00:00",
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:33:33.812707+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+              "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+              "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35",
+              "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+              "status": "running",
+              "recovery_attempts": 1
+            },
+            "tasks": [
+              {
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+                "last_invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "status": "succeeded",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "bfa9d326-b835-4d13-80eb-c6d2a4a56339",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:33:33.812707+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 2,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.remote_agent.task_bound": 1,
+              "internal.run.recovery_claimed": 1,
+              "internal.run.recovery_activated": 1
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 6,
+                "event_type": "internal.remote_agent.task_bound",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "remote_context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "initial_message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "同一本批Task绑定后、终态前强制结束独立Runtime"
+        },
+        {
+          "attempt": 2,
+          "pid": 36880,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 36880,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:33:45.782276+00:00",
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:33:49.574410+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+              "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+              "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35",
+              "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+              "status": "running",
+              "recovery_attempts": 2
+            },
+            "tasks": [
+              {
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+                "last_invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "status": "succeeded",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "bfa9d326-b835-4d13-80eb-c6d2a4a56339",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:33:49.574410+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 3,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.remote_agent.task_bound": 1,
+              "internal.run.recovery_claimed": 2,
+              "internal.run.recovery_activated": 2
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 6,
+                "event_type": "internal.remote_agent.task_bound",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "remote_context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "initial_message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 65,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 66,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "同一本批Task绑定后、终态前强制结束独立Runtime"
+        },
+        {
+          "attempt": 3,
+          "pid": 26684,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 26684,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:34:00.026238+00:00",
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:34:05.681726+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+              "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+              "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35",
+              "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+              "status": "running",
+              "recovery_attempts": 3
+            },
+            "tasks": [
+              {
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+                "last_invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "status": "succeeded",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "bfa9d326-b835-4d13-80eb-c6d2a4a56339",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:34:05.681726+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 4,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.remote_agent.task_bound": 1,
+              "internal.run.recovery_claimed": 3,
+              "internal.run.recovery_activated": 3
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 6,
+                "event_type": "internal.remote_agent.task_bound",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "remote_context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "initial_message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 65,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 66,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 97,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 98,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "同一本批Task绑定后、终态前强制结束独立Runtime"
+        },
+        {
+          "attempt": 4,
+          "pid": 18844,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 18844,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:34:14.035314+00:00",
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:34:20.792058+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+              "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+              "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35",
+              "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+              "status": "running",
+              "recovery_attempts": 4
+            },
+            "tasks": [
+              {
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+                "last_invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "status": "succeeded",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "bfa9d326-b835-4d13-80eb-c6d2a4a56339",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "after_binding",
+              "held": true
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:34:20.792058+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 5,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.remote_agent.task_bound": 1,
+              "internal.run.recovery_claimed": 4,
+              "internal.run.recovery_activated": 4
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 6,
+                "event_type": "internal.remote_agent.task_bound",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "remote_context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "initial_message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 65,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 66,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 97,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 98,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 129,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 130,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          },
+          "stop_intent": "超过3次后仍保留原任务；第5次强制结束，下一进程取消停点并正常收敛"
+        },
+        {
+          "attempt": 5,
+          "pid": 18808,
+          "health": {
+            "batch": "a9549d9c-6976-4721-8fed-f5fe863c928a",
+            "database": "agent_runtime_ra_int01_a9549d9c",
+            "pid": 18808,
+            "source_sha256": "dbe4641efa2e34db585be344f227af6ae3c64c0a488716824578b39129e82584",
+            "started_at": "2026-10-28T12:34:38.721704+00:00",
+            "control": {
+              "fault": "none",
+              "held": false
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:34:45.222458+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ]
+          },
+          "facts": {
+            "run": {
+              "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+              "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+              "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35",
+              "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+              "status": "running",
+              "recovery_attempts": 5
+            },
+            "tasks": [
+              {
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining",
+                "status": "active",
+                "last_run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+                "last_invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338"
+              }
+            ],
+            "operations": [
+              {
+                "operation_key": "remote_send:0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "status": "succeeded",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008"
+              }
+            ],
+            "history": [
+              {
+                "message_id": "bfa9d326-b835-4d13-80eb-c6d2a4a56339",
+                "role": "user",
+                "runtime_status": null,
+                "capability_id": null,
+                "nonempty": true,
+                "chars": 33,
+                "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+                "contains_start": true,
+                "contains_end": true
+              }
+            ],
+            "control": {
+              "fault": "none",
+              "held": false
+            },
+            "observations": [
+              {
+                "at": "2026-10-28T12:34:45.222458+00:00",
+                "operation": "get",
+                "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "state": 2
+              }
+            ],
+            "event_counts": {
+              "run.started": 1,
+              "message.started": 6,
+              "internal.capability.invocation.started": 1,
+              "internal.capability.task.created": 1,
+              "internal.capability.task.current_changed": 1,
+              "internal.remote_agent.task_bound": 1,
+              "internal.run.recovery_claimed": 5,
+              "internal.run.recovery_activated": 5
+            },
+            "identity_events": [
+              {
+                "seq": 3,
+                "event_type": "internal.capability.invocation.started",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 4,
+                "event_type": "internal.capability.task.created",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 5,
+                "event_type": "internal.capability.task.current_changed",
+                "visibility": "internal",
+                "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+                "capability_id": "semantic_pattern_mining"
+              },
+              {
+                "seq": 6,
+                "event_type": "internal.remote_agent.task_bound",
+                "visibility": "internal",
+                "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+                "capability_id": "semantic_pattern_mining",
+                "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+                "remote_context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+                "initial_message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+                "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+              },
+              {
+                "seq": 33,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 34,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 65,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 66,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 97,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 98,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 129,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 130,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              },
+              {
+                "seq": 161,
+                "event_type": "internal.run.recovery_claimed",
+                "visibility": "internal"
+              },
+              {
+                "seq": 162,
+                "event_type": "internal.run.recovery_activated",
+                "visibility": "internal"
+              }
+            ],
+            "seq_unique_increasing": true
+          }
+        }
+      ],
+      "http_status": 202,
+      "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+      "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+      "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+      "seq": 6,
+      "event_type": "internal.remote_agent.task_bound",
+      "visibility": "internal",
+      "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+      "capability_id": "semantic_pattern_mining",
+      "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+      "remote_context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+      "initial_message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+      "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+      "local_task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+      "facts": {
+        "run": {
+          "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+          "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+          "request_id": "198eb31d-c8fa-4dd7-a486-766507c8df35",
+          "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+          "status": "completed",
+          "recovery_attempts": 5
+        },
+        "tasks": [
+          {
+            "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+            "capability_id": "semantic_pattern_mining",
+            "status": "active",
+            "last_run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+            "last_invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338"
+          }
+        ],
+        "operations": [
+          {
+            "operation_key": "remote_send:0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+            "status": "succeeded",
+            "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+            "task_id": "4d98591a-812f-48a6-bde4-ac1613762008"
+          }
+        ],
+        "history": [
+          {
+            "message_id": "bfa9d326-b835-4d13-80eb-c6d2a4a56339",
+            "role": "user",
+            "runtime_status": null,
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 33,
+            "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+            "contains_start": true,
+            "contains_end": true
+          },
+          {
+            "message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+            "role": "assistant",
+            "runtime_status": "completed",
+            "capability_id": "semantic_pattern_mining",
+            "nonempty": true,
+            "chars": 330,
+            "sha256": "29cba44f3af752882c143ad0b7300a19b126933e292e9b007acd040f2bfcb879",
+            "contains_start": true,
+            "contains_end": true
+          }
+        ],
+        "control": {
+          "fault": "none",
+          "held": false
+        },
+        "observations": [
+          {
+            "at": "2026-10-28T12:34:45.222458+00:00",
+            "operation": "get",
+            "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+            "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+            "state": 2
+          },
+          {
+            "at": "2026-10-28T12:35:00.312748+00:00",
+            "operation": "get",
+            "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+            "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+            "state": 3
+          }
+        ],
+        "event_counts": {
+          "run.started": 1,
+          "message.started": 6,
+          "internal.capability.invocation.started": 1,
+          "internal.capability.task.created": 1,
+          "internal.capability.task.current_changed": 1,
+          "internal.remote_agent.task_bound": 1,
+          "internal.run.recovery_claimed": 5,
+          "internal.run.recovery_activated": 5,
+          "internal.remote_agent.task_terminal": 1,
+          "internal.capability.invocation.completed": 1,
+          "message.finalized": 1,
+          "run.completed": 1
+        },
+        "identity_events": [
+          {
+            "seq": 3,
+            "event_type": "internal.capability.invocation.started",
+            "visibility": "internal",
+            "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+            "capability_id": "semantic_pattern_mining",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 4,
+            "event_type": "internal.capability.task.created",
+            "visibility": "internal",
+            "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 5,
+            "event_type": "internal.capability.task.current_changed",
+            "visibility": "internal",
+            "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 6,
+            "event_type": "internal.remote_agent.task_bound",
+            "visibility": "internal",
+            "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+            "remote_context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+            "initial_message_id": "0aefd3a6-3a02-5abb-8ba2-f0caf83c75d5",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 33,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 34,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 65,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 66,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 97,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 98,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 129,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 130,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 161,
+            "event_type": "internal.run.recovery_claimed",
+            "visibility": "internal"
+          },
+          {
+            "seq": 162,
+            "event_type": "internal.run.recovery_activated",
+            "visibility": "internal"
+          },
+          {
+            "seq": 167,
+            "event_type": "internal.remote_agent.task_terminal",
+            "visibility": "internal",
+            "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+            "remote_status": "completed"
+          },
+          {
+            "seq": 169,
+            "event_type": "internal.capability.invocation.completed",
+            "visibility": "internal",
+            "invocation_id": "58a71bd1-8e29-4562-8bad-c08bd8a04338",
+            "task_id": "4d98591a-812f-48a6-bde4-ac1613762008",
+            "capability_id": "semantic_pattern_mining"
+          }
+        ],
+        "seq_unique_increasing": true
+      },
+      "sse": {
+        "events": [
+          {
+            "type": "run.started",
+            "seq": 1
+          },
+          {
+            "type": "message.started",
+            "seq": 2
+          },
+          {
+            "type": "message.started",
+            "seq": 35
+          },
+          {
+            "type": "message.started",
+            "seq": 67
+          },
+          {
+            "type": "message.started",
+            "seq": 99
+          },
+          {
+            "type": "message.started",
+            "seq": 131
+          },
+          {
+            "type": "message.started",
+            "seq": 163
+          },
+          {
+            "type": "message.delta",
+            "seq": 168
+          },
+          {
+            "type": "message.finalized",
+            "seq": 170
+          },
+          {
+            "type": "run.completed",
+            "seq": 171
+          }
+        ],
+        "unique_terminal": true,
+        "unique_finalized": true,
+        "privacy_whitelist": true,
+        "reconnect_after_terminal_empty": true
+      },
+      "remote_database": {
+        "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+        "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+        "state": "TASK_STATE_COMPLETED",
+        "cancel_requested": false,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "5744c92f-4aa4-4355-8136-12143b9af0ee",
+            "status": "completed",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 1,
+            "unique_common_clause_ids": 1,
+            "trace_records": 0,
+            "distinct_source_clauses": 0
+          }
+        ]
+      },
+      "initial_submit_response": {
+        "http_status": 202,
+        "run_id": "b09dd6fa-24a3-4d95-84ce-7b6a07b5c0a6",
+        "session_id": "bb879b36-ba8c-4195-82de-a5d3f0269439",
+        "response_message_id": "7d17383d-6b5b-4295-a87f-44d7676383d8",
+        "status": "queued",
+        "recovery_attempts": 0
+      },
+      "initial_recovery_attempts": 0,
+      "final_recovery_attempts": 5,
+      "final_status": "completed",
+      "browser_completed": {
+        "passed": 1,
+        "seconds": 3.1
+      }
+    },
+    {
+      "case": "session_delete_barrier",
+      "request_id": "6ba0c2fe-006e-4e72-9959-5a4a7d7d2d39",
+      "intent": "固定日期完整参数；确认working及analysis_runs后，测试客户端读取真实Get响应再注入丢失，验证DELETE409保留Session/Run/绑定/Operation；解除故障确认远程终态后再DELETE204",
+      "status": "cancelled",
+      "http_status": 202,
+      "run_id": "a4804284-f1e9-444a-b61c-c6ad0f4dec45",
+      "session_id": "f5bd52e4-610e-411d-84f7-32b873ac871e",
+      "response_message_id": "14230a31-a80e-4d1d-9ccd-6c198c348b4d",
+      "seq": 6,
+      "event_type": "internal.remote_agent.task_bound",
+      "visibility": "internal",
+      "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+      "capability_id": "semantic_pattern_mining",
+      "remote_task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+      "remote_context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+      "initial_message_id": "67526e30-7215-51e9-8ff6-70bf672a33a4",
+      "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+      "local_task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+      "facts_before": {
+        "run": {
+          "run_id": "a4804284-f1e9-444a-b61c-c6ad0f4dec45",
+          "session_id": "f5bd52e4-610e-411d-84f7-32b873ac871e",
+          "request_id": "6ba0c2fe-006e-4e72-9959-5a4a7d7d2d39",
+          "response_message_id": "14230a31-a80e-4d1d-9ccd-6c198c348b4d",
+          "status": "running",
+          "recovery_attempts": 0
+        },
+        "tasks": [
+          {
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+            "capability_id": "semantic_pattern_mining",
+            "status": "active",
+            "last_run_id": "a4804284-f1e9-444a-b61c-c6ad0f4dec45",
+            "last_invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a"
+          }
+        ],
+        "operations": [
+          {
+            "operation_key": "remote_send:67526e30-7215-51e9-8ff6-70bf672a33a4",
+            "status": "succeeded",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3"
+          }
+        ],
+        "history": [
+          {
+            "message_id": "aa1a3d3e-11f7-4e30-b917-635ce59f3ab3",
+            "role": "user",
+            "runtime_status": null,
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 33,
+            "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+            "contains_start": true,
+            "contains_end": true
+          }
+        ],
+        "control": {
+          "fault": "none",
+          "held": false
+        },
+        "observations": [
+          {
+            "at": "2026-10-28T12:36:23.650357+00:00",
+            "operation": "send",
+            "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+            "state": 1,
+            "message_id": "67526e30-7215-51e9-8ff6-70bf672a33a4"
+          },
+          {
+            "at": "2026-10-28T12:36:24.723799+00:00",
+            "operation": "get",
+            "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+            "state": 2
+          }
+        ],
+        "event_counts": {
+          "run.started": 1,
+          "message.started": 1,
+          "internal.capability.invocation.started": 1,
+          "internal.capability.task.created": 1,
+          "internal.capability.task.current_changed": 1,
+          "internal.remote_agent.task_bound": 1
+        },
+        "identity_events": [
+          {
+            "seq": 3,
+            "event_type": "internal.capability.invocation.started",
+            "visibility": "internal",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "capability_id": "semantic_pattern_mining",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 4,
+            "event_type": "internal.capability.task.created",
+            "visibility": "internal",
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 5,
+            "event_type": "internal.capability.task.current_changed",
+            "visibility": "internal",
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 6,
+            "event_type": "internal.remote_agent.task_bound",
+            "visibility": "internal",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "remote_context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+            "initial_message_id": "67526e30-7215-51e9-8ff6-70bf672a33a4",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          }
+        ],
+        "seq_unique_increasing": true
+      },
+      "delete_unknown": {
+        "http_status": 409,
+        "retryable": true,
+        "remote_was_working": true,
+        "remote_business_run_id": "3e1ef436-612b-4b32-884a-537b80fef0a7",
+        "facts": {
+          "run": {
+            "run_id": "a4804284-f1e9-444a-b61c-c6ad0f4dec45",
+            "session_id": "f5bd52e4-610e-411d-84f7-32b873ac871e",
+            "request_id": "6ba0c2fe-006e-4e72-9959-5a4a7d7d2d39",
+            "response_message_id": "14230a31-a80e-4d1d-9ccd-6c198c348b4d",
+            "status": "cancel_requested",
+            "recovery_attempts": 0
+          },
+          "tasks": [
+            {
+              "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+              "capability_id": "semantic_pattern_mining",
+              "status": "active",
+              "last_run_id": "a4804284-f1e9-444a-b61c-c6ad0f4dec45",
+              "last_invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a"
+            }
+          ],
+          "operations": [
+            {
+              "operation_key": "remote_send:67526e30-7215-51e9-8ff6-70bf672a33a4",
+              "status": "succeeded",
+              "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+              "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3"
+            }
+          ],
+          "history": [
+            {
+              "message_id": "aa1a3d3e-11f7-4e30-b917-635ce59f3ab3",
+              "role": "user",
+              "runtime_status": null,
+              "capability_id": null,
+              "nonempty": true,
+              "chars": 33,
+              "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+              "contains_start": true,
+              "contains_end": true
+            }
+          ],
+          "control": {
+            "fault": "unknown",
+            "held": false
+          },
+          "observations": [
+            {
+              "at": "2026-10-28T12:36:23.650357+00:00",
+              "operation": "send",
+              "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+              "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+              "state": 1,
+              "message_id": "67526e30-7215-51e9-8ff6-70bf672a33a4"
+            },
+            {
+              "at": "2026-10-28T12:36:24.723799+00:00",
+              "operation": "get",
+              "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+              "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+              "state": 2
+            }
+          ],
+          "event_counts": {
+            "run.started": 1,
+            "message.started": 1,
+            "internal.capability.invocation.started": 1,
+            "internal.capability.task.created": 1,
+            "internal.capability.task.current_changed": 1,
+            "internal.remote_agent.task_bound": 1,
+            "internal.run.remote_pending": 1,
+            "internal.run.cancel_requested": 1
+          },
+          "identity_events": [
+            {
+              "seq": 3,
+              "event_type": "internal.capability.invocation.started",
+              "visibility": "internal",
+              "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+              "capability_id": "semantic_pattern_mining",
+              "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+            },
+            {
+              "seq": 4,
+              "event_type": "internal.capability.task.created",
+              "visibility": "internal",
+              "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+              "capability_id": "semantic_pattern_mining"
+            },
+            {
+              "seq": 5,
+              "event_type": "internal.capability.task.current_changed",
+              "visibility": "internal",
+              "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+              "capability_id": "semantic_pattern_mining"
+            },
+            {
+              "seq": 6,
+              "event_type": "internal.remote_agent.task_bound",
+              "visibility": "internal",
+              "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+              "capability_id": "semantic_pattern_mining",
+              "remote_task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+              "remote_context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+              "initial_message_id": "67526e30-7215-51e9-8ff6-70bf672a33a4",
+              "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+            },
+            {
+              "seq": 7,
+              "event_type": "internal.run.remote_pending",
+              "visibility": "internal"
+            },
+            {
+              "seq": 8,
+              "event_type": "internal.run.cancel_requested",
+              "visibility": "internal"
+            }
+          ],
+          "seq_unique_increasing": true
+        },
+        "session_run_binding_operation_retained": true,
+        "no_public_terminal": true
+      },
+      "facts": {
+        "run": {
+          "run_id": "a4804284-f1e9-444a-b61c-c6ad0f4dec45",
+          "session_id": "f5bd52e4-610e-411d-84f7-32b873ac871e",
+          "request_id": "6ba0c2fe-006e-4e72-9959-5a4a7d7d2d39",
+          "response_message_id": "14230a31-a80e-4d1d-9ccd-6c198c348b4d",
+          "status": "cancelled",
+          "recovery_attempts": 0
+        },
+        "tasks": [
+          {
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+            "capability_id": "semantic_pattern_mining",
+            "status": "active",
+            "last_run_id": "a4804284-f1e9-444a-b61c-c6ad0f4dec45",
+            "last_invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a"
+          }
+        ],
+        "operations": [
+          {
+            "operation_key": "remote_send:67526e30-7215-51e9-8ff6-70bf672a33a4",
+            "status": "succeeded",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3"
+          },
+          {
+            "operation_key": "remote_cancel:6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "status": "succeeded",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3"
+          }
+        ],
+        "history": [
+          {
+            "message_id": "aa1a3d3e-11f7-4e30-b917-635ce59f3ab3",
+            "role": "user",
+            "runtime_status": null,
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 33,
+            "sha256": "cee2e007c9579f343291cc5589ae64e5907b54b2a3fdc7126d4a6c2a7fef17d7",
+            "contains_start": true,
+            "contains_end": true
+          },
+          {
+            "message_id": "14230a31-a80e-4d1d-9ccd-6c198c348b4d",
+            "role": "assistant",
+            "runtime_status": "stopped",
+            "capability_id": null,
+            "nonempty": true,
+            "chars": 8,
+            "sha256": "bcaa0a842b7d027994809a847826bd84e9a1f0a3e3ee83abc7023e1e579e3b40",
+            "contains_start": false,
+            "contains_end": false
+          }
+        ],
+        "control": {
+          "fault": "none",
+          "held": false
+        },
+        "observations": [
+          {
+            "at": "2026-10-28T12:36:23.650357+00:00",
+            "operation": "send",
+            "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+            "state": 1,
+            "message_id": "67526e30-7215-51e9-8ff6-70bf672a33a4"
+          },
+          {
+            "at": "2026-10-28T12:36:24.723799+00:00",
+            "operation": "get",
+            "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+            "state": 2
+          },
+          {
+            "at": "2026-10-28T12:37:04.562197+00:00",
+            "operation": "cancel",
+            "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+            "state": 2
+          },
+          {
+            "at": "2026-10-28T12:37:06.436870+00:00",
+            "operation": "get",
+            "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+            "state": 5
+          }
+        ],
+        "event_counts": {
+          "run.started": 1,
+          "message.started": 1,
+          "internal.capability.invocation.started": 1,
+          "internal.capability.task.created": 1,
+          "internal.capability.task.current_changed": 1,
+          "internal.remote_agent.task_bound": 1,
+          "internal.run.remote_pending": 1,
+          "internal.run.cancel_requested": 1,
+          "internal.remote_agent.task_terminal": 1,
+          "internal.capability.invocation.cancelled": 1,
+          "message.finalized": 1,
+          "run.cancelled": 1
+        },
+        "identity_events": [
+          {
+            "seq": 3,
+            "event_type": "internal.capability.invocation.started",
+            "visibility": "internal",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "capability_id": "semantic_pattern_mining",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 4,
+            "event_type": "internal.capability.task.created",
+            "visibility": "internal",
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 5,
+            "event_type": "internal.capability.task.current_changed",
+            "visibility": "internal",
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+            "capability_id": "semantic_pattern_mining"
+          },
+          {
+            "seq": 6,
+            "event_type": "internal.remote_agent.task_bound",
+            "visibility": "internal",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "remote_context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+            "initial_message_id": "67526e30-7215-51e9-8ff6-70bf672a33a4",
+            "identity_hash": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08"
+          },
+          {
+            "seq": 7,
+            "event_type": "internal.run.remote_pending",
+            "visibility": "internal"
+          },
+          {
+            "seq": 8,
+            "event_type": "internal.run.cancel_requested",
+            "visibility": "internal"
+          },
+          {
+            "seq": 9,
+            "event_type": "internal.remote_agent.task_terminal",
+            "visibility": "internal",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "capability_id": "semantic_pattern_mining",
+            "remote_task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+            "remote_status": "canceled"
+          },
+          {
+            "seq": 11,
+            "event_type": "internal.capability.invocation.cancelled",
+            "visibility": "internal",
+            "invocation_id": "51dcf28a-eea2-4fd6-b1a1-b1be653a2d4a",
+            "task_id": "4d8a64cc-1f41-4f1f-aa52-8bc874b192d3",
+            "capability_id": "semantic_pattern_mining"
+          }
+        ],
+        "seq_unique_increasing": true
+      },
+      "sse": {
+        "events": [
+          {
+            "type": "run.started",
+            "seq": 1
+          },
+          {
+            "type": "message.started",
+            "seq": 2
+          },
+          {
+            "type": "message.finalized",
+            "seq": 12
+          },
+          {
+            "type": "run.cancelled",
+            "seq": 13
+          }
+        ],
+        "unique_terminal": true,
+        "unique_finalized": true,
+        "privacy_whitelist": true,
+        "reconnect_after_terminal_empty": true
+      },
+      "delete_confirmed_intent": "真实远程canceled/本地cancelled证据已保存，才再次删除本批Session",
+      "delete_confirmed": {
+        "http_status": 204,
+        "local_rows_remaining": {
+          "sessions": 0,
+          "runs": 0,
+          "events": 0,
+          "tasks": 0,
+          "contexts": 0,
+          "operations": 0,
+          "interrupts": 0,
+          "checkpoints": 0,
+          "blobs": 0,
+          "writes": 0
+        }
+      },
+      "remote_database": {
+        "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+        "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+        "state": "TASK_STATE_CANCELED",
+        "cancel_requested": true,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "3e1ef436-612b-4b32-884a-537b80fef0a7",
+            "status": "canceled",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 0,
+            "unique_common_clause_ids": 0,
+            "trace_records": 0,
+            "distinct_source_clauses": 0
+          }
+        ]
+      },
+      "initial_submit_response": {
+        "http_status": 202,
+        "run_id": "a4804284-f1e9-444a-b61c-c6ad0f4dec45",
+        "session_id": "f5bd52e4-610e-411d-84f7-32b873ac871e",
+        "response_message_id": "14230a31-a80e-4d1d-9ccd-6c198c348b4d",
+        "status": "queued",
+        "recovery_attempts": 0
+      },
+      "initial_recovery_attempts": 0,
+      "final_recovery_attempts": 0,
+      "final_status": "cancelled"
+    }
+  ],
+  "final_remote_metadata": {
+    "database": "semantic_a2a_integration",
+    "all_counts": {
+      "tasks": 11,
+      "messages": 15,
+      "analysis_runs": 11,
+      "common_clauses": 19,
+      "trace_records": 172
+    },
+    "source": {
+      "rows": 50,
+      "categories": 5,
+      "first_date": "2026-10-01",
+      "last_date": "2026-10-20"
+    },
+    "tasks": [
+      {
+        "task_id": "ee9b55b2-611e-44e4-8dea-803b836f25ed",
+        "context_id": "75958446-513e-48f8-84b4-5ebeda9ac3a1",
+        "state": "TASK_STATE_COMPLETED",
+        "cancel_requested": false,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "4c5e4ff5-efda-4e2d-b928-aec671d0c563",
+            "status": "completed",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 1,
+            "unique_common_clause_ids": 1,
+            "trace_records": 10,
+            "distinct_source_clauses": 10
+          }
+        ]
+      },
+      {
+        "task_id": "5f697322-1728-4a6f-8af3-ca47cc066566",
+        "context_id": "ce0a54a7-7d48-4c9d-900b-603da1e88cab",
+        "state": "TASK_STATE_COMPLETED",
+        "cancel_requested": false,
+        "distinct_messages": 3,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "a9014df0-d4d1-4804-af9e-16b028908e28",
+            "status": "completed",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 0,
+            "unique_common_clause_ids": 0,
+            "trace_records": 0,
+            "distinct_source_clauses": 0
+          }
+        ]
+      },
+      {
+        "task_id": "af51606e-a174-4cac-8381-4a7e22356e39",
+        "context_id": "cc63edb0-e897-4309-90ad-e027ca09fcc7",
+        "state": "TASK_STATE_CANCELED",
+        "cancel_requested": true,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "98ee4b6a-0fca-4009-84da-268a9e93a8b1",
+            "status": "canceled",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 0,
+            "unique_common_clause_ids": 0,
+            "trace_records": 0,
+            "distinct_source_clauses": 0
+          }
+        ]
+      },
+      {
+        "task_id": "7fbdbdda-ab44-4aa2-be8e-1834c0420b51",
+        "context_id": "8592ce2e-a579-44c0-b9cc-f5af5f0b1f5f",
+        "state": "TASK_STATE_COMPLETED",
+        "cancel_requested": false,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "5e05b6d1-6cfe-47cc-ac89-2661169e143f",
+            "status": "completed",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 3,
+            "unique_common_clause_ids": 3,
+            "trace_records": 30,
+            "distinct_source_clauses": 20
+          }
+        ]
+      },
+      {
+        "task_id": "2b503ebd-e46c-4075-9c6b-37f003cd4af0",
+        "context_id": "f963d0f4-7124-4ad5-bdc2-24cd93e05914",
+        "state": "TASK_STATE_COMPLETED",
+        "cancel_requested": false,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "5744c92f-4aa4-4355-8136-12143b9af0ee",
+            "status": "completed",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 1,
+            "unique_common_clause_ids": 1,
+            "trace_records": 0,
+            "distinct_source_clauses": 0
+          }
+        ]
+      },
+      {
+        "task_id": "6ba2ded5-a010-41a3-9d34-f9dd589cdcde",
+        "context_id": "b1e7fddb-a473-4e1e-813b-ef8617a3d6ac",
+        "state": "TASK_STATE_CANCELED",
+        "cancel_requested": true,
+        "distinct_messages": 1,
+        "business_run_count": 1,
+        "business_runs": [
+          {
+            "run_id": "3e1ef436-612b-4b32-884a-537b80fef0a7",
+            "status": "canceled",
+            "range_start": "2026-09-30T16:00:00+00:00",
+            "range_end": "2026-10-20T16:00:00+00:00",
+            "common_clauses": 0,
+            "unique_common_clause_ids": 0,
+            "trace_records": 0,
+            "distinct_source_clauses": 0
+          }
+        ]
+      }
+    ]
+  },
+  "privacy": {
+    "scanned_log_files": 1,
+    "known_public_body_matches": 0,
+    "scope": "仅独立Runtime专用日志；初版继承全局日志不读取，隐私契约另复用同版自动化测试"
+  }
+}

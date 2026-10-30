@@ -1,0 +1,12 @@
+{
+  "source_type": "负责人提供的外部交付文档",
+  "source_path": "D:/workspace/semantic-pattern-mining/远程Agent适配交付说明.md",
+  "source_sha256": "sha256:749ccbe4236578380d56780aca47feafb90ab04daad18d3c9bbf0ddeed0edbdf",
+  "line_count": 223,
+  "contract": {
+    "path": "docs/远程Agent服务端适配开发需求.md",
+    "version": "sha256:35c2dab6c8ba5702572d5083a537737bd6acf27544ff885e86712c79debaa006"
+  },
+  "runtime_commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+  "review_operation_key": "sha256:c490ffe5ca85118fe9075b43a5d652ab23e1c8703d1213c432aac786575f7b0f"
+}

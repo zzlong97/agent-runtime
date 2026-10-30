@@ -43,6 +43,12 @@ tasks:
     parent_task: RA-001
     depends_on:
       - RA-DEV-02
+  RA-INT-01:
+    title: 真实联调与接入成本验收
+    state_file: .dev-team/tasks/RA-INT-01/state.yaml
+    parent_task: RA-001
+    depends_on:
+      - RA-DEV-03
   DB-002:
     title: 补齐项目自有表字段中文注释并复核R07
     state_file: .dev-team/tasks/DB-002/state.yaml

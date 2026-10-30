@@ -1,0 +1,2714 @@
+{
+  "schema_version": 1,
+  "task_id": "RA-INT-01",
+  "report_date": "2026-10-28",
+  "author_role": "dev-team-developer（成本事实归集辅助，无state写入权）",
+  "status": "成本事实已归集，实际联调人工步骤与工时缺项；不构成独立审核或验收",
+  "authority": {
+    "requirements": "docs/requirements.md 9.7、RA-AC-10",
+    "architecture": "docs/architecture.md 17.9、17.11",
+    "decision": "docs/decisions.md D-069",
+    "inputs": {
+      "docs/requirements.md": "8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a",
+      "docs/architecture.md": "92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b",
+      "docs/decisions.md": "78ac1122defa9df497fd154d13bacd8dc04a15ef1b4c53024d448cbf3ee681af",
+      ".dev-team/tasks/RA-INT-01/evidence/正式交付包引用.json": "b70ef1e9edc54082d95254e8ef194e1abc8b9c95936e71455b1bf6e9eb5a0ac2",
+      ".dev-team/tasks/RA-INT-01/evidence/正式交付包只读复核.json": "de6ff1b12d6665056d08a8ff85d3d3d9818c3812e2c25c7391cac1b844a7609e",
+      ".dev-team/tasks/RA-INT-01/handoffs/0003-正式交付包与入口独立复核.md": "881f8502da639795a97a969fdc8851411d8b7ce6ef89c55328f59196764a0b1b",
+      ".dev-team/tasks/RA-INT-01/handoffs/0005-隔离联调执行授权.md": "b9fd5f7ed79d80304ff4854442ff15d4e2d9311aa37bbf845b1ab1992f4f90b8"
+    },
+    "scope": "仅固定Runtime Git对象与正式交付包引用.json指定九文件；未读对方当前源码、.git、备份、临时副本或任何.env内容。归档仅定向读内部manifest及pyproject.toml；未执行归档代码。"
+  },
+  "counting_rules": {
+    "baseline": "Runtime首个RA功能提交的唯一parent；净差异使用baseline→RA-DEV-03，批次分别使用各自parent→commit。当前dirty工作区不参与行数与文件数统计。",
+    "files": "git diff --no-ext-diff --no-renames --numstat -z；每个不同路径一项。带hash构建资产改名按旧路径删除、新路径新增，故本口径不是Git启发式重命名后的逻辑文件数。",
+    "physical": "Git numstat的增删物理行，含空行与注释。Git返回'-'的文件不视作0行；分类physical合计只含可取得numstat的文本。构建资产另给两端字节数与splitlines行数，不能加入有效业务代码。",
+    "python_effective": [
+      "仅统计src下Python源码及tests下Python测试/夹具；.dev-team中的审核探针按协作台账处理，不混入产品测试有效行。",
+      "从固定Git blob解码utf-8-sig，ast.parse识别Module/ClassDef/FunctionDef/AsyncFunctionDef首个字符串表达式docstring，按AST起止位置掩去；AST UTF-8字节列转换为字符列。",
+      "tokenize.generate_tokens定位并掩去COMMENT token（含纯注释与行尾注释），保留业务字符串、断言、缩进及标点；去除空白行，每行rstrip，保留非空行。",
+      "对两端处理后的行序列用difflib.SequenceMatcher(autojunk=False)；replace同时计新增和删除，insert/delete按行数计。该值是约定口径的有效物理行，不是复杂度、工作量或语义指令数。"
+    ],
+    "frontend_effective": "JS/JSX/CSS单独列物理行；本次未使用能可靠区分JSX、字符串与注释的解析器，有效行=null，列为缺项。不得将物理行冒称有效代码，也不将打包JS/CSS作源码。",
+    "external_effective": "沿用同hash交付差异JSON及0003核对结果的声明口径：排除空行、纯注释和docstring，保留实际字符串/断言；算法实现未交付，且未获当前源码读取授权，本次未独立重算，不能假定与Runtime细节完全一致。",
+    "non_additivity": "净差异是最终交付规模；三批次是变更经过，同一文件/中途修改可重复出现。两者不得相加；分批文件数也不能直接当作唯一修改文件总数。测试报告不同范围/版本/重跑不可合并称一次全绿或唯一用例数。",
+    "time": "工时只接受双方团队实际登记；本次均null。测试时长、等待、Token与代码行数不能换算人工工时。"
+  },
+  "runtime_one_time": {
+    "repository": "D:/workspace/agent_runtime",
+    "fixed_versions": {
+      "baseline": "b3e855d17234704b41c0be72f8e2a907a0f942f6",
+      "final": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+      "commits": {
+        "RA_DEV_01": "4f6791369ee562c52539a260ee7320f38e7f34c8",
+        "RA_DEV_02": "b25ff6bab89dda4f3be4006e4f1456538f18964c",
+        "RA_DEV_03": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe"
+      },
+      "parents": {
+        "4f6791369ee562c52539a260ee7320f38e7f34c8": [
+          "b3e855d17234704b41c0be72f8e2a907a0f942f6"
+        ],
+        "b25ff6bab89dda4f3be4006e4f1456538f18964c": [
+          "4f6791369ee562c52539a260ee7320f38e7f34c8"
+        ],
+        "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe": [
+          "b25ff6bab89dda4f3be4006e4f1456538f18964c"
+        ]
+      },
+      "direct_parent_chain_verified": true,
+      "git_version": "git version 2.53.0.windows.1",
+      "python_version": "3.12.7 | packaged by Anaconda, Inc. | (main, Oct  4 2024, 13:17:27) [MSC v.1929 64 bit (AMD64)]"
+    },
+    "final_net": {
+      "from": "b3e855d17234704b41c0be72f8e2a907a0f942f6",
+      "to": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+      "changed_path_entries_no_renames": 139,
+      "categories": {
+        "collaboration_ledger": {
+          "files": 60,
+          "binary_files": 2,
+          "physical_added": 4600,
+          "physical_removed": 0,
+          "effective_added": null,
+          "effective_removed": null
+        },
+        "documentation": {
+          "files": 4,
+          "binary_files": 0,
+          "physical_added": 825,
+          "physical_removed": 7,
+          "effective_added": null,
+          "effective_removed": null
+        },
+        "frontend_tests": {
+          "files": 3,
+          "binary_files": 0,
+          "physical_added": 173,
+          "physical_removed": 0,
+          "effective_added": null,
+          "effective_removed": null
+        },
+        "frontend_test_tooling": {
+          "files": 1,
+          "binary_files": 0,
+          "physical_added": 12,
+          "physical_removed": 0,
+          "effective_added": null,
+          "effective_removed": null
+        },
+        "frontend_source": {
+          "files": 4,
+          "binary_files": 0,
+          "physical_added": 52,
+          "physical_removed": 15,
+          "effective_added": null,
+          "effective_removed": null
+        },
+        "dependency_manifest": {
+          "files": 1,
+          "binary_files": 0,
+          "physical_added": 1,
+          "physical_removed": 0,
+          "effective_added": null,
+          "effective_removed": null
+        },
+        "python_source": {
+          "files": 26,
+          "binary_files": 0,
+          "physical_added": 1503,
+          "physical_removed": 88,
+          "effective_added": 1242,
+          "effective_removed": 84
+        },
+        "capability_configuration": {
+          "files": 2,
+          "binary_files": 0,
+          "physical_added": 6,
+          "physical_removed": 2,
+          "effective_added": null,
+          "effective_removed": null
+        },
+        "generated_frontend_assets": {
+          "files": 5,
+          "binary_files": 4,
+          "physical_added": 2,
+          "physical_removed": 2,
+          "effective_added": null,
+          "effective_removed": null
+        },
+        "python_tests_and_fixtures": {
+          "files": 32,
+          "binary_files": 0,
+          "physical_added": 2741,
+          "physical_removed": 24,
+          "effective_added": 2401,
+          "effective_removed": 24
+        },
+        "dependency_lock": {
+          "files": 1,
+          "binary_files": 0,
+          "physical_added": 261,
+          "physical_removed": 0,
+          "effective_added": null,
+          "effective_removed": null
+        }
+      },
+      "files": [
+        {
+          "path": ".dev-team/index.yaml",
+          "category": "collaboration_ledger",
+          "physical_added": 23,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/evidence/0001-planning-validation.md",
+          "category": "collaboration_ledger",
+          "physical_added": 54,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/evidence/0002-前序双远程同步输入.json",
+          "category": "collaboration_ledger",
+          "physical_added": 25,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0001-planning.md",
+          "category": "collaboration_ledger",
+          "physical_added": 34,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0002-启动授权与前序门禁核对.md",
+          "category": "collaboration_ledger",
+          "physical_added": 54,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0003-前序双远程同步回执.md",
+          "category": "collaboration_ledger",
+          "physical_added": 32,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0004-实施前技术核对.md",
+          "category": "collaboration_ledger",
+          "physical_added": 151,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0005-首批实施与复核.md",
+          "category": "collaboration_ledger",
+          "physical_added": 68,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0006-RA02实施落点核对.md",
+          "category": "collaboration_ledger",
+          "physical_added": 52,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0007-续行授权与基线等价核对.md",
+          "category": "collaboration_ledger",
+          "physical_added": 39,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0008-远程范围拒绝窄例外裁决.md",
+          "category": "collaboration_ledger",
+          "physical_added": 44,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0009-发送前远程身份缺口核对.md",
+          "category": "collaboration_ledger",
+          "physical_added": 35,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0010-发送前身份持久化实施细化.md",
+          "category": "collaboration_ledger",
+          "physical_added": 24,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0011-远程超时取消意图持久化细化.md",
+          "category": "collaboration_ledger",
+          "physical_added": 27,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0012-RA02技术交付与终验边界.md",
+          "category": "collaboration_ledger",
+          "physical_added": 42,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0013-RA03实施落点核对.md",
+          "category": "collaboration_ledger",
+          "physical_added": 57,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/handoffs/0014-RA03技术交付与终验边界.md",
+          "category": "collaboration_ledger",
+          "physical_added": 42,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/state.yaml",
+          "category": "collaboration_ledger",
+          "physical_added": 277,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-001/task.md",
+          "category": "collaboration_ledger",
+          "physical_added": 55,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/evidence/0001-开发验证.json",
+          "category": "collaboration_ledger",
+          "physical_added": 238,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/evidence/0002-R01返工验证.json",
+          "category": "collaboration_ledger",
+          "physical_added": 206,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/evidence/0003-提交输入.json",
+          "category": "collaboration_ledger",
+          "physical_added": 178,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/handoffs/0001-开发交付.md",
+          "category": "collaboration_ledger",
+          "physical_added": 45,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/handoffs/0002-独立审核.md",
+          "category": "collaboration_ledger",
+          "physical_added": 99,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/handoffs/0003-R01返工交付.md",
+          "category": "collaboration_ledger",
+          "physical_added": 33,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/handoffs/0004-R01独立复核.md",
+          "category": "collaboration_ledger",
+          "physical_added": 62,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/handoffs/0005-提交与同步回执.md",
+          "category": "collaboration_ledger",
+          "physical_added": 43,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/state.yaml",
+          "category": "collaboration_ledger",
+          "physical_added": 434,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-01/task.md",
+          "category": "collaboration_ledger",
+          "physical_added": 68,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/R01独立复核探针.py",
+          "category": "collaboration_ledger",
+          "physical_added": 84,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/R01返工范围指纹.json",
+          "category": "collaboration_ledger",
+          "physical_added": 34,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/R01返工验证回执.json",
+          "category": "collaboration_ledger",
+          "physical_added": 56,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/交付范围指纹.json",
+          "category": "collaboration_ledger",
+          "physical_added": 26,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/审核探针.py",
+          "category": "collaboration_ledger",
+          "physical_added": 36,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/提交输入.json",
+          "category": "collaboration_ledger",
+          "physical_added": 102,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/最终验证回执.json",
+          "category": "collaboration_ledger",
+          "physical_added": 33,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/验证记录.md",
+          "category": "collaboration_ledger",
+          "physical_added": 174,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/handoffs/0001-开发交付.md",
+          "category": "collaboration_ledger",
+          "physical_added": 54,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/handoffs/0002-独立审核.md",
+          "category": "collaboration_ledger",
+          "physical_added": 68,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/handoffs/0003-R01返工交付.md",
+          "category": "collaboration_ledger",
+          "physical_added": 42,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/handoffs/0004-R01独立复核.md",
+          "category": "collaboration_ledger",
+          "physical_added": 52,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/handoffs/0005-负责人终验与提交授权.md",
+          "category": "collaboration_ledger",
+          "physical_added": 24,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/handoffs/0006-提交与同步回执.md",
+          "category": "collaboration_ledger",
+          "physical_added": 39,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/state.yaml",
+          "category": "collaboration_ledger",
+          "physical_added": 230,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-02/task.md",
+          "category": "collaboration_ledger",
+          "physical_added": 83,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/browser/.last-run.json",
+          "category": "collaboration_ledger",
+          "physical_added": 4,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/browser/chat-刷新恢复两轮文本补参、空白阻止、双击单提交和同请求失败重试-browser/second-text-interrupt.png",
+          "category": "collaboration_ledger",
+          "physical_added": null,
+          "physical_removed": null
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/候选文件指纹.json",
+          "category": "collaboration_ledger",
+          "physical_added": 53,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/审核浏览器/.last-run.json",
+          "category": "collaboration_ledger",
+          "physical_added": 4,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/审核浏览器/chat-刷新恢复两轮文本补参、空白阻止、双击单提交和同请求失败重试-browser/second-text-interrupt.png",
+          "category": "collaboration_ledger",
+          "physical_added": null,
+          "physical_removed": null
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/审核补充探针.py",
+          "category": "collaboration_ledger",
+          "physical_added": 72,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/接线阶段验证回执.md",
+          "category": "collaboration_ledger",
+          "physical_added": 25,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/提交输入.json",
+          "category": "collaboration_ledger",
+          "physical_added": 121,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md",
+          "category": "collaboration_ledger",
+          "physical_added": 81,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/首组真实PG探针.md",
+          "category": "collaboration_ledger",
+          "physical_added": 43,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/handoffs/0001-开发交付.md",
+          "category": "collaboration_ledger",
+          "physical_added": 26,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/handoffs/0002-独立审核.md",
+          "category": "collaboration_ledger",
+          "physical_added": 67,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/handoffs/0003-负责人终验与提交授权.md",
+          "category": "collaboration_ledger",
+          "physical_added": 24,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/state.yaml",
+          "category": "collaboration_ledger",
+          "physical_added": 353,
+          "physical_removed": 0
+        },
+        {
+          "path": ".dev-team/tasks/RA-DEV-03/task.md",
+          "category": "collaboration_ledger",
+          "physical_added": 49,
+          "physical_removed": 0
+        },
+        {
+          "path": "docs/architecture.md",
+          "category": "documentation",
+          "physical_added": 396,
+          "physical_removed": 0
+        },
+        {
+          "path": "docs/capability_development_guide.md",
+          "category": "documentation",
+          "physical_added": 108,
+          "physical_removed": 6
+        },
+        {
+          "path": "docs/decisions.md",
+          "category": "documentation",
+          "physical_added": 153,
+          "physical_removed": 0
+        },
+        {
+          "path": "docs/requirements.md",
+          "category": "documentation",
+          "physical_added": 168,
+          "physical_removed": 1
+        },
+        {
+          "path": "frontend/e2e-remote/chat.spec.js",
+          "category": "frontend_tests",
+          "physical_added": 127,
+          "physical_removed": 0
+        },
+        {
+          "path": "frontend/e2e/chat.spec.js",
+          "category": "frontend_tests",
+          "physical_added": 17,
+          "physical_removed": 0
+        },
+        {
+          "path": "frontend/playwright.remote.config.js",
+          "category": "frontend_test_tooling",
+          "physical_added": 12,
+          "physical_removed": 0
+        },
+        {
+          "path": "frontend/src/App.jsx",
+          "category": "frontend_source",
+          "physical_added": 25,
+          "physical_removed": 7
+        },
+        {
+          "path": "frontend/src/App.test.jsx",
+          "category": "frontend_tests",
+          "physical_added": 29,
+          "physical_removed": 0
+        },
+        {
+          "path": "frontend/src/components/ChatWorkspace.jsx",
+          "category": "frontend_source",
+          "physical_added": 2,
+          "physical_removed": 1
+        },
+        {
+          "path": "frontend/src/components/RunStatusPanel.jsx",
+          "category": "frontend_source",
+          "physical_added": 19,
+          "physical_removed": 7
+        },
+        {
+          "path": "frontend/src/styles/app.css",
+          "category": "frontend_source",
+          "physical_added": 6,
+          "physical_removed": 0
+        },
+        {
+          "path": "pyproject.toml",
+          "category": "dependency_manifest",
+          "physical_added": 1,
+          "physical_removed": 0
+        },
+        {
+          "path": "src/agent_runtime/api/routes/chat.py",
+          "category": "python_source",
+          "physical_added": 8,
+          "physical_removed": 6,
+          "effective": {
+            "added": 8,
+            "removed": 6,
+            "before_lines": 429,
+            "after_lines": 431
+          }
+        },
+        {
+          "path": "src/agent_runtime/api/schemas/runs.py",
+          "category": "python_source",
+          "physical_added": 10,
+          "physical_removed": 10,
+          "effective": {
+            "added": 10,
+            "removed": 10,
+            "before_lines": 97,
+            "after_lines": 97
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/contracts.py",
+          "category": "python_source",
+          "physical_added": 4,
+          "physical_removed": 1,
+          "effective": {
+            "added": 3,
+            "removed": 0,
+            "before_lines": 309,
+            "after_lines": 312
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/en_to_zh/manifest.yaml",
+          "category": "capability_configuration",
+          "physical_added": 3,
+          "physical_removed": 1
+        },
+        {
+          "path": "src/agent_runtime/capabilities/execution.py",
+          "category": "python_source",
+          "physical_added": 10,
+          "physical_removed": 0,
+          "effective": {
+            "added": 9,
+            "removed": 0,
+            "before_lines": 321,
+            "after_lines": 330
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/general_chat/manifest.yaml",
+          "category": "capability_configuration",
+          "physical_added": 3,
+          "physical_removed": 1
+        },
+        {
+          "path": "src/agent_runtime/capabilities/invocation_gateway.py",
+          "category": "python_source",
+          "physical_added": 80,
+          "physical_removed": 2,
+          "effective": {
+            "added": 70,
+            "removed": 2,
+            "before_lines": 487,
+            "after_lines": 555
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/invocation_service.py",
+          "category": "python_source",
+          "physical_added": 2,
+          "physical_removed": 0,
+          "effective": {
+            "added": 2,
+            "removed": 0,
+            "before_lines": 199,
+            "after_lines": 201
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/manifest.py",
+          "category": "python_source",
+          "physical_added": 81,
+          "physical_removed": 10,
+          "effective": {
+            "added": 63,
+            "removed": 10,
+            "before_lines": 232,
+            "after_lines": 285
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/operation_ledger.py",
+          "category": "python_source",
+          "physical_added": 9,
+          "physical_removed": 1,
+          "effective": {
+            "added": 7,
+            "removed": 1,
+            "before_lines": 258,
+            "after_lines": 264
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/persistence.py",
+          "category": "python_source",
+          "physical_added": 46,
+          "physical_removed": 2,
+          "effective": {
+            "added": 42,
+            "removed": 1,
+            "before_lines": 2093,
+            "after_lines": 2134
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/regeneration.py",
+          "category": "python_source",
+          "physical_added": 2,
+          "physical_removed": 1,
+          "effective": {
+            "added": 2,
+            "removed": 1,
+            "before_lines": 192,
+            "after_lines": 193
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/registry.py",
+          "category": "python_source",
+          "physical_added": 24,
+          "physical_removed": 10,
+          "effective": {
+            "added": 23,
+            "removed": 10,
+            "before_lines": 632,
+            "after_lines": 645
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/remote_a2a/__init__.py",
+          "category": "python_source",
+          "physical_added": 1,
+          "physical_removed": 0,
+          "effective": {
+            "added": 0,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 0
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/remote_a2a/capability.py",
+          "category": "python_source",
+          "physical_added": 206,
+          "physical_removed": 0,
+          "effective": {
+            "added": 168,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 168
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/remote_a2a/card.py",
+          "category": "python_source",
+          "physical_added": 121,
+          "physical_removed": 0,
+          "effective": {
+            "added": 101,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 101
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/remote_a2a/client.py",
+          "category": "python_source",
+          "physical_added": 350,
+          "physical_removed": 0,
+          "effective": {
+            "added": 298,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 298
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/remote_a2a/errors.py",
+          "category": "python_source",
+          "physical_added": 50,
+          "physical_removed": 0,
+          "effective": {
+            "added": 28,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 28
+          }
+        },
+        {
+          "path": "src/agent_runtime/capabilities/task_service.py",
+          "category": "python_source",
+          "physical_added": 3,
+          "physical_removed": 1,
+          "effective": {
+            "added": 2,
+            "removed": 0,
+            "before_lines": 350,
+            "after_lines": 352
+          }
+        },
+        {
+          "path": "src/agent_runtime/chat.py",
+          "category": "python_source",
+          "physical_added": 198,
+          "physical_removed": 33,
+          "effective": {
+            "added": 179,
+            "removed": 33,
+            "before_lines": 3381,
+            "after_lines": 3527
+          }
+        },
+        {
+          "path": "src/agent_runtime/core/config.py",
+          "category": "python_source",
+          "physical_added": 19,
+          "physical_removed": 0,
+          "effective": {
+            "added": 18,
+            "removed": 0,
+            "before_lines": 159,
+            "after_lines": 177
+          }
+        },
+        {
+          "path": "src/agent_runtime/graph/parent.py",
+          "category": "python_source",
+          "physical_added": 24,
+          "physical_removed": 2,
+          "effective": {
+            "added": 22,
+            "removed": 2,
+            "before_lines": 299,
+            "after_lines": 319
+          }
+        },
+        {
+          "path": "src/agent_runtime/runtime/event_repository.py",
+          "category": "python_source",
+          "physical_added": 105,
+          "physical_removed": 2,
+          "effective": {
+            "added": 92,
+            "removed": 2,
+            "before_lines": 1594,
+            "after_lines": 1684
+          }
+        },
+        {
+          "path": "src/agent_runtime/runtime/event_schemas.py",
+          "category": "python_source",
+          "physical_added": 44,
+          "physical_removed": 6,
+          "effective": {
+            "added": 28,
+            "removed": 5,
+            "before_lines": 587,
+            "after_lines": 610
+          }
+        },
+        {
+          "path": "src/agent_runtime/runtime/interrupt_payloads.py",
+          "category": "python_source",
+          "physical_added": 63,
+          "physical_removed": 0,
+          "effective": {
+            "added": 35,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 35
+          }
+        },
+        {
+          "path": "src/agent_runtime/runtime/interrupts.py",
+          "category": "python_source",
+          "physical_added": 23,
+          "physical_removed": 0,
+          "effective": {
+            "added": 20,
+            "removed": 0,
+            "before_lines": 246,
+            "after_lines": 266
+          }
+        },
+        {
+          "path": "src/agent_runtime/runtime/models.py",
+          "category": "python_source",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 123,
+            "after_lines": 123
+          }
+        },
+        {
+          "path": "src/agent_runtime/runtime/sequencer.py",
+          "category": "python_source",
+          "physical_added": 19,
+          "physical_removed": 0,
+          "effective": {
+            "added": 11,
+            "removed": 0,
+            "before_lines": 292,
+            "after_lines": 303
+          }
+        },
+        {
+          "path": "src/agent_runtime/static/assets/index-B3KNrXbB.css",
+          "category": "generated_frontend_assets",
+          "physical_added": null,
+          "physical_removed": null
+        },
+        {
+          "path": "src/agent_runtime/static/assets/index-B_5ARtbB.js",
+          "category": "generated_frontend_assets",
+          "physical_added": null,
+          "physical_removed": null
+        },
+        {
+          "path": "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+          "category": "generated_frontend_assets",
+          "physical_added": null,
+          "physical_removed": null
+        },
+        {
+          "path": "src/agent_runtime/static/assets/index-xY-hKUao.css",
+          "category": "generated_frontend_assets",
+          "physical_added": null,
+          "physical_removed": null
+        },
+        {
+          "path": "src/agent_runtime/static/index.html",
+          "category": "generated_frontend_assets",
+          "physical_added": 2,
+          "physical_removed": 2
+        },
+        {
+          "path": "tests/api/schemas/test_interrupt_payloads.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 29,
+          "physical_removed": 0,
+          "effective": {
+            "added": 21,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 21
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 2
+        },
+        {
+          "path": "tests/api/test_async_run_api.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 16,
+          "physical_removed": 1,
+          "effective": {
+            "added": 14,
+            "removed": 1,
+            "before_lines": 452,
+            "after_lines": 465
+          },
+          "test_definitions_before": 16,
+          "test_definitions_after": 17
+        },
+        {
+          "path": "tests/capabilities/test_contracts.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 248,
+            "after_lines": 248
+          },
+          "test_definitions_before": 8,
+          "test_definitions_after": 8
+        },
+        {
+          "path": "tests/capabilities/test_invocation_gateway.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 14,
+          "physical_removed": 1,
+          "effective": {
+            "added": 11,
+            "removed": 1,
+            "before_lines": 336,
+            "after_lines": 346
+          },
+          "test_definitions_before": 4,
+          "test_definitions_after": 5
+        },
+        {
+          "path": "tests/capabilities/test_manifest.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 57,
+          "physical_removed": 6,
+          "effective": {
+            "added": 47,
+            "removed": 6,
+            "before_lines": 252,
+            "after_lines": 293
+          },
+          "test_definitions_before": 11,
+          "test_definitions_after": 16
+        },
+        {
+          "path": "tests/capabilities/test_manifest_source.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 3,
+          "physical_removed": 1,
+          "effective": {
+            "added": 3,
+            "removed": 1,
+            "before_lines": 170,
+            "after_lines": 172
+          },
+          "test_definitions_before": 10,
+          "test_definitions_after": 10
+        },
+        {
+          "path": "tests/capabilities/test_recovery.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 403,
+            "after_lines": 403
+          },
+          "test_definitions_before": 7,
+          "test_definitions_after": 7
+        },
+        {
+          "path": "tests/capabilities/test_regeneration_policy.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 12,
+          "physical_removed": 1,
+          "effective": {
+            "added": 10,
+            "removed": 1,
+            "before_lines": 310,
+            "after_lines": 319
+          },
+          "test_definitions_before": 8,
+          "test_definitions_after": 9
+        },
+        {
+          "path": "tests/capabilities/test_regeneration_submission.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 21,
+          "physical_removed": 0,
+          "effective": {
+            "added": 19,
+            "removed": 0,
+            "before_lines": 265,
+            "after_lines": 284
+          },
+          "test_definitions_before": 3,
+          "test_definitions_after": 4
+        },
+        {
+          "path": "tests/capabilities/test_registry.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 81,
+          "physical_removed": 1,
+          "effective": {
+            "added": 69,
+            "removed": 1,
+            "before_lines": 784,
+            "after_lines": 852
+          },
+          "test_definitions_before": 15,
+          "test_definitions_after": 17
+        },
+        {
+          "path": "tests/capabilities/test_remote_a2a_client.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 326,
+          "physical_removed": 0,
+          "effective": {
+            "added": 272,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 272
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 8
+        },
+        {
+          "path": "tests/capabilities/test_remote_a2a_transport_errors.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 213,
+          "physical_removed": 0,
+          "effective": {
+            "added": 182,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 182
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 2
+        },
+        {
+          "path": "tests/capabilities/test_remote_agent_card.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 208,
+          "physical_removed": 0,
+          "effective": {
+            "added": 170,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 170
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 7
+        },
+        {
+          "path": "tests/capabilities/test_remote_invocation.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 248,
+          "physical_removed": 0,
+          "effective": {
+            "added": 211,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 211
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 9
+        },
+        {
+          "path": "tests/capabilities/test_s3_05_postgres_integration.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 756,
+            "after_lines": 756
+          },
+          "test_definitions_before": 3,
+          "test_definitions_after": 3
+        },
+        {
+          "path": "tests/capabilities/test_s3_08_postgres_integration.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 456,
+            "after_lines": 456
+          },
+          "test_definitions_before": 2,
+          "test_definitions_after": 2
+        },
+        {
+          "path": "tests/capabilities/test_s3_09_postgres_integration.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 404,
+            "after_lines": 404
+          },
+          "test_definitions_before": 2,
+          "test_definitions_after": 2
+        },
+        {
+          "path": "tests/capabilities/test_s3_10_postgres_integration.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 1355,
+            "after_lines": 1355
+          },
+          "test_definitions_before": 7,
+          "test_definitions_after": 7
+        },
+        {
+          "path": "tests/capabilities/test_s3_11_postgres_integration.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 484,
+            "after_lines": 484
+          },
+          "test_definitions_before": 2,
+          "test_definitions_after": 2
+        },
+        {
+          "path": "tests/capabilities/test_task_service.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 296,
+            "after_lines": 296
+          },
+          "test_definitions_before": 4,
+          "test_definitions_after": 4
+        },
+        {
+          "path": "tests/core/test_config.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 12,
+          "physical_removed": 0,
+          "effective": {
+            "added": 10,
+            "removed": 0,
+            "before_lines": 117,
+            "after_lines": 127
+          },
+          "test_definitions_before": 8,
+          "test_definitions_after": 9
+        },
+        {
+          "path": "tests/e2e/remote_server.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 72,
+          "physical_removed": 0,
+          "effective": {
+            "added": 59,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 59
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 0
+        },
+        {
+          "path": "tests/e2e/server.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 4,
+          "physical_removed": 0,
+          "effective": {
+            "added": 4,
+            "removed": 0,
+            "before_lines": 54,
+            "after_lines": 58
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 0
+        },
+        {
+          "path": "tests/fake_a2a.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 137,
+          "physical_removed": 0,
+          "effective": {
+            "added": 127,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 127
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 0
+        },
+        {
+          "path": "tests/integration/test_checkpoint_recovery_runtime.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 0,
+          "effective": {
+            "added": 1,
+            "removed": 0,
+            "before_lines": 972,
+            "after_lines": 973
+          },
+          "test_definitions_before": 6,
+          "test_definitions_after": 6
+        },
+        {
+          "path": "tests/integration/test_interrupt_resume_runtime.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 3,
+          "physical_removed": 1,
+          "effective": {
+            "added": 3,
+            "removed": 1,
+            "before_lines": 462,
+            "after_lines": 464
+          },
+          "test_definitions_before": 2,
+          "test_definitions_after": 2
+        },
+        {
+          "path": "tests/integration/test_remote_interrupt_resume_postgres.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 359,
+          "physical_removed": 0,
+          "effective": {
+            "added": 324,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 324
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 5
+        },
+        {
+          "path": "tests/integration/test_remote_runtime_postgres.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 743,
+          "physical_removed": 0,
+          "effective": {
+            "added": 688,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 688
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 14
+        },
+        {
+          "path": "tests/integration/test_stage_three_gate.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 3,
+          "effective": {
+            "added": 1,
+            "removed": 3,
+            "before_lines": 226,
+            "after_lines": 224
+          },
+          "test_definitions_before": 1,
+          "test_definitions_after": 1
+        },
+        {
+          "path": "tests/runtime/test_capability_event_schemas.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 1,
+          "physical_removed": 1,
+          "effective": {
+            "added": 1,
+            "removed": 1,
+            "before_lines": 154,
+            "after_lines": 154
+          },
+          "test_definitions_before": 4,
+          "test_definitions_after": 4
+        },
+        {
+          "path": "tests/runtime/test_interrupt_comments_postgres.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 58,
+          "physical_removed": 0,
+          "effective": {
+            "added": 52,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 52
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 1
+        },
+        {
+          "path": "tests/test_remote_service_bootstrap.py",
+          "category": "python_tests_and_fixtures",
+          "physical_added": 114,
+          "physical_removed": 0,
+          "effective": {
+            "added": 94,
+            "removed": 0,
+            "before_lines": 0,
+            "after_lines": 94
+          },
+          "test_definitions_before": 0,
+          "test_definitions_after": 1
+        },
+        {
+          "path": "uv.lock",
+          "category": "dependency_lock",
+          "physical_added": 261,
+          "physical_removed": 0
+        }
+      ],
+      "totals": {
+        "files": 139,
+        "git_numstat_unavailable_files": 6,
+        "physical_added_text_only": 10176,
+        "physical_removed_text_only": 138
+      }
+    },
+    "batches": [
+      {
+        "task": "RA-DEV-01",
+        "from": "b3e855d17234704b41c0be72f8e2a907a0f942f6",
+        "to": "4f6791369ee562c52539a260ee7320f38e7f34c8",
+        "changed_path_entries_no_renames": 59,
+        "categories": {
+          "collaboration_ledger": {
+            "files": 20,
+            "binary_files": 0,
+            "physical_added": 2023,
+            "physical_removed": 0,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "documentation": {
+            "files": 4,
+            "binary_files": 0,
+            "physical_added": 667,
+            "physical_removed": 7,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "dependency_manifest": {
+            "files": 1,
+            "binary_files": 0,
+            "physical_added": 1,
+            "physical_removed": 0,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "capability_configuration": {
+            "files": 2,
+            "binary_files": 0,
+            "physical_added": 6,
+            "physical_removed": 2,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "python_source": {
+            "files": 10,
+            "binary_files": 0,
+            "physical_added": 702,
+            "physical_removed": 26,
+            "effective_added": 580,
+            "effective_removed": 26
+          },
+          "python_tests_and_fixtures": {
+            "files": 21,
+            "binary_files": 0,
+            "physical_added": 1112,
+            "physical_removed": 21,
+            "effective_added": 940,
+            "effective_removed": 21
+          },
+          "dependency_lock": {
+            "files": 1,
+            "binary_files": 0,
+            "physical_added": 261,
+            "physical_removed": 0,
+            "effective_added": null,
+            "effective_removed": null
+          }
+        },
+        "totals": {
+          "files": 59,
+          "git_numstat_unavailable_files": 0,
+          "physical_added_text_only": 4772,
+          "physical_removed_text_only": 56
+        }
+      },
+      {
+        "task": "RA-DEV-02",
+        "from": "4f6791369ee562c52539a260ee7320f38e7f34c8",
+        "to": "b25ff6bab89dda4f3be4006e4f1456538f18964c",
+        "changed_path_entries_no_renames": 51,
+        "categories": {
+          "collaboration_ledger": {
+            "files": 25,
+            "binary_files": 0,
+            "physical_added": 1492,
+            "physical_removed": 38,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "documentation": {
+            "files": 4,
+            "binary_files": 0,
+            "physical_added": 147,
+            "physical_removed": 8,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "python_source": {
+            "files": 16,
+            "binary_files": 0,
+            "physical_added": 561,
+            "physical_removed": 39,
+            "effective_added": 470,
+            "effective_removed": 33
+          },
+          "python_tests_and_fixtures": {
+            "files": 6,
+            "binary_files": 0,
+            "physical_added": 1054,
+            "physical_removed": 2,
+            "effective_added": 954,
+            "effective_removed": 2
+          }
+        },
+        "totals": {
+          "files": 51,
+          "git_numstat_unavailable_files": 0,
+          "physical_added_text_only": 3254,
+          "physical_removed_text_only": 87
+        }
+      },
+      {
+        "task": "RA-DEV-03",
+        "from": "b25ff6bab89dda4f3be4006e4f1456538f18964c",
+        "to": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+        "changed_path_entries_no_renames": 60,
+        "categories": {
+          "collaboration_ledger": {
+            "files": 21,
+            "binary_files": 2,
+            "physical_added": 1143,
+            "physical_removed": 20,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "documentation": {
+            "files": 1,
+            "binary_files": 0,
+            "physical_added": 20,
+            "physical_removed": 1,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "frontend_tests": {
+            "files": 3,
+            "binary_files": 0,
+            "physical_added": 173,
+            "physical_removed": 0,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "frontend_test_tooling": {
+            "files": 1,
+            "binary_files": 0,
+            "physical_added": 12,
+            "physical_removed": 0,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "frontend_source": {
+            "files": 4,
+            "binary_files": 0,
+            "physical_added": 52,
+            "physical_removed": 15,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "python_source": {
+            "files": 14,
+            "binary_files": 0,
+            "physical_added": 276,
+            "physical_removed": 59,
+            "effective_added": 217,
+            "effective_removed": 50
+          },
+          "generated_frontend_assets": {
+            "files": 5,
+            "binary_files": 4,
+            "physical_added": 2,
+            "physical_removed": 2,
+            "effective_added": null,
+            "effective_removed": null
+          },
+          "python_tests_and_fixtures": {
+            "files": 11,
+            "binary_files": 0,
+            "physical_added": 586,
+            "physical_removed": 12,
+            "effective_added": 518,
+            "effective_removed": 12
+          }
+        },
+        "totals": {
+          "files": 60,
+          "git_numstat_unavailable_files": 6,
+          "physical_added_text_only": 2264,
+          "physical_removed_text_only": 109
+        }
+      }
+    ],
+    "headline": {
+      "python_source": {
+        "files": 26,
+        "physical_added": 1503,
+        "physical_removed": 88,
+        "effective_added": 1242,
+        "effective_removed": 84
+      },
+      "python_tests_and_fixtures": {
+        "files": 32,
+        "physical_added": 2741,
+        "physical_removed": 24,
+        "effective_added": 2401,
+        "effective_removed": 24
+      },
+      "python_combined": {
+        "files": 58,
+        "physical_added": 4244,
+        "physical_removed": 112,
+        "effective_added": 3643,
+        "effective_removed": 108
+      },
+      "frontend_source": {
+        "files": 4,
+        "jsx_files": 3,
+        "css_files": 1,
+        "physical_added": 52,
+        "physical_removed": 15,
+        "effective_added": null,
+        "effective_removed": null
+      },
+      "frontend_tests": {
+        "files": 3,
+        "javascript_files": 2,
+        "jsx_files": 1,
+        "physical_added": 173,
+        "physical_removed": 0,
+        "effective_added": null,
+        "effective_removed": null
+      },
+      "frontend_test_tooling": {
+        "files": 1,
+        "physical_added": 12,
+        "physical_removed": 0,
+        "effective_added": null,
+        "effective_removed": null
+      },
+      "excluded_from_effective_business_code": "文档4、协作台账60、Manifest配置2、依赖声明1、锁文件1、构建资产路径5；前端有效行缺项。139为全部变更路径项，58仅Python源码与测试/夹具。"
+    },
+    "responsibility_breakdown": [
+      {
+        "area": "通用协议与发现",
+        "paths": [
+          "src/agent_runtime/capabilities/manifest.py",
+          "src/agent_runtime/capabilities/registry.py",
+          "src/agent_runtime/capabilities/remote_a2a/card.py",
+          "src/agent_runtime/capabilities/remote_a2a/client.py",
+          "src/agent_runtime/capabilities/remote_a2a/errors.py"
+        ],
+        "work": "transport关闭联合、Card身份与同源校验、官方HTTP+JSON Send/Get/Cancel、协议/传输错误与脱敏；适用于后续同类Agent。"
+      },
+      {
+        "area": "通用生命周期",
+        "paths": [
+          "src/agent_runtime/capabilities/remote_a2a/capability.py",
+          "src/agent_runtime/capabilities/invocation_gateway.py",
+          "src/agent_runtime/capabilities/invocation_service.py",
+          "src/agent_runtime/capabilities/execution.py",
+          "src/agent_runtime/capabilities/operation_ledger.py",
+          "src/agent_runtime/runtime/event_schemas.py",
+          "src/agent_runtime/graph/parent.py",
+          "src/agent_runtime/chat.py"
+        ],
+        "work": "持久绑定、幂等Send/Cancel、未知状态与恢复、取消/超时/删除屏障、范围拒绝和Regenerate限制。沿用RuntimeEvent与Operation Ledger，不是每接入一个Agent重做。"
+      },
+      {
+        "area": "通用文本补参与页面",
+        "paths": [
+          "src/agent_runtime/runtime/interrupt_payloads.py",
+          "src/agent_runtime/runtime/interrupts.py",
+          "src/agent_runtime/api/schemas/runs.py",
+          "frontend/src/App.jsx",
+          "frontend/src/components/ChatWorkspace.jsx",
+          "frontend/src/components/RunStatusPanel.jsx",
+          "frontend/src/styles/app.css"
+        ],
+        "work": "文本/确认Payload、同Run Resume、持久提示及数据库注释、文本输入/防重复提交/重试与状态显示。"
+      }
+    ],
+    "dependencies": {
+      "project_added": [
+        "a2a-sdk==1.2.3"
+      ],
+      "project_removed": [],
+      "lock_added": {
+        "a2a-sdk": "1.2.3",
+        "aiologic": "0.17.1",
+        "cffi": "2.1.1",
+        "cryptography": "50.0.2",
+        "culsans": "0.11.0",
+        "google-api-core": "2.43.0",
+        "google-auth": "2.62.0",
+        "googleapis-common-protos": "1.76.0",
+        "json-rpc": "1.15.0",
+        "opentelemetry-api": "1.45.1",
+        "proto-plus": "1.29.0",
+        "protobuf": "7.36.2",
+        "pyasn1": "0.6.4",
+        "pyasn1-modules": "0.4.2",
+        "pycparser": "3.12",
+        "wrapt": "2.5.1"
+      },
+      "lock_removed": {},
+      "lock_changed": {}
+    },
+    "dependency_note": "新增直接依赖仅a2a-sdk==1.2.3；uv.lock新增16个包（含SDK），没有既有锁定包版本变化。frontend/package.json与基线相同，无本阶段新增前端依赖；未执行安装。",
+    "configuration": {
+      "new_environment_settings": [
+        {
+          "name": "REMOTE_A2A_DEVELOPMENT_MODE",
+          "default": false,
+          "purpose": "显式开启后才允许HTTP与none；真实本机联调需true。"
+        },
+        {
+          "name": "REMOTE_A2A_HTTP_TIMEOUT_SECONDS",
+          "default": 10,
+          "purpose": "Card/Send/Get/Cancel单次HTTP请求有限超时，不等同Invocation执行时限。"
+        },
+        {
+          "name": "REMOTE_A2A_POLL_INTERVAL_SECONDS",
+          "default": 0.25,
+          "purpose": "GetTask轮询及恢复退避基础间隔。"
+        }
+      ],
+      "manifest": "既有两个本地Manifest迁移到transport.local+entrypoint；远程使用transport.remote_a2a、agent_card_url、auth.none或auth.bearer/token_env（只存变量名），state_scope仅invocation。",
+      "per_agent_required": "独立静态Manifest的ID/name/description/版本与超时/并发、可信Card/interface身份、显式权限allow、按幂等能力选择automatic+idempotent；无默认远程业务Manifest写入通用默认目录。",
+      "integration_candidate_ref": ".dev-team/tasks/RA-INT-01/evidence/联调候选/manifest.yaml",
+      "candidate_is_not_in_fixed_implementation_counts": true,
+      "integration_candidate_values": {
+        "capability_id": "semantic_pattern_mining",
+        "development_mode": true,
+        "authentication": "none",
+        "state_scope": "invocation",
+        "recovery_policy": "automatic",
+        "side_effect_policy": "idempotent",
+        "execution_timeout_seconds": 900,
+        "cancel_grace_seconds": 2,
+        "max_concurrency": 1
+      }
+    },
+    "deployment": {
+      "implementation_added_service_count": 0,
+      "implementation_added_fixed_listening_port_count": 0,
+      "compose_yaml_unchanged": true,
+      "inherited_infrastructure": [
+        {
+          "service": "PostgreSQL",
+          "default_host_port": 5432
+        },
+        {
+          "service": "Redis",
+          "default_host_port": 6379
+        }
+      ],
+      "steps_to_reproduce_not_executed_here": [
+        "沿用项目Windows Docker Desktop/compose.yaml的PostgreSQL与Redis；主执行员工选择已批准隔离库及专用Redis数据，不动命名卷。",
+        "uv sync --locked取得固定SDK及锁文件依赖；如需重建页面，在frontend沿用既有依赖并执行npm run build。",
+        "准备独立静态Manifest和Runtime启动配置；本机18080开发none显式开启REMOTE_A2A_DEVELOPMENT_MODE，保留HTTP有界超时，Invocation设900秒。",
+        "为本批capability显式allow并启动独立Runtime；核对Card/interface身份和健康，再由主执行员工按批准稳定ID与最多6个远程Task执行。"
+      ],
+      "actual_runtime_listening_port": null,
+      "actual_setup_manual_action_count": null,
+      "pending_owner": "RA-INT-01主执行员工的真实运行回执；本辅助任务未部署、启动或查询服务。"
+    },
+    "generated_assets": {
+      "note": "Git numstat将四个带hash JS/CSS路径报告为'-'；两端快照各3文件，JS352行+CSS1行+HTML17行。旧新hash资产各353物理行，仅作为生成物体量，不代表编辑/业务代码；HTML净diff+2/-2。",
+      "snapshots": [
+        {
+          "commit": "b3e855d17234704b41c0be72f8e2a907a0f942f6",
+          "path": "src/agent_runtime/static/assets/index-B3KNrXbB.css",
+          "bytes": 9260,
+          "physical_lines": 1,
+          "sha256": "d9c85504d508bb8d749c013323c8cc789ceb31207ced79d257ad5a90069c9f35"
+        },
+        {
+          "commit": "b3e855d17234704b41c0be72f8e2a907a0f942f6",
+          "path": "src/agent_runtime/static/assets/index-Bz0BVo3w.js",
+          "bytes": 1148415,
+          "physical_lines": 352,
+          "sha256": "4e78a1cfc93ff3fe8f04b48e9bd69c21a96a20c9fbef7023ee6efdd581274c05"
+        },
+        {
+          "commit": "b3e855d17234704b41c0be72f8e2a907a0f942f6",
+          "path": "src/agent_runtime/static/index.html",
+          "bytes": 527,
+          "physical_lines": 17,
+          "sha256": "445dfad01c34b1aa9b4d5d1ae78ec5604a3b2cee8d986af0a74097a2ee12c72f"
+        },
+        {
+          "commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+          "path": "src/agent_runtime/static/assets/index-B_5ARtbB.js",
+          "bytes": 1149463,
+          "physical_lines": 352,
+          "sha256": "873c4fce88dea742cac578464e887ba9f953342d8bfcf47eda707a734baf9025"
+        },
+        {
+          "commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+          "path": "src/agent_runtime/static/assets/index-xY-hKUao.css",
+          "bytes": 9306,
+          "physical_lines": 1,
+          "sha256": "7ed8c1ebb9794aeb9aab4474210d19f39c98b22567e694f0ea50c103857c51a7"
+        },
+        {
+          "commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+          "path": "src/agent_runtime/static/index.html",
+          "bytes": 527,
+          "physical_lines": 17,
+          "sha256": "edbf5388f87add4d30af11b65065fcf055e56c3d29f95d08397bab12c6203b59"
+        }
+      ]
+    },
+    "tests": {
+      "static_selected_remote_test_definitions": {
+        "tests/capabilities/test_remote_a2a_client.py": 8,
+        "tests/capabilities/test_remote_a2a_transport_errors.py": 2,
+        "tests/capabilities/test_remote_agent_card.py": 7,
+        "tests/capabilities/test_remote_invocation.py": 9,
+        "tests/integration/test_remote_runtime_postgres.py": 14,
+        "tests/integration/test_remote_interrupt_resume_postgres.py": 5,
+        "tests/api/schemas/test_interrupt_payloads.py": 2,
+        "tests/runtime/test_interrupt_comments_postgres.py": 1,
+        "tests/test_remote_service_bootstrap.py": 1
+      },
+      "static_selected_definition_sum": 49,
+      "static_count_note": "固定最终源码AST中的test_函数定义数，范围为列明9文件；含参数化，非pytest收集/执行用例数，也不是全部新增测试数。",
+      "fixed_historical_evidence": [
+        {
+          "commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+          "path": ".dev-team/tasks/RA-DEV-02/evidence/R01返工验证回执.json",
+          "sha256": "b9acdeb53ef5f136f4ff2b93f6b0573f2042fd77b9485acc3a1b48c229bf05cb",
+          "result": "当批remote Client/Card/transport/invocation离线组85通过；身份/取消/恢复定向PG9通过27 deselected；是子02历史结果，不冒领子03重新执行。"
+        },
+        {
+          "commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md",
+          "sha256": "b56b9eefbf84ee1e38ad66712a0fb76a739e4601e90499c320d7e79feadae7aa",
+          "result": "默认离线801 passed/121 skipped；文本/确认PG与注释14 passed；Vitest30 passed/5 files；build退出0；正式Runtime+Fake远程浏览器4 passed；旧confirmation浏览器2 passed。全部为已保存历史回执，本轮未重跑。"
+        },
+        {
+          "commit": "29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe",
+          "path": ".dev-team/tasks/RA-DEV-03/evidence/最终验证回执.md",
+          "sha256": "b56b9eefbf84ee1e38ad66712a0fb76a739e4601e90499c320d7e79feadae7aa",
+          "result": "同文件保留41 passed/1 failed/18 deselected的混合PG失败与后续定向复验；旧RA02全部窗口及Stage 3/远程阶段PG/Redis最终补验由主执行员工处理，不能据上述离线回执宣称RA-AC-10全门禁通过。"
+        }
+      ],
+      "fake_vectors": [
+        "completed唯一非空文本",
+        "working及有界Get轮询",
+        "逐轮input-required/Resume",
+        "Cancel确认与未知状态",
+        "同messageId幂等与冲突",
+        "远程受理后断连",
+        "绑定前后崩溃及连续超过3次恢复",
+        "身份变化、错误映射、脱敏和范围拒绝"
+      ],
+      "real_runtime_scenarios_required": 4,
+      "real_fault_windows_required": 2,
+      "consecutive_recoveries_required": ">3",
+      "actual_real_case_count": null,
+      "actual_manual_action_count": null,
+      "actual_results_ref": "pending：主执行员工handoffs/0006及真实运行回执；成本辅助不创建或重做真实任务。"
+    },
+    "hours": null,
+    "hours_note": "固定Git对象/所引用回执未提供可归集的团队实际登记人工工时。"
+  },
+  "semantic_pattern_mining_per_agent": {
+    "index_sha256": "b70ef1e9edc54082d95254e8ef194e1abc8b9c95936e71455b1bf6e9eb5a0ac2",
+    "specified_files": [
+      {
+        "name": "远程Agent适配交付说明.md",
+        "sha256": "703ce367be143ef2ff0145e02128c7a391f2c6117be7760290ce0211c6df70f5",
+        "bytes": 16001,
+        "index_match": true
+      },
+      {
+        "name": "远程Agent联调Card.json",
+        "sha256": "74f4dbb921e1059a86be284031b721db95c2d50d90cdfe564940d21e7d996b47",
+        "bytes": 546,
+        "index_match": true
+      },
+      {
+        "name": "远程Agent交付版本清单.json",
+        "sha256": "a9892bf77dc9b53b9e25e53695b0b7ea0d9a620b6e9fd4d33d822a41c5dc49dc",
+        "bytes": 16195,
+        "index_match": true
+      },
+      {
+        "name": "远程Agent联调自测报告.xml",
+        "sha256": "5c6685e0bc149a69a04e40347f3957a44982f6f95e94409eeecbfaa2f3fd601b",
+        "bytes": 16650,
+        "index_match": true
+      },
+      {
+        "name": "远程Agent真实环境自测报告.xml",
+        "sha256": "a30b221cd282e7ce237c5bfa2fe8f8059febbb01fa4ed98c881131a06a5b2a6b",
+        "bytes": 6419,
+        "index_match": true
+      },
+      {
+        "name": "远程Agent重启场景复测报告.xml",
+        "sha256": "3efd3668e6a8cfa774dd73e62fc06f7be76949b952c8e5b59fe9b5ced70d8fcd",
+        "bytes": 2262,
+        "index_match": true
+      },
+      {
+        "name": "远程Agent联调证据清单.json",
+        "sha256": "fefc52dec1ba3199a637fd2b6ee18a2ac32f1f25045d13cb551f1291011a1698",
+        "bytes": 20893,
+        "index_match": true
+      },
+      {
+        "name": "远程Agent适配前源码快照.zip",
+        "sha256": "c5f497177b6a3df9a33e897fe0b93c15c6718c426f12ded00fc2dc2b9db995ee",
+        "bytes": 131899,
+        "index_match": true
+      },
+      {
+        "name": "远程Agent适配差异统计.json",
+        "sha256": "f03ca6c810a7449fb963aa32f84323c9157968af3a2096125b9d9ae0d76e02dc",
+        "bytes": 7581,
+        "index_match": true
+      }
+    ],
+    "source_commit": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+    "delivery_tag_claim": "a2a-integration-ready-v1.0.0",
+    "archive_sha256": "c5f497177b6a3df9a33e897fe0b93c15c6718c426f12ded00fc2dc2b9db995ee",
+    "archive_manifest_sha256": "10d9016443b6d7b832e47259e408ddf6a7428dce526be05e30af10ea9a8adebe",
+    "archive_manifest_items": 63,
+    "final_manifest_files": 76,
+    "baseline_code_manifest_files": 58,
+    "final_manifest_only_change_comparison": {
+      "count": 37,
+      "statuses": {
+        "added": 18,
+        "modified": 19
+      },
+      "files": [
+        {
+          "path": "code/.dockerignore",
+          "status": "added"
+        },
+        {
+          "path": "code/.env.example",
+          "status": "modified"
+        },
+        {
+          "path": "code/.gitignore",
+          "status": "added"
+        },
+        {
+          "path": "code/Dockerfile",
+          "status": "added"
+        },
+        {
+          "path": "code/README.md",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/graphs/adapters.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/graphs/cancellation.py",
+          "status": "added"
+        },
+        {
+          "path": "code/app/graphs/extraction.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/logging.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/main.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/remote/__init__.py",
+          "status": "added"
+        },
+        {
+          "path": "code/app/remote/api.py",
+          "status": "added"
+        },
+        {
+          "path": "code/app/remote/business.py",
+          "status": "added"
+        },
+        {
+          "path": "code/app/remote/models.py",
+          "status": "added"
+        },
+        {
+          "path": "code/app/remote/protocol.py",
+          "status": "added"
+        },
+        {
+          "path": "code/app/remote/store.py",
+          "status": "added"
+        },
+        {
+          "path": "code/app/remote/worker.py",
+          "status": "added"
+        },
+        {
+          "path": "code/app/repositories/analysis.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/runtime.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/services/llm.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/settings.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/tasks/e2e_mock_llm.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/app/tasks/init_database.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/docker-compose.integration.yml",
+          "status": "added"
+        },
+        {
+          "path": "code/docker-compose.yml",
+          "status": "modified"
+        },
+        {
+          "path": "code/pyproject.toml",
+          "status": "modified"
+        },
+        {
+          "path": "code/scripts/start_remote_integration.ps1",
+          "status": "added"
+        },
+        {
+          "path": "code/tests/conftest.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/tests/helpers/remote_test_service.py",
+          "status": "added"
+        },
+        {
+          "path": "code/tests/integration/test_remote_a2a.py",
+          "status": "added"
+        },
+        {
+          "path": "code/tests/integration/test_remote_process_recovery.py",
+          "status": "added"
+        },
+        {
+          "path": "code/tests/online/test_remote_readiness.py",
+          "status": "added"
+        },
+        {
+          "path": "code/tests/unit/test_artifacts_and_services.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/tests/unit/test_database_documentation.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/tests/unit/test_extraction_graph.py",
+          "status": "modified"
+        },
+        {
+          "path": "code/tests/unit/test_remote_business.py",
+          "status": "added"
+        },
+        {
+          "path": "code/uv.lock",
+          "status": "modified"
+        }
+      ]
+    },
+    "scopes": {
+      "app": {
+        "summary": {
+          "files": 18,
+          "physical_added": 923,
+          "physical_removed": 10,
+          "effective_added": 716,
+          "effective_removed": 9
+        },
+        "files": [
+          {
+            "path": "code/app/graphs/adapters.py",
+            "physical": {
+              "added": 22,
+              "removed": 0
+            },
+            "effective": {
+              "added": 20,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/graphs/cancellation.py",
+            "physical": {
+              "added": 32,
+              "removed": 0
+            },
+            "effective": {
+              "added": 17,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/graphs/extraction.py",
+            "physical": {
+              "added": 19,
+              "removed": 2
+            },
+            "effective": {
+              "added": 15,
+              "removed": 2
+            }
+          },
+          {
+            "path": "code/app/logging.py",
+            "physical": {
+              "added": 8,
+              "removed": 1
+            },
+            "effective": {
+              "added": 5,
+              "removed": 1
+            }
+          },
+          {
+            "path": "code/app/main.py",
+            "physical": {
+              "added": 37,
+              "removed": 2
+            },
+            "effective": {
+              "added": 31,
+              "removed": 2
+            }
+          },
+          {
+            "path": "code/app/remote/__init__.py",
+            "physical": {
+              "added": 1,
+              "removed": 0
+            },
+            "effective": {
+              "added": 0,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/remote/api.py",
+            "physical": {
+              "added": 86,
+              "removed": 0
+            },
+            "effective": {
+              "added": 65,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/remote/business.py",
+            "physical": {
+              "added": 146,
+              "removed": 0
+            },
+            "effective": {
+              "added": 116,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/remote/models.py",
+            "physical": {
+              "added": 46,
+              "removed": 0
+            },
+            "effective": {
+              "added": 32,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/remote/protocol.py",
+            "physical": {
+              "added": 159,
+              "removed": 0
+            },
+            "effective": {
+              "added": 118,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/remote/store.py",
+            "physical": {
+              "added": 168,
+              "removed": 0
+            },
+            "effective": {
+              "added": 134,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/remote/worker.py",
+            "physical": {
+              "added": 150,
+              "removed": 0
+            },
+            "effective": {
+              "added": 121,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/repositories/analysis.py",
+            "physical": {
+              "added": 22,
+              "removed": 1
+            },
+            "effective": {
+              "added": 18,
+              "removed": 1
+            }
+          },
+          {
+            "path": "code/app/runtime.py",
+            "physical": {
+              "added": 11,
+              "removed": 0
+            },
+            "effective": {
+              "added": 11,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/services/llm.py",
+            "physical": {
+              "added": 4,
+              "removed": 1
+            },
+            "effective": {
+              "added": 3,
+              "removed": 1
+            }
+          },
+          {
+            "path": "code/app/settings.py",
+            "physical": {
+              "added": 3,
+              "removed": 0
+            },
+            "effective": {
+              "added": 2,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/app/tasks/e2e_mock_llm.py",
+            "physical": {
+              "added": 5,
+              "removed": 2
+            },
+            "effective": {
+              "added": 5,
+              "removed": 2
+            }
+          },
+          {
+            "path": "code/app/tasks/init_database.py",
+            "physical": {
+              "added": 4,
+              "removed": 1
+            },
+            "effective": {
+              "added": 3,
+              "removed": 0
+            }
+          }
+        ]
+      },
+      "tests": {
+        "summary": {
+          "files": 9,
+          "physical_added": 983,
+          "physical_removed": 1,
+          "effective_added": 801,
+          "effective_removed": 1
+        },
+        "files": [
+          {
+            "path": "code/tests/conftest.py",
+            "physical": {
+              "added": 22,
+              "removed": 0
+            },
+            "effective": {
+              "added": 19,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/tests/helpers/remote_test_service.py",
+            "physical": {
+              "added": 101,
+              "removed": 0
+            },
+            "effective": {
+              "added": 81,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/tests/integration/test_remote_a2a.py",
+            "physical": {
+              "added": 415,
+              "removed": 0
+            },
+            "effective": {
+              "added": 349,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/tests/integration/test_remote_process_recovery.py",
+            "physical": {
+              "added": 169,
+              "removed": 0
+            },
+            "effective": {
+              "added": 143,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/tests/online/test_remote_readiness.py",
+            "physical": {
+              "added": 155,
+              "removed": 0
+            },
+            "effective": {
+              "added": 122,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/tests/unit/test_artifacts_and_services.py",
+            "physical": {
+              "added": 14,
+              "removed": 0
+            },
+            "effective": {
+              "added": 9,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/tests/unit/test_database_documentation.py",
+            "physical": {
+              "added": 2,
+              "removed": 1
+            },
+            "effective": {
+              "added": 2,
+              "removed": 1
+            }
+          },
+          {
+            "path": "code/tests/unit/test_extraction_graph.py",
+            "physical": {
+              "added": 18,
+              "removed": 0
+            },
+            "effective": {
+              "added": 14,
+              "removed": 0
+            }
+          },
+          {
+            "path": "code/tests/unit/test_remote_business.py",
+            "physical": {
+              "added": 87,
+              "removed": 0
+            },
+            "effective": {
+              "added": 62,
+              "removed": 0
+            }
+          }
+        ]
+      }
+    },
+    "historical_git_baseline_complete": false,
+    "hours": null,
+    "corrupted_field_names": [
+      "baseline_archive",
+      "hours_note"
+    ],
+    "evidence_chain": "本次九文件字节数/SHA256再次匹配；复用相同输入hash的0003及正式交付包只读复核.json：63原文件逐项hash核对通过。本次只定向读取ZIP内部manifest及基线pyproject，不解压或执行。",
+    "baseline_commit": null,
+    "baseline_note": "永久ZIP作为可核对适配前字节依据；交付说明明确198d8c6不是完整应用基线，historical_git_baseline_complete=false；不能补造适配前完整Git提交。",
+    "final_commit_status": "a74183f由交付清单、JUnit及运行镜像revision声明绑定；未进入对方.git独立验证commit/tag/当前工作区，tag只是交付自述。",
+    "net_python_totals": {
+      "files": 27,
+      "physical_added": 1906,
+      "physical_removed": 11,
+      "effective_added": 1517,
+      "effective_removed": 10
+    },
+    "non_python_delivery_changes": {
+      "files": 10,
+      "source": "ZIP baseline-manifest与76文件最终清单声明hash之间的比较，非当前源字节diff。",
+      "paths": [
+        {
+          "path": "code/.dockerignore",
+          "status": "added"
+        },
+        {
+          "path": "code/.env.example",
+          "status": "modified"
+        },
+        {
+          "path": "code/.gitignore",
+          "status": "added"
+        },
+        {
+          "path": "code/Dockerfile",
+          "status": "added"
+        },
+        {
+          "path": "code/README.md",
+          "status": "modified"
+        },
+        {
+          "path": "code/docker-compose.integration.yml",
+          "status": "added"
+        },
+        {
+          "path": "code/docker-compose.yml",
+          "status": "modified"
+        },
+        {
+          "path": "code/pyproject.toml",
+          "status": "modified"
+        },
+        {
+          "path": "code/scripts/start_remote_integration.ps1",
+          "status": "added"
+        },
+        {
+          "path": "code/uv.lock",
+          "status": "modified"
+        }
+      ],
+      "physical_added": null,
+      "physical_removed": null,
+      "effective_added": null,
+      "effective_removed": null,
+      "note": "37为code范围按两份manifest声明hash比较的全部变更路径（18新增19修改）；27为交付差异统计Python范围，两者有包含关系，不能相加。其他10文件包括依赖/锁、部署、README与忽略/环境模板；未读取.env.example内容。归档外文档与台账不在这37项统计范围。"
+    },
+    "responsibility_breakdown": [
+      {
+        "area": "A2A协议门面/持久Task/幂等",
+        "paths": [
+          "code/app/remote/api.py",
+          "code/app/remote/models.py",
+          "code/app/remote/protocol.py",
+          "code/app/remote/store.py"
+        ],
+        "source": "交付清单与差异JSON；持久受理、Task/context查询、messageId幂等与冲突、逐轮问题身份。"
+      },
+      {
+        "area": "业务执行/取消/补参/Artifact",
+        "paths": [
+          "code/app/remote/business.py",
+          "code/app/remote/worker.py",
+          "code/app/graphs/cancellation.py",
+          "code/app/graphs/adapters.py",
+          "code/app/graphs/extraction.py",
+          "code/app/repositories/analysis.py"
+        ],
+        "source": "交付说明118～128行及差异JSON；独立Worker接管、取消意图与完成竞态、checkpoint继续、文本Artifact、早期范围拒绝。未审核当前源码。"
+      },
+      {
+        "area": "测试与部署",
+        "paths": [
+          "code/tests/integration/test_remote_a2a.py",
+          "code/tests/integration/test_remote_process_recovery.py",
+          "code/tests/online/test_remote_readiness.py",
+          "code/tests/unit/test_remote_business.py",
+          "code/docker-compose.integration.yml",
+          "code/scripts/start_remote_integration.ps1"
+        ],
+        "source": "交付清单、三个JUnit与说明；本团队未执行这些命令或改写适配。"
+      }
+    ],
+    "dependencies": {
+      "baseline_direct_dependencies_source": "ZIP内code/pyproject.toml",
+      "baseline_a2a_sdk_declared": false,
+      "final_observed_versions_from_three_junit": {
+        "version_a2a-sdk": "1.2.3",
+        "version_fastapi": "0.159.1",
+        "version_langgraph": "1.2.16",
+        "version_langgraph-checkpoint-postgres": "3.2.0",
+        "version_psycopg": "3.3.6"
+      },
+      "new_a2a_sdk_observation": "基线直接依赖未声明a2a-sdk，最终三JUnit均记录已安装1.2.3；最终pyproject/lock内容未在授权当前源码范围，不能据此列出完整新增直接/传递依赖或约束变化。",
+      "exact_final_dependency_delta": null,
+      "database_and_model_resources": "复用对方既有PostgreSQL/LangGraph、在线LLM与宿主机CUDA嵌入；不据交付说明推算资源费用。"
+    },
+    "configuration_and_ports": {
+      "source": "远程Agent适配交付说明.md第2/4/5节；仅记录可公开配置名与端口，不读取配置文件或密钥。",
+      "model_environment_variable_names": [
+        "PRODUCTION_LLM__BASE_URL",
+        "PRODUCTION_LLM__MODEL",
+        "PRODUCTION_LLM__API_KEY"
+      ],
+      "a2a_settings": "docker-compose.integration.yml固定公开base为http://127.0.0.1:18080/api、development=true、Token为空；Runtime发现Card同源且tenant为空。",
+      "ports": [
+        {
+          "service": "隔离API",
+          "host": 18080,
+          "container": 8000
+        },
+        {
+          "service": "独立Worker",
+          "host": null
+        },
+        {
+          "service": "隔离PostgreSQL",
+          "host": 55434
+        },
+        {
+          "service": "宿主机嵌入",
+          "host": 8900
+        },
+        {
+          "service": "自测专用PostgreSQL",
+          "host": 55433,
+          "note": "JUnit复现测试目标，与联调库不同"
+        }
+      ],
+      "database": "semantic_a2a_integration",
+      "persistence": [
+        "semantic-pattern-mining-integration-postgres-data",
+        "semantic-pattern-mining-integration-artifact-data"
+      ],
+      "image": "semantic-pattern-mining-agent:a74183f1c55c",
+      "image_sha256": "0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+      "read_only_health_limit": "原0003仅证明API/数据库健康及容器运行标签；不等于LLM/GPU当前可用，本次未重新查询。"
+    },
+    "deployment": {
+      "steps_from_delivery_not_executed_here": [
+        "对方负责人以受信环境文件提供三项模型配置；当前适配部署参数由integration compose覆盖，不在命令中传密钥。",
+        "对方已有固定镜像按scripts/start_remote_integration.ps1 -Image semantic-pattern-mining-agent:a74183f1c55c启动/恢复，脚本核对revision且不隐式build，保留独立库/卷。",
+        "对方维护宿主机8900嵌入服务并做自身smoke；Runtime本批不得启停对方API/Worker或修改其配置。",
+        "交接Card、固定候选与隔离数据日期，Runtime显式配置开发开关及Manifest后做本项目四场景；禁止把服务端Worker重启当成本项目Runtime重建。"
+      ],
+      "actual_preparation_manual_action_count": null,
+      "stop_or_restart_permissions": "文档中Worker重启/停止命令仅为外部材料；本项目0005禁止启停对方API/Worker，本辅助没有执行任何命令。"
+    },
+    "tests": {
+      "raw_junit": [
+        {
+          "file": "远程Agent联调自测报告.xml",
+          "sha256": "5c6685e0bc149a69a04e40347f3957a44982f6f95e94409eeecbfaa2f3fd601b",
+          "commit": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+          "passed": 78,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "online_cases": 0,
+          "suite_seconds": 63.242
+        },
+        {
+          "file": "远程Agent真实环境自测报告.xml",
+          "sha256": "a30b221cd282e7ce237c5bfa2fe8f8059febbb01fa4ed98c881131a06a5b2a6b",
+          "commit": "356546c71c15ddbe2d1d778db2fae014bf2cbd1b",
+          "passed": 3,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0,
+          "suite_seconds": 565.801,
+          "failure": "Worker重启观察300秒超时；保留失败，非业务failed。"
+        },
+        {
+          "file": "远程Agent重启场景复测报告.xml",
+          "sha256": "3efd3668e6a8cfa774dd73e62fc06f7be76949b952c8e5b59fe9b5ced70d8fcd",
+          "commit": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+          "passed": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "suite_seconds": 395.289,
+          "worker_restart_count": 1
+        }
+      ],
+      "note": "三个JUnit本次仅解析suite摘要及依赖版本；逐用例与索引一致性、正文非空和日期布尔值复用同版0003，不保存Artifact/用户或模型正文。三份不得合并为一次全绿；78项无online、0 skipped，不写为4 skipped。",
+      "covered_external_topics": [
+        "官方SDK/真实PostgreSQL协议",
+        "并发与重送",
+        "两轮补参",
+        "取消/完成竞态",
+        "空结果与文本顺序",
+        "范围拒绝零Checkpoint",
+        "脱敏及中文元数据",
+        "Worker进程恢复"
+      ],
+      "runtime_restart_recovery_proven_by_external_worker_test": false,
+      "actual_team_manual_action_count": null
+    },
+    "costs_not_claimed": "双方真实人工小时、模型费用、运行资源账单、每个新增Agent预计小时均未提供；不据代码量/测试秒数推算。"
+  },
+  "second_similar_agent_increment": {
+    "reuse": "复用本报告Runtime一次性通用协议、生命周期、页面和测试框架。",
+    "required_items": [
+      "对方提供符合A2A 1.0 HTTP+JSON Profile的Card、持久Task、messageId幂等、Get/Cancel、稳定问题身份与非空文本Artifact；已有合规能力可复用，无须因第二个Agent重做Runtime。",
+      "单Agent业务边界映射及既有业务checkpoint/取消/补参/Artifact适配，由对方团队负责。",
+      "新增静态Manifest、可信同源地址和认证变量引用、显式权限、版本/执行超时/并发与幂等恢复策略；按部署提供实际可达端口和持久化资源。",
+      "在现有Fake契约向量上执行该Agent互操作测试；参数齐全、缺参补参、取消、Runtime两窗口及连续恢复、页面/Run/SSE/Session屏障，记录同Task/context及无重复写入。",
+      "独立记录第二个Agent的真实基线/最终差异、依赖/配置/部署步骤及实际人工工时。"
+    ],
+    "new_runtime_code_estimate": null,
+    "hours_estimate": null,
+    "note": "这是已批准契约下的增量责任清单，不是新增实现或重设计；实际差异与工时须由第二次接入记录。"
+  },
+  "pending_and_limits": [
+    {
+      "item": "双方人工工时",
+      "status": "缺项",
+      "owner": "双方原执行团队",
+      "reason": "无实际登记，不反推。"
+    },
+    {
+      "item": "外部完整Git适配前提交及独立当前源diff",
+      "status": "缺项/授权范围限制",
+      "owner": "对方团队",
+      "reason": "现有永久ZIP可核对，历史Git不完整；本团队不得读取当前源码/.git。"
+    },
+    {
+      "item": "前端JS/JSX/CSS有效行",
+      "status": "缺项",
+      "owner": "成本报告最终归集",
+      "reason": "已单列物理行，本次无可靠解析算法，不伪称有效行。"
+    },
+    {
+      "item": "外部最终依赖/锁与非Python文件物理diff",
+      "status": "缺项",
+      "owner": "对方团队",
+      "reason": "授权九文件仅有元数据hash、版本自述与Python差异；可以核对37条清单hash变化，但不能重算当前非Python源行。"
+    },
+    {
+      "item": "实际联调用例/故障演练和人工步骤计数",
+      "status": "pending",
+      "owner": "主执行员工",
+      "reason": "复用其独占真实回执；成本辅助不启动测试或创建任务。"
+    },
+    {
+      "item": "Stage 3与远程阶段真实PG/Redis补充回归",
+      "status": "pending",
+      "owner": "主执行员工",
+      "reason": "既有同版离线/页面回执已列，不能以其代替未决门禁。"
+    },
+    {
+      "item": "外部两个中文字段乱码",
+      "status": "已知限制",
+      "owner": "对方团队",
+      "reason": "baseline_archive/hours_note含替换字符，未改外部文件；以完整ZIP SHA256及hours=null/交付说明第175行确定归档与工时缺项。"
+    }
+  ],
+  "verification": {
+    "performed_here": [
+      "固定Git父子链、净diff及各批numstat；固定Python blob的AST/tokenize有效行与test_定义计数",
+      "固定pyproject/uv.lock依赖比较、compose与frontend/package.json未变核对、构建资产两端字节/行数",
+      "指定九文件实际长度/SHA256与索引一致；ZIP内部manifest摘要及两份manifest路径hash比较；三个JUnit suite与版本属性只读解析",
+      "本产物JSON结构/加总/范围及输出文件SHA256检查见handoff；未运行任何业务或自动化测试。"
+    ],
+    "runtime_counts_reproduction_powershell": "@'\nimport ast, difflib, io, json, subprocess, tokenize, functools, sys\nB='b3e855d17234704b41c0be72f8e2a907a0f942f6'; C1='4f6791369ee562c52539a260ee7320f38e7f34c8'; C2='b25ff6bab89dda4f3be4006e4f1456538f18964c'; C3='29aa34d1d5d39328ac0a39150c9f4dc06dc4fbfe'\ndef git(*args): return subprocess.check_output(['git','-c','core.quotepath=false',*args])\ndef cat(p):\n if p.startswith('.dev-team/'): return 'collaboration_ledger'\n if p.startswith('docs/'): return 'documentation'\n if p.startswith('src/agent_runtime/static/'): return 'generated_frontend_assets'\n if p=='uv.lock': return 'dependency_lock'\n if p=='pyproject.toml': return 'dependency_manifest'\n if p.startswith('src/') and p.endswith('.yaml'): return 'capability_configuration'\n if p.startswith('src/') and p.endswith('.py'): return 'python_source'\n if p.startswith('tests/') and p.endswith('.py'): return 'python_tests_and_fixtures'\n if p.startswith('frontend/') and (p.endswith('.test.jsx') or '/e2e' in p): return 'frontend_tests'\n if p.startswith('frontend/src/'): return 'frontend_source'\n if p.startswith('frontend/'): return 'frontend_test_tooling'\n return 'other'\n@functools.lru_cache(None)\ndef source(ref,p):\n r=subprocess.run(['git','show',ref+':'+p],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)\n return r.stdout.decode('utf-8-sig') if r.returncode==0 else ''\n@functools.lru_cache(None)\ndef effective(s):\n if not s: return []\n tree=ast.parse(s); lines=s.splitlines(keepends=True); chars=[list(x) for x in lines]\n def erase(start,end):\n  (sl,sc),(el,ec)=start,end\n  for li in range(sl-1,el):\n   low=sc if li==sl-1 else 0; high=ec if li==el-1 else len(chars[li])\n   for col in range(low,high):\n    if chars[li][col] not in '\\r\\n': chars[li][col]=' '\n for node in ast.walk(tree):\n  if isinstance(node,(ast.Module,ast.ClassDef,ast.FunctionDef,ast.AsyncFunctionDef)) and node.body:\n   f=node.body[0]\n   if isinstance(f,ast.Expr) and isinstance(f.value,ast.Constant) and isinstance(f.value.value,str):\n    v=f.value\n    sc=len(lines[v.lineno-1].encode('utf-8')[:v.col_offset].decode('utf-8'))\n    ec=len(lines[v.end_lineno-1].encode('utf-8')[:v.end_col_offset].decode('utf-8'))\n    erase((v.lineno,sc),(v.end_lineno,ec))\n for tok in tokenize.generate_tokens(io.StringIO(s).readline):\n  if tok.type==tokenize.COMMENT: erase(tok.start,tok.end)\n return [x.rstrip() for row in chars if (x:=''.join(row)).strip()]\ndef edits(old,new):\n add=rem=0\n for tag,a,b,c,d in difflib.SequenceMatcher(None,old,new,autojunk=False).get_opcodes():\n  if tag in ('replace','delete'): rem+=b-a\n  if tag in ('replace','insert'): add+=d-c\n return {'added':add,'removed':rem,'before_lines':len(old),'after_lines':len(new)}\ndef count(a,b):\n data=git('diff','--no-ext-diff','--no-renames','--numstat','-z',a,b).decode('utf-8').split('\\0'); rows=[]; sums={}\n for ent in data:\n  if not ent: continue\n  ad,de,p=ent.split('\\t',2); c=cat(p)\n  row={'path':p,'category':c,'physical_added':None if ad=='-' else int(ad),'physical_removed':None if de=='-' else int(de)}\n  group=sums.setdefault(c,{'files':0,'binary_files':0,'physical_added':0,'physical_removed':0,'effective_added':0 if c in ('python_source','python_tests_and_fixtures') else None,'effective_removed':0 if c in ('python_source','python_tests_and_fixtures') else None})\n  group['files']+=1\n  if ad=='-': group['binary_files']+=1\n  else: group['physical_added']+=int(ad);group['physical_removed']+=int(de)\n  if c in ('python_source','python_tests_and_fixtures'):\n   old=source(a,p);new=source(b,p);e=edits(effective(old),effective(new)); row['effective']=e\n   group['effective_added']+=e['added'];group['effective_removed']+=e['removed']\n   if c=='python_tests_and_fixtures':\n    row['test_definitions_before']=sum(isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name.startswith('test_') for n in ast.walk(ast.parse(old)))\n    row['test_definitions_after']=sum(isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name.startswith('test_') for n in ast.walk(ast.parse(new)))\n  rows.append(row)\n return {'from':a,'to':b,'changed_path_entries_no_renames':len(rows),'categories':sums,'files':rows}\nresult={'git_version':git('--version').decode().strip(),'python_version':sys.version,'parents':{c:git('show','-s','--format=%P',c).decode().strip().split() for c in (C1,C2,C3)},'baseline':B,'final':C3,'net':count(B,C3),'batches':[{'task':task,**count(a,b)} for task,a,b in [('RA-DEV-01',B,C1),('RA-DEV-02',C1,C2),('RA-DEV-03',C2,C3)]]}\nprint(json.dumps(result,ensure_ascii=False))\n'@ | .\\.venv\\Scripts\\python.exe -X utf8 -",
+    "no_state_or_baseline_write": true,
+    "no_service_database_docker_network_test_commit_push": true
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "review_kind": "基线复核，不构成开发验收或批准",
+  "checked_at": "2026-10-28T11:46:19Z",
+  "operation_key": "sha256:7b57f8fb80cf6f07fda699f85e5f98149c84fa694e7397b260aebcbd76cfaff8",
+  "inputs_ref": ".dev-team/tasks/RA-INT-01/evidence/正式交付包引用.json",
+  "inputs_sha256": "b70ef1e9edc54082d95254e8ef194e1abc8b9c95936e71455b1bf6e9eb5a0ac2",
+  "local_versions": {
+    "AGENTS.md": "42b07029752d3ae8350754ed9278d3e13e4bbcebcd712b653fbf6dcc893ba7c6",
+    "docs/requirements.md": "8ab1332d68e928a0dd8c49843e1d218fd19e0a655a48aff1ed372f5e7552fe7a",
+    "docs/architecture.md": "92f95702b266990c061b7825ec7ca66a7d21f57a1516845e7d09137c3444f87b",
+    "docs/decisions.md": "78ac1122defa9df497fd154d13bacd8dc04a15ef1b4c53024d448cbf3ee681af",
+    "docs/远程Agent服务端适配开发需求.md": "35c2dab6c8ba5702572d5083a537737bd6acf27544ff885e86712c79debaa006",
+    "src/agent_runtime/capabilities/remote_a2a/card.py": "b0816a5ecc662b3abff05bee66ff7cbb9e9ec78f901fc607465c174ef5ed37a5",
+    "src/agent_runtime/capabilities/manifest.py": "d616d4966f6a099116218e9aeb5add40e877f4b406b2ededa38b90f79ac5cfcc",
+    "src/agent_runtime/capabilities/execution.py": "5a53f649865a5d6b467a1b3e12a493b858fbeaad75ff979b43f192d6a35080d0",
+    "src/agent_runtime/core/config.py": "602e24a5b09a15385073a9dc2efd3fc1a78e6bb7fec950f783d79a079bc89d31"
+  },
+  "methods": [
+    "Get-FileHash -Algorithm SHA256：本地适用基线与校验实现；Python hashlib：输入索引及指定九文件的原始字节/长度",
+    ".\\.venv\\Scripts\\python.exe -X utf8 -：stdin只读探针使用json、xml.etree.ElementTree、zipfile、hashlib；ZIP仅内存读取，不解压、不执行归档内容",
+    "httpx.Client(headers={'A2A-Version':'1.0'}, trust_env=False, follow_redirects=False, timeout=5.0)：仅GET明确Card URL及同源/health；SDK 1.2.3及当前validate_card以development_mode=True、auth.type=none校验",
+    "docker inspect --format '{{json .Image}} {{json .State.Status}} {{json .State.Running}} {{json .State.StartedAt}} {{json (index .Config.Labels \"org.opencontainers.image.revision\")}}' semantic-pattern-mining-integration-api semantic-pattern-mining-integration-worker"
+  ],
+  "specified_files": {"count": 9, "all_readable": true, "all_bytes_and_sha256_match_input_index": true},
+  "version_manifest": {
+    "declared_file_count": 76, "actual_file_count": 76, "unique_paths": 76,
+    "app_files": 45, "test_files": 21, "other_files": 10,
+    "all_paths_safe_relative_code_paths": true, "all_digest_formats_valid": true,
+    "source_commit": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+    "delivery_tag_claim": "a2a-integration-ready-v1.0.0",
+    "source_app_sha256_claim": "4798d4716c05c62bbea17ad1d80eee3a138f5b9ffcea9dc33199b9a985820ce7",
+    "tests_sha256_claim": "d31ea8707b4ea21e4227cfbae46ff1063a9bbf085edaa4db7b8e1d0bf4b66979",
+    "independent_current_source_or_git_validation": false
+  },
+  "junit": [
+    {
+      "file": "远程Agent联调自测报告.xml", "sha256": "5c6685e0bc149a69a04e40347f3957a44982f6f95e94409eeecbfaa2f3fd601b",
+      "actual_tests": 78, "passed": 78, "failures": 0, "errors": 0, "skipped": 0, "suite_seconds": 63.242,
+      "online_cases": 0, "suite_summary_and_all_indexed_cases_properties_match_index": true,
+      "suite_properties_match_index": true, "app_hash_and_file_count_match_manifest": true, "test_hash_and_file_count_match_manifest": true,
+      "tested_commit": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2"
+    },
+    {
+      "file": "远程Agent真实环境自测报告.xml", "sha256": "a30b221cd282e7ce237c5bfa2fe8f8059febbb01fa4ed98c881131a06a5b2a6b",
+      "actual_tests": 4, "passed": 3, "failures": 1, "errors": 0, "skipped": 0, "suite_seconds": 565.801,
+      "suite_summary_and_all_indexed_cases_properties_match_index": true, "suite_properties_match_index": true,
+      "app_hash_and_file_count_match_manifest": true, "test_file_count_matches_manifest": true,
+      "tested_commit": "356546c71c15ddbe2d1d778db2fae014bf2cbd1b",
+      "tested_tests_sha256": "ec61bedfc8e7d536b67c7a4f4ace35ef2c9af540d8b556a613558e1b68819885",
+      "failure": "Worker重启用例观察超时；原报告保留失败，失败文本含300秒观察及working，不把它改为通过或业务failed",
+      "completed_final_texts": {"count": 2, "all_nonempty": true, "both_date_bounds_present": true},
+      "cancel_final_business_write_count": 0
+    },
+    {
+      "file": "远程Agent重启场景复测报告.xml", "sha256": "3efd3668e6a8cfa774dd73e62fc06f7be76949b952c8e5b59fe9b5ced70d8fcd",
+      "actual_tests": 1, "passed": 1, "failures": 0, "errors": 0, "skipped": 0,
+      "suite_seconds": 395.289, "testcase_seconds": 395.138,
+      "suite_summary_and_all_indexed_cases_properties_match_index": true, "suite_properties_match_index": true,
+      "app_hash_and_file_count_match_manifest": true, "test_hash_and_file_count_match_manifest": true,
+      "tested_commit": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2", "worker_restart_count": 1,
+      "remote_task_id": "5c925b1c-abea-4c92-9a0f-0842458d1d7b",
+      "remote_context_id": "949c65ed-fd84-4ccc-8e70-9512b4691eb0",
+      "analysis_run_id": "13b41550-742f-4f49-92fd-d7d8f709ed41",
+      "completed_final_texts": {"count": 1, "all_nonempty": true, "both_date_bounds_present": true}
+    }
+  ],
+  "junit_scope": "78项报告实际执行78项、0 skipped、无online；另份online报告有4项，属于显式排除而非跳过。final_artifact属性只在原始XML保留，索引未复制；本复核只保留非空/日期布尔值。三份报告不得合并冒领同一候选的一次全绿执行。相同app属性支持业务源相同的自述，不能凭属性独立证实仅测试观察上限300变900或依赖配置未变。",
+  "baseline_zip": {
+    "sha256": "c5f497177b6a3df9a33e897fe0b93c15c6718c426f12ded00fc2dc2b9db995ee",
+    "entries": 64, "manifest": "baseline-manifest.json", "manifest_items": 63, "original_files": 63,
+    "unique_paths": 63, "all_item_bytes_hash_match": true, "extra_files": 0, "unsafe_paths": 0,
+    "archive_extracted_or_executed": false
+  },
+  "diff_statistics": {
+    "app": {"files": 18, "physical_added": 923, "physical_removed": 10, "effective_added": 716, "effective_removed": 9},
+    "tests": {"files": 9, "physical_added": 983, "physical_removed": 1, "effective_added": 801, "effective_removed": 1},
+    "total": {"files": 27, "physical_added": 1906, "physical_removed": 11, "effective_added": 1517, "effective_removed": 10},
+    "all_per_item_sums_equal_summaries": true, "all_paths_unique_and_present_in_current_manifest": true,
+    "archive_hash_matches": true, "source_commit_matches_manifest": true,
+    "baseline_archive_filename_corrupted": true, "hours_note_corrupted": true,
+    "hours": null, "historical_git_baseline_complete": false,
+    "independently_recomputed_current_source_line_diff": false
+  },
+  "live_card": {
+    "checked_at": "2026-10-28T11:44:37.863825Z", "http_status": 200, "redirect": false,
+    "sdk_version": "1.2.3", "runtime_validate_card": "通过",
+    "disk_bytes_sha256": "74f4dbb921e1059a86be284031b721db95c2d50d90cdfe564940d21e7d996b47",
+    "live_bytes_sha256": "74f4dbb921e1059a86be284031b721db95c2d50d90cdfe564940d21e7d996b47",
+    "disk_and_live_json_equal": true, "disk_and_live_identity_equal": true,
+    "identity_fingerprint": "48f71b662b021f044ff81ba2d42da4d7589992ed009fae462d124b8984aedf08",
+    "interface_url": "http://127.0.0.1:18080/api", "tenant": "", "development_mode": true, "authentication": "none",
+    "health_status": 200, "health_fields": {"status": "ok", "database": "ok"}
+  },
+  "containers": {
+    "image_id": "sha256:0f0c10c8c3523e3d19668f0ce0840cbd97c352aca8eddcb53610d275642106cf",
+    "revision": "a74183f1c55ca760e8cf0ac1aa3ccc32012734e2",
+    "api": {"name": "semantic-pattern-mining-integration-api", "state": "running", "running": true, "started_at": "2026-10-28T09:01:46.119779882Z"},
+    "worker": {"name": "semantic-pattern-mining-integration-worker", "state": "running", "running": true, "started_at": "2026-10-28T09:03:18.755862893Z"},
+    "both_image_and_revision_match_manifest": true
+  },
+  "limits": [
+    "未进入对方当前源码、.git、其他外部文件或凭据；清单Git blob、tag/工作区状态、当前app/tests聚合与代码/有效行差异仅核对交付链条，未独立从当前源字节重算。",
+    "未执行文档命令、业务Send/GetTask/Cancel、模型调用、数据库查询、Docker exec/启停/重启或全量测试；原始JUnit属于对方自测回执，不是本次重新运行。",
+    "未查询业务正文、未复制最终Artifact/秘密；health只覆盖API/数据库，running和标签不证明LLM/GPU当前可用或镜像内容确实等于标签源码。",
+    "50条/5类隔离数据、备份及GPU证据和负责人批准均来自对方文件陈述；没有把这些陈述升级为本项目负责人对新付费/写入/重启范围的可信授权。",
+    "Worker重启自测不等于Runtime重启或RA-AC-09的四条端到端联合验收；Run/Invocation/页面/SSE/Session屏障仍需本项目执行。",
+    "联调执行需显式较长Manifest execution.timeout_seconds及测试观察窗口，可参照900秒；单次HTTP默认10秒与并发槽acquire_timeout_seconds用途不同，不能只增大HTTP超时。"
+  ]
+}
